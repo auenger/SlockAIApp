@@ -1,0 +1,56 @@
+# feature-workflow/config.yaml
+project:
+  name: SlockAI
+  main_branch: main
+  repo_path: .
+  tech_stack: node-react-tauri
+  test_framework: vitest
+
+parallelism:
+  max_concurrent: 3
+
+git:
+  remote: origin
+  auto_push: false
+  merge_strategy: "--no-ff"
+  push_tags: true
+
+branch_prefix: feature
+worktree_prefix: SlockAI
+worktree_base: ..
+
+workflow:
+  auto_start: false
+  auto_start_next: true
+  require_checklist: true
+  splitting:
+    enabled: true
+    threshold: 3
+  testing:
+    pytest_enabled: false
+    test_dir: ""
+    coverage_enabled: false
+    coverage_target: 80
+
+completion:
+  archive:
+    create_tag: true
+    tag_format: "{id}-{date}"
+    tag_date_format: "%Y%m%d"
+  cleanup:
+    delete_worktree: true
+    delete_branch: true
+  record:
+    update_spec: true
+    update_archive_log: true
+
+naming:
+  feature_prefix: feat
+  branch_prefix: feature
+  worktree_prefix: SlockAI
+
+paths:
+  features_dir: features
+  archive_dir: features/archive
+  worktree_base: ..
+  repo_path: .
