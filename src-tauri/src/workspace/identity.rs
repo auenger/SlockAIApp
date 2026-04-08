@@ -165,6 +165,7 @@ impl AgentIdentity {
     }
 
     /// Serialize identity to IDENTITY.md content.
+    #[allow(unused_variables)]
     pub fn to_identity_content(&self) -> String {
         let avatar_line = match &self.avatar {
             Some(a) if !a.is_empty() => a.as_str(),

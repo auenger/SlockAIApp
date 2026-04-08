@@ -5,7 +5,7 @@ pub mod storage;
 pub mod workspace;
 
 use commands::AppState;
-use runtime::registry::RuntimeRegistry;
+// RuntimeRegistry is used at runtime; import kept for future use.
 use std::sync::Mutex;
 use tauri::Manager;
 use workspace::manager::AgentManager;
