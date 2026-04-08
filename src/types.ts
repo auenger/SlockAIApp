@@ -34,3 +34,42 @@ export interface Agent {
   name: string;
   status: AgentStatus;
 }
+
+// ===========================================================================
+// Agent Runtime types
+// ===========================================================================
+
+/** Agent runtime status */
+export type AgentRuntimeStatusType =
+  | "available"
+  | "unhealthy"
+  | "not-installed"
+  | "detecting";
+
+/** Agent runtime capability */
+export type AgentCapability =
+  | "streaming"
+  | "sessions"
+  | "tool_use"
+  | "structured_output";
+
+/** Information about a registered agent runtime */
+export interface AgentRuntimeInfo {
+  id: string;
+  name: string;
+  runtime_type: string;
+  status: AgentRuntimeStatusType;
+  version?: string;
+  install_path?: string;
+  capabilities: AgentCapability[];
+  install_hint: string;
+}
+
+/** Streaming event from an agent runtime execution */
+export interface StreamEvent {
+  text: string;
+  is_done: boolean;
+  error?: string;
+  type?: string;
+  session_id?: string;
+}
