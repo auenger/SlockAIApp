@@ -1,8 +1,8 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-08T17:30:00+08:00"
-  version: 5
-  total_completed: 5
+  last_updated: "2026-04-08T18:10:00+08:00"
+  version: 6
+  total_completed: 6
 
 records:
   - id: feat-project-init
@@ -115,4 +115,27 @@ records:
       duration: "30min"
       commits: 1
       files_changed: 5
+      note: "Direct main commit, no worktree/branch"
+  - id: feat-rename-agentszone
+    name: "Rename to AgentsZone"
+    completed: "2026-04-08T18:10:00+08:00"
+    tag: feat-rename-agentszone-20260408
+    merge_commit: "201321b"
+    merged_to: main
+    branch_deleted: false
+    branch_name: main
+    worktree_deleted: false
+    worktree_path: .
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-08T18:00:00+08:00"
+      duration: "10min"
+      commits: 1
+      files_changed: 21
       note: "Direct main commit, no worktree/branch"

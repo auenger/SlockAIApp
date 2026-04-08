@@ -1,14 +1,11 @@
 # feature-workflow/queue.yaml
 meta:
-  last_updated: "2026-04-08T18:00:00+08:00"
-  version: 10
+  last_updated: "2026-04-08T18:10:00+08:00"
+  version: 11
 
 parents: []
 active: []
-pending:
-  - id: feat-rename-agentszone
-    name: "Rename to AgentsZone"
-    priority: 60
+pending: []
 blocked: []
 completed:
   - id: feat-project-init
@@ -31,3 +28,7 @@ completed:
     name: "Project Design Review"
     completed_at: "2026-04-08T17:30:00Z"
     tag: feat-project-review-20260408
+  - id: feat-rename-agentszone
+    name: "Rename to AgentsZone"
+    completed_at: "2026-04-08T18:10:00Z"
+    tag: feat-rename-agentszone-20260408
