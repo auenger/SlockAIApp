@@ -20,6 +20,9 @@ node_modules/
 dist/
 build/
 
+# Rust / Tauri
+src-tauri/target/
+
 # Environment files
 .env
 .env.local
