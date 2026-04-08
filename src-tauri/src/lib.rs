@@ -2,23 +2,25 @@ pub mod commands;
 pub mod context;
 pub mod runtime;
 pub mod storage;
+pub mod workspace;
 
-use runtime::registry::RuntimeRegistry;
+use commands::AppState;
+// RuntimeRegistry is used at runtime; import kept for future use.
 use std::sync::Mutex;
+use tauri::Manager;
+use workspace::manager::AgentManager;
 
-/// Application state shared across all Tauri commands.
-pub struct AppState {
-    /// Agent runtime registry for managing agent runtimes (Claude Code, etc.)
-    pub agent_runtime_registry: Mutex<RuntimeRegistry>,
-    /// Current agent session state (session_id + process tracking)
-    pub agent_session: Mutex<AgentSessionState>,
-}
+/// Default workspace directory name.
+const DEFAULT_WORKSPACE_DIR: &str = "workspaces";
 
-/// State tracking for an active agent session.
-#[derive(Default)]
-pub struct AgentSessionState {
-    /// The current session ID (if any)
-    pub session_id: Option<String>,
+/// Resolve the workspace root path.
+///
+/// Uses the app's data directory (managed by Tauri) to store workspace data.
+fn resolve_workspace_root(app: &tauri::AppHandle) -> std::path::PathBuf {
+    app.path()
+        .app_data_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .join(DEFAULT_WORKSPACE_DIR)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -26,10 +28,6 @@ pub fn run() {
     let registry = runtime::registry::create_default_registry();
 
     tauri::Builder::default()
-        .manage(AppState {
-            agent_runtime_registry: Mutex::new(registry),
-            agent_session: Mutex::new(AgentSessionState::default()),
-        })
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -38,6 +36,17 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // Initialize workspace root from app data dir
+            let workspace_root = resolve_workspace_root(app.handle());
+            let agent_manager = AgentManager::new(&workspace_root);
+
+            app.manage(AppState {
+                agent_runtime_registry: Mutex::new(registry),
+                agent_session: Mutex::new(commands::AgentSessionState::default()),
+                agent_manager: Mutex::new(agent_manager),
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -50,6 +59,15 @@ pub fn run() {
             storage::keyring::store_api_key,
             storage::keyring::has_api_key,
             storage::keyring::delete_api_key,
+            commands::init_workspace,
+            commands::get_workspace_status,
+            commands::create_agent,
+            commands::list_agents,
+            commands::switch_agent,
+            commands::get_active_agent,
+            commands::delete_agent,
+            commands::get_agent_identity,
+            commands::get_agent_context,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
