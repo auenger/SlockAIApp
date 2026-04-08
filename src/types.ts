@@ -1,36 +1,41 @@
-/**
- * Base type definitions for SlockAI.
- */
+export type TabType = 'CHAT' | 'TASKS' | 'WORKSPACE' | 'SKILLS' | 'ACTIVITY' | 'PROFILE';
 
-/** Message role in a conversation */
-export type MessageRole = "user" | "agent" | "system";
-
-/** Agent identifier */
-export type AgentId = "claude" | "codex";
-
-/** A single message in a channel */
-export interface Message {
+export interface Agent {
   id: string;
-  role: MessageRole;
-  content: string;
-  timestamp: string;
-  channel: string;
-  agent?: AgentId;
+  name: string;
+  description: string;
+  status: 'online' | 'offline' | 'busy';
+  avatar: string;
+  color: string;
 }
 
-/** A channel (conversation container) */
 export interface Channel {
   id: string;
   name: string;
-  createdAt: string;
+  unreadCount?: number;
 }
 
-/** Agent status */
-export type AgentStatus = "idle" | "running" | "error";
+export interface Thread {
+  id: string;
+  title: string;
+  preview: string;
+}
 
-/** Agent info */
-export interface Agent {
-  id: AgentId;
-  name: string;
-  status: AgentStatus;
+export interface Task {
+  id: number;
+  title: string;
+  status: 'TODO' | 'IN PROGRESS' | 'IN REVIEW' | 'DONE';
+  assignee?: string;
+}
+
+export interface Message {
+  id: string;
+  sender: {
+    name: string;
+    avatar: string;
+    isAgent: boolean;
+  };
+  content: string;
+  timestamp: string;
+  isThinking?: boolean;
 }
