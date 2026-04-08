@@ -4,7 +4,7 @@ version: 3
 features_completed: 0
 ---
 
-# Project Context: SlockAI
+# Project Context: AgentsZone
 
 > AI 原生协作桌面应用 — 人类 @Agent 触发对话，上下文编排驱动 Claude Code / Codex，文档/JSONL 持久化。
 
@@ -12,7 +12,7 @@ features_completed: 0
 
 ## 产品定位
 
-**SlockAI** 是一个 Tauri 桌面端 AI 协作应用。核心模型极简：
+**AgentsZone** 是一个 Tauri 桌面端 AI 协作应用。核心模型极简：
 
 1. **Channel / Thread = 对话容器** — 不同 channel 存储不同对话记录
 2. **@Agent = 触发器** — 在 channel 里 @某个 Agent，触发一次 LLM 请求
@@ -32,7 +32,7 @@ features_completed: 0
 
 ### 竞品参考
 
-| 维度 | Slock.ai (参考) | 本项目 |
+| 维度 | Slock.ai (参考) | 本项目 (AgentsZone) |
 |------|-----------------|--------|
 | 载体 | Web SPA | **Tauri 桌面应用** |
 | Agent Runtime | Claude Code via MCP | **Claude Code + Codex 双 runtime** |
@@ -234,7 +234,7 @@ trait AgentRuntime {
 
 ## UI 设计风格
 
-参考 Slock.ai 界面截图的**新粗野主义 (Neo-Brutalism)** 风格：
+参考 Slock.ai 界面截图的**新粗野主义 (Neo-Brutalism)** 风格（竞品参考）：
 
 - **主色调**：高饱和亮黄色 (Lemon Yellow) 侧边栏
 - **背景**：米白色/浅杏色 (Off-white/Beige)

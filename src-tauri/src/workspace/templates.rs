@@ -25,7 +25,7 @@ impl WorkspaceTemplates {
     /// - `SOUL.md` -- global Agent personality
     /// - `USER.md` -- user profile
     /// - `AGENTS.md` -- Agent behavior instructions
-    /// - `TOOLS.md` -- tool usage guide (SlockAI context engine)
+    /// - `TOOLS.md` -- tool usage guide (AgentsZone context engine)
     /// - `memory/MEMORY.md` -- long-term memory
     /// - `memory/HISTORY.md` -- history summary
     ///
@@ -100,7 +100,7 @@ impl WorkspaceTemplates {
     // Template content generators
     // -----------------------------------------------------------------------
 
-    /// Global SOUL.md template -- SlockAI default personality.
+    /// Global SOUL.md template -- AgentsZone default personality.
     pub fn soul_template() -> String {
         r#"# SOUL.md - Who You Are
 
@@ -197,12 +197,12 @@ _(Any special notes about how the assistant should behave)_
 
 ---
 
-_Edit this file to customize SlockAI's behavior._
+_Edit this file to customize AgentsZone's behavior._
 "#
         .to_string()
     }
 
-    /// AGENTS.md template -- Agent behavior instructions adapted for SlockAI.
+    /// AGENTS.md template -- Agent behavior instructions adapted for AgentsZone.
     pub fn agents_template() -> String {
         r#"# Agent Instructions
 
@@ -210,7 +210,7 @@ You are a helpful AI assistant. Be concise, accurate, and friendly.
 
 ## Context Engine
 
-SlockAI uses a context orchestration engine that assembles context from:
+AgentsZone uses a context orchestration engine that assembles context from:
 - **SOUL.md** -- Your personality and behavior rules
 - **USER.md** -- User preferences and profile
 - **IDENTITY.md** -- Your identity metadata (name, emoji, etc.)
@@ -226,14 +226,14 @@ The engine loads these files as context prefixes before each conversation.
 
 ## Task Management
 
-- Use the tools available in the SlockAI context engine.
+- Use the tools available in the AgentsZone context engine.
 - Follow the tool usage guidelines in TOOLS.md.
 - Keep conversation records in JSONL format in the conversations/ directory.
 "#
         .to_string()
     }
 
-    /// TOOLS.md template -- tool usage guide adapted for SlockAI.
+    /// TOOLS.md template -- tool usage guide adapted for AgentsZone.
     pub fn tools_template() -> String {
         r#"# Tool Usage Guide
 
@@ -242,7 +242,7 @@ This file documents non-obvious constraints and usage patterns.
 
 ## Context Engine Tools
 
-The SlockAI context orchestration engine provides:
+The AgentsZone context orchestration engine provides:
 
 - **File operations**: read/write/list within workspace boundaries
 - **Agent switching**: @mention triggers workspace switch

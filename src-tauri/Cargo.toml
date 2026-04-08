@@ -1,8 +1,8 @@
 [package]
-name = "slockai"
+name = "agentszone"
 version = "0.1.0"
-description = "SlockAI - AI-native collaboration desktop app"
-authors = ["SlockAI"]
+description = "AgentsZone - AI-native collaboration desktop app"
+authors = ["AgentsZone"]
 license = "MIT"
 repository = ""
 edition = "2021"
@@ -11,17 +11,17 @@ rust-version = "1.77.2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-name = "slockai_lib"
+name = "agentszone_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.5.6" }
+tauri-build = { version = "2.5.6", features = [] }
 
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.10.3" }
+tauri = { version = "2.10.3", features = [] }
 tauri-plugin-log = "2"
 keyring = "3"
 thiserror = "2"

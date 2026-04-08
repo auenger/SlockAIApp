@@ -1,7 +1,7 @@
 //! Agent Workspace module.
 //!
 //! Provides isolated file directories per Agent, template initialization,
-//! and workspace management for the SlockAI multi-Agent system.
+//! and workspace management for the AgentsZone multi-Agent system.
 //!
 //! ## Directory Layout
 //!

@@ -262,8 +262,8 @@ mod tests {
         let builder = ContextBuilder::new(dir.path());
         let ctx = builder.build("default").unwrap();
 
-        // Agent-level SOUL.md is used (personalized, contains "SlockAI")
-        assert!(ctx.system_prompt.contains("SlockAI") || ctx.system_prompt.contains("Soul"));
+        // Agent-level SOUL.md is used (personalized, contains "AgentsZone")
+        assert!(ctx.system_prompt.contains("AgentsZone") || ctx.system_prompt.contains("Soul"));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # feature-workflow/config.yaml
 project:
-  name: SlockAI
+  name: AgentsZone
   main_branch: main
   repo_path: .
   tech_stack: node-react-tauri
@@ -47,7 +47,7 @@ completion:
 naming:
   feature_prefix: feat
   branch_prefix: feature
-  worktree_prefix: SlockAI
+  worktree_prefix: AgentsZone
 
 paths:
   features_dir: features

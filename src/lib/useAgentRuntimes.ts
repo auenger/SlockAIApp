@@ -1,5 +1,5 @@
 /**
- * Hook for managing agent runtimes in SlockAI.
+ * Hook for managing agent runtimes in AgentsZone.
  *
  * Provides runtime scanning, listing, session management,
  * and streaming message execution via Tauri IPC.

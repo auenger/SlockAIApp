@@ -140,7 +140,7 @@ impl AgentManager {
         let default_created = if !default_dir.exists() {
             self.create_agent_internal(
                 "default",
-                "SlockAI",
+                "AgentsZone",
                 "AI",
                 "helpful",
                 "robot",

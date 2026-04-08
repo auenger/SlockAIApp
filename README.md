@@ -1,10 +1,10 @@
-# SlockAI
+# AgentsZone
 
 > AI 原生协作桌面应用 — 人类 @Agent 触发对话，上下文编排驱动 Claude Code / Codex，文档/JSONL 持久化。
 
 ## 核心模型
 
-SlockAI 的设计极简，围绕五个核心概念构建：
+AgentsZone 的设计极简，围绕五个核心概念构建：
 
 | 概念 | 说明 |
 |------|------|
@@ -78,7 +78,7 @@ SlockAI 的设计极简，围绕五个核心概念构建：
 ## 项目结构
 
 ```
-SlockAI/
+AgentsZone/
 ├── ReactDemo/                    # React 原型 (Vite)
 │   └── slockai-prototype/
 ├── PMFile/                       # 产品管理文档

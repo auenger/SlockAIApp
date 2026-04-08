@@ -5,7 +5,7 @@
 //! Keys are never exposed to the frontend - only stored/checked/deleted.
 
 /// Service name used for keyring entries.
-const SERVICE_NAME: &str = "SlockAI";
+const SERVICE_NAME: &str = "AgentsZone";
 
 /// Store an API key for a given runtime in the OS keyring.
 #[tauri::command]

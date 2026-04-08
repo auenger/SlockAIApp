@@ -1,11 +1,14 @@
 # feature-workflow/queue.yaml
 meta:
-  last_updated: "2026-04-08T17:30:00+08:00"
-  version: 9
+  last_updated: "2026-04-08T18:00:00+08:00"
+  version: 10
 
 parents: []
 active: []
-pending: []
+pending:
+  - id: feat-rename-agentszone
+    name: "Rename to AgentsZone"
+    priority: 60
 blocked: []
 completed:
   - id: feat-project-init

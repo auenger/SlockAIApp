@@ -265,5 +265,5 @@ pub fn get_agent_context(
 
 #[tauri::command]
 pub fn greet(name: &str) -> String {
-    format!("Hello, {}! Welcome to SlockAI.", name)
+    format!("Hello, {}! Welcome to AgentsZone.", name)
 }
