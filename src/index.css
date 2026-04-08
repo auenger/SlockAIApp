@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  /* Neo-Brutalism Color Palette */
+  --color-slock-bg: #FAF8F0;
+  --color-slock-sidebar: #F5E642;
+  --color-slock-sidebar-hover: #E8D639;
+  --color-slock-text: #1A1A1A;
+  --color-slock-text-muted: #6B6B6B;
+  --color-slock-accent: #00C9B7;
+  --color-slock-accent-hover: #00B3A3;
+  --color-slock-danger: #FF6B6B;
+  --color-slock-border: #1A1A1A;
+
+  /* Typography */
+  --font-sans: "Inter", "SF Pro", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+}
+
+/* Base styles */
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-slock-bg);
+  color: var(--color-slock-text);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
