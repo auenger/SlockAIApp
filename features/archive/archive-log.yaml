@@ -1,7 +1,118 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-06T22:05:00+08:00"
-  version: 1
-  total_completed: 0
+  last_updated: "2026-04-08T17:30:00+08:00"
+  version: 5
+  total_completed: 5
 
-records: []
+records:
+  - id: feat-project-init
+    name: "Project Init (Tauri V2 + React 19)"
+    completed: "2026-04-08T13:20:00+08:00"
+    tag: feat-project-init-20260408
+    merge_commit: "2c127be"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-project-init
+    worktree_deleted: true
+    worktree_path: ../SlockAI-feat-project-init
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-08T12:30:00+08:00"
+      duration: "50min"
+      commits: 1
+      files_changed: 44
+  - id: feat-claude-runtime
+    name: "Claude Code Runtime Agent"
+    completed: "2026-04-08T14:30:00+08:00"
+    tag: feat-claude-runtime-20260408
+    merge_commit: "7ccc7b8"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-claude-runtime
+    worktree_deleted: true
+    worktree_path: ../SlockAI-feat-claude-runtime
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-08T14:05:00+08:00"
+      duration: "25min"
+      commits: 1
+      files_changed: 11
+  - id: feat-style-consistency
+    name: "原型 MVP 移植"
+    completed: "2026-04-08T14:45:00+08:00"
+    tag: feat-style-consistency-20260408
+    merge_commit: "414a869"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-style-consistency
+    worktree_deleted: true
+    worktree_path: ../SlockAI-feat-style-consistency
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 5
+      scenarios_passed: 5
+    stats:
+      started: "2026-04-08T14:00:00+08:00"
+      duration: "45min"
+      commits: 1
+      files_changed: 12
+  - id: feat-agent-workspace-design
+    name: "Agent Workspace 与身份系统设计"
+    completed: "2026-04-08T16:15:00+08:00"
+    tag: feat-agent-workspace-design-20260408
+    merge_commit: "72dc093"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-agent-workspace-design
+    worktree_deleted: true
+    worktree_path: ../SlockAI-feat-agent-workspace-design
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-08T14:10:00+08:00"
+      duration: "2h5min"
+      commits: 2
+      files_changed: 10
+  - id: feat-project-review
+    name: "Project Design Review"
+    completed: "2026-04-08T17:30:00+08:00"
+    tag: feat-project-review-20260408
+    merge_commit: "a033eeb"
+    merged_to: main
+    branch_deleted: false
+    branch_name: main
+    worktree_deleted: false
+    worktree_path: .
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 2
+      scenarios_passed: 2
+    stats:
+      started: "2026-04-08T17:00:00+08:00"
+      duration: "30min"
+      commits: 1
+      files_changed: 5
+      note: "Direct main commit, no worktree/branch"

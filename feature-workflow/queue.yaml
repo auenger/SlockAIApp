@@ -1,14 +1,11 @@
 # feature-workflow/queue.yaml
 meta:
-  last_updated: "2026-04-08T17:00:00+08:00"
-  version: 8
+  last_updated: "2026-04-08T17:30:00+08:00"
+  version: 9
 
 parents: []
 active: []
-pending:
-  - id: feat-project-review
-    name: "Project Design Review"
-    priority: 70
+pending: []
 blocked: []
 completed:
   - id: feat-project-init
@@ -27,3 +24,7 @@ completed:
     name: "Agent Workspace 与身份系统设计"
     completed_at: "2026-04-08T16:15:00Z"
     tag: feat-agent-workspace-design-20260408
+  - id: feat-project-review
+    name: "Project Design Review"
+    completed_at: "2026-04-08T17:30:00Z"
+    tag: feat-project-review-20260408
