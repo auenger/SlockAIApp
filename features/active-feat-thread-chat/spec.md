@@ -45,7 +45,18 @@
 - feat-channel-infra（后续）— Channel 也需要 chat 能力
 
 ## Technical Solution
-<!-- To be filled during implementation -->
+
+### Backend (Rust/Tauri)
+- **Thread data model** (`src-tauri/src/workspace/thread.rs`): `Thread` struct with id, agent_id, title, session_id, messages, timestamps. `ThreadStore` manages JSON file persistence in agent's `conversations/` directory.
+- **Thread commands** (`src-tauri/src/commands/thread.rs`): CRUD commands (`create_thread`, `list_threads`, `get_thread`, `delete_thread`) + `send_message` that integrates with ClaudeCodeRuntime for streaming.
+- **Runtime integration**: `send_message` saves user message, calls `ClaudeCodeRuntime::execute()` with session_id for `--resume`, spawns thread to forward `agent://chunk` events to frontend. Emits `agent://thread-response` with accumulated response for persistence via `save_agent_response`.
+
+### Frontend (React/TypeScript)
+- **Types** (`src/types.ts`): `Thread`, `ThreadMessageData`, `ThreadInfo` interfaces mirroring Rust structs.
+- **IPC** (`src/lib/ipc.ts`): Type-safe wrappers for all Thread Tauri commands.
+- **useThreadChat hook** (`src/lib/useThreadChat.ts`): Central state management for active thread, streaming text, isThinking/isStreaming states. Handles Tauri event listeners for `agent://chunk` and `agent://thread-response`.
+- **Chat UI** (`src/components/MainContent.tsx`): Replaced mock handleSendMessage with real thread system. Streaming text rendered with animated cursor. Dynamic placeholder with agent name. Disabled send during streaming.
+- **Thread list** (`src/components/Sidebar.tsx`): Real thread data from backend with title + preview. Click to switch threads. "+" button for new thread creation.
 
 ## Acceptance Criteria (Gherkin)
 
@@ -107,10 +118,10 @@ And 点击 Thread 可切换到对应对话
 - 支持 Enter 发送 / Shift+Enter 换行
 
 ### General Checklist
-- [ ] Thread 数据模型（Rust struct + TS interface）
-- [ ] Thread CRUD Tauri commands
-- [ ] Chat UI 接入真实 Runtime
-- [ ] Tauri Event 流式推送正常
-- [ ] Session create/resume 机制正常
-- [ ] 移除 MainContent 中的 mock handleSendMessage
-- [ ] Thread 列表渲染在 Sidebar
+- [x] Thread 数据模型（Rust struct + TS interface）
+- [x] Thread CRUD Tauri commands
+- [x] Chat UI 接入真实 Runtime
+- [x] Tauri Event 流式推送正常
+- [x] Session create/resume 机制正常
+- [x] 移除 MainContent 中的 mock handleSendMessage
+- [x] Thread 列表渲染在 Sidebar
