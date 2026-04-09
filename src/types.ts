@@ -23,8 +23,29 @@ export interface Channel {
 
 export interface Thread {
   id: string;
+  agent_id: string;
+  title: string;
+  session_id: string | null;
+  messages: ThreadMessageData[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ThreadMessageData {
+  id: string;
+  role: "user" | "agent";
+  content: string;
+  timestamp: string;
+}
+
+export interface ThreadInfo {
+  id: string;
+  agent_id: string;
   title: string;
   preview: string;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Task {

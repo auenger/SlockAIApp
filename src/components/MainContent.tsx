@@ -26,6 +26,7 @@ import {
 import { cn } from '../lib/utils';
 import { TabType, Task, Message, AgentWithRuntime } from '../types';
 import { getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
+import { useThreadChat } from '../lib/useThreadChat';
 
 interface MainContentProps {
   activeTab: TabType;
@@ -34,13 +35,22 @@ interface MainContentProps {
   onOpenInviteHuman?: () => void;
   /** Currently selected agent (null = no agent selected) */
   selectedAgent?: AgentWithRuntime | null;
+  /** Active thread ID from sidebar */
+  activeThreadId?: string | null;
+  /** Callback when a new thread is created */
+  onThreadCreated?: (threadId: string) => void;
 }
 
-export const MainContent: React.FC<MainContentProps> = ({ activeTab, onTabChange, onOpenCreateTask, selectedAgent }) => {
+export const MainContent: React.FC<MainContentProps> = ({
+  activeTab,
+  onTabChange,
+  onOpenCreateTask,
+  selectedAgent,
+  activeThreadId,
+  onThreadCreated,
+}) => {
   const [taskFilter, setTaskFilter] = useState('All');
-  const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
-  const [isThinking, setIsThinking] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [logs, setLogs] = useState<{ time: string; status: string; text?: string; color?: string }[]>([
     { time: '08:27:17 AM', status: 'Thinking', color: 'text-brutal-yellow' },
@@ -48,6 +58,17 @@ export const MainContent: React.FC<MainContentProps> = ({ activeTab, onTabChange
     { time: '08:30:09 AM', status: 'Working', color: 'text-brutal-cyan', text: 'Message received' },
   ]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Thread chat hook
+  const {
+    activeThread,
+    isStreaming,
+    isThinking,
+    streamingText,
+    createNewThread,
+    selectThread,
+    send,
+  } = useThreadChat();
 
   const addLog = (status: string, text?: string, color?: string) => {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -60,54 +81,68 @@ export const MainContent: React.FC<MainContentProps> = ({ activeTab, onTabChange
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isThinking]);
+  }, [activeThread?.messages, isThinking, streamingText]);
+
+  // When activeThreadId changes (from sidebar), load the thread
+  useEffect(() => {
+    if (activeThreadId && selectedAgent) {
+      selectThread(selectedAgent.agent.agent_id, activeThreadId);
+    }
+  }, [activeThreadId, selectedAgent]);
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim()) return;
+    if (!inputValue.trim() || !selectedAgent) return;
+    if (isStreaming || isThinking) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      sender: {
-        name: 'Lissa',
-        avatar: 'L',
-        isAgent: false,
-      },
-      content: inputValue,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
+    const agentId = selectedAgent.agent.agent_id;
+    let threadId = activeThread?.id;
 
-    setMessages(prev => [...prev, userMessage]);
+    // If no active thread, create one
+    if (!threadId) {
+      try {
+        addLog('Working', 'Creating new thread...', 'text-brutal-cyan');
+        const newThread = await createNewThread(agentId, selectedAgent.agent.name);
+        threadId = newThread.id;
+        onThreadCreated?.(threadId);
+      } catch (err) {
+        addLog('Error', 'Failed to create thread', 'text-brutal-pink');
+        return;
+      }
+    }
+
     const userInput = inputValue;
     setInputValue('');
-    setIsThinking(true);
-    addLog('Working', 'Message received from Lissa', 'text-brutal-cyan');
+    addLog('Working', 'Message sent', 'text-brutal-cyan');
     addLog('Thinking', undefined, 'text-brutal-yellow');
 
     try {
-      // Mock AI response - simulates a delay and returns a placeholder response
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      const agentMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        sender: {
-          name: '克劳德',
-          avatar: 'C',
-          isAgent: true,
-        },
-        content: `[Mock Response] I received your message: "${userInput}". This is a placeholder response. Connect an AI backend for real responses.`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-
-      setMessages(prev => [...prev, agentMessage]);
+      await send(agentId, threadId, userInput);
       addLog('Output', `Responded to: ${userInput.substring(0, 20)}...`);
     } catch (error) {
       console.error("Agent Error:", error);
       addLog('Error', 'Failed to generate response', 'text-brutal-pink');
     } finally {
-      setIsThinking(false);
       addLog('Idle', 'Task completed', 'text-brutal-green');
     }
   };
+
+  // Convert thread messages to display format
+  const displayMessages: Message[] = (() => {
+    if (!activeThread) return [];
+    return activeThread.messages.map((msg) => ({
+      id: msg.id,
+      sender: {
+        name: msg.role === 'user' ? 'You' : (selectedAgent?.agent.name || 'Agent'),
+        avatar: msg.role === 'user' ? 'U' : (selectedAgent?.agent.emoji?.charAt(0) || 'A'),
+        isAgent: msg.role === 'agent',
+      },
+      content: msg.content,
+      timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }));
+  })();
+
+  const agentName = selectedAgent?.agent.name || 'Agent';
+  const canSend = inputValue.trim() && !isStreaming && !isThinking;
 
   const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
     { id: 'CHAT', label: 'CHAT', icon: MessageSquare },
@@ -343,13 +378,15 @@ export const MainContent: React.FC<MainContentProps> = ({ activeTab, onTabChange
         {activeTab === 'CHAT' && (
           <div className="h-full flex flex-col">
              <div className="flex-1 overflow-y-auto space-y-6 pb-4">
-                {messages.length === 0 && !isThinking && (
+                {displayMessages.length === 0 && !isThinking && !isStreaming && (
                   <div className="h-full flex flex-col justify-center items-center text-gray-400 italic text-sm">
-                    No messages yet. Start a conversation by @mentioning an agent.
+                    {selectedAgent
+                      ? `No messages yet. Start a conversation with ${agentName}.`
+                      : 'No messages yet. Select an agent to start chatting.'}
                   </div>
                 )}
 
-                {messages.map((msg) => (
+                {displayMessages.map((msg) => (
                   <div key={msg.id} className="flex gap-3 px-2">
                     <div className={cn(
                       "w-8 h-8 brutal-border flex items-center justify-center shrink-0 font-black",
@@ -369,14 +406,34 @@ export const MainContent: React.FC<MainContentProps> = ({ activeTab, onTabChange
                   </div>
                 ))}
 
-                {isThinking && (
+                {/* Streaming text display */}
+                {streamingText && (
+                  <div className="flex gap-3 px-2">
+                    <div className="w-8 h-8 brutal-border bg-brutal-cyan flex items-center justify-center shrink-0 font-black">
+                      <Bot size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-black text-xs">{agentName}</span>
+                        <span className="text-[8px] text-gray-500 uppercase italic">Streaming...</span>
+                      </div>
+                      <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                        {streamingText}
+                        <span className="inline-block w-1.5 h-4 bg-brutal-cyan ml-0.5 animate-pulse" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Thinking indicator (before any text arrives) */}
+                {isThinking && !streamingText && (
                   <div className="flex gap-3 px-2 animate-pulse">
                     <div className="w-8 h-8 brutal-border bg-brutal-cyan flex items-center justify-center shrink-0">
                       <Bot size={18} />
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-black text-xs">克劳德</span>
+                        <span className="font-black text-xs">{agentName}</span>
                         <span className="text-[8px] text-gray-500 uppercase italic">Thinking...</span>
                       </div>
                       <div className="h-4 bg-gray-200 w-2/3 brutal-border-b" />
@@ -397,8 +454,12 @@ export const MainContent: React.FC<MainContentProps> = ({ activeTab, onTabChange
                         handleSendMessage();
                       }
                     }}
-                    placeholder="Message #kagent-integrate-sap-ai-core"
-                    className="w-full brutal-border bg-white p-3 min-h-[100px] text-sm focus:outline-none focus:bg-brutal-bg resize-none"
+                    placeholder={selectedAgent ? `Message @${agentName}...` : 'Select an agent to start chatting...'}
+                    disabled={!selectedAgent || isStreaming || isThinking}
+                    className={cn(
+                      "w-full brutal-border bg-white p-3 min-h-[100px] text-sm focus:outline-none focus:bg-brutal-bg resize-none",
+                      (!selectedAgent || isStreaming || isThinking) && "opacity-50 cursor-not-allowed"
+                    )}
                   />
                 </div>
                 <div className="flex items-center justify-between mt-2">
@@ -417,10 +478,10 @@ export const MainContent: React.FC<MainContentProps> = ({ activeTab, onTabChange
                     </label>
                     <button
                       onClick={handleSendMessage}
-                      disabled={!inputValue.trim() || isThinking}
+                      disabled={!canSend}
                       className={cn(
                         "brutal-btn flex items-center gap-2",
-                        (!inputValue.trim() || isThinking) ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-brutal-pink text-white"
+                        !canSend ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-brutal-pink text-white"
                       )}
                     >
                       Send <Send size={16} />

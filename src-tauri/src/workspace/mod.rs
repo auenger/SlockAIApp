@@ -31,8 +31,10 @@ pub mod agent;
 pub mod identity;
 pub mod manager;
 pub mod templates;
+pub mod thread;
 
 pub use agent::AgentWorkspace;
 pub use identity::AgentIdentity;
 pub use manager::AgentManager;
 pub use templates::WorkspaceTemplates;
+pub use thread::{Thread, ThreadInfo, ThreadMessage, ThreadStore};
