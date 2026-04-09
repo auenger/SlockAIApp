@@ -1,11 +1,43 @@
-# feature-workflow/queue.yaml
 meta:
-  last_updated: "2026-04-08T18:10:00+08:00"
-  version: 11
+  last_updated: "2026-04-09T10:30:00+08:00"
+  version: 13
 
 parents: []
-active: []
-pending: []
+active:
+  - id: feat-agent-status
+    name: "Agent 状态与选择器"
+    priority: 90
+    size: S
+    dependencies: []
+    branch: feature/feat-agent-status
+    worktree: ../AgentsZone-feat-agent-status
+    started_at: "2026-04-09T10:30:00+08:00"
+
+pending:
+  - id: feat-thread-chat
+    name: "Thread: 1对1 Agent 对话"
+    priority: 85
+    size: M
+    dependencies: [feat-agent-status]
+
+  - id: feat-conversation-store
+    name: "对话持久化与历史"
+    priority: 75
+    size: S
+    dependencies: [feat-thread-chat]
+
+  - id: feat-channel-infra
+    name: "Channel 基础设施"
+    priority: 70
+    size: M
+    dependencies: [feat-agent-status, feat-thread-chat]
+
+  - id: feat-channel-multi-agent
+    name: "Channel 多Agent协作"
+    priority: 65
+    size: M
+    dependencies: [feat-conversation-store, feat-channel-infra]
+
 blocked: []
 completed:
   - id: feat-project-init

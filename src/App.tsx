@@ -3,12 +3,13 @@ import { Sidebar } from './components/Sidebar';
 import { MainContent } from './components/MainContent';
 import { ThreadPanel } from './components/ThreadPanel';
 import { CreateTaskModal, InviteHumanModal } from './components/Modals';
-import { TabType } from './types';
+import { TabType, AgentWithRuntime } from './types';
 
 export default function App() {
   const [activeChannel, setActiveChannel] = useState('kagent-integrate-sap-ai-core');
   const [activeTab, setActiveTab] = useState<TabType>('TASKS');
   const [isThreadOpen, setIsThreadOpen] = useState(true);
+  const [selectedAgent, setSelectedAgent] = useState<AgentWithRuntime | null>(null);
 
   // Modal states for demonstration
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
@@ -20,6 +21,8 @@ export default function App() {
       <Sidebar
         activeChannel={activeChannel}
         onChannelSelect={setActiveChannel}
+        selectedAgentId={selectedAgent?.agent.agent_id ?? null}
+        onAgentSelect={setSelectedAgent}
       />
 
       {/* Main Content Area */}
@@ -28,6 +31,7 @@ export default function App() {
         onTabChange={setActiveTab}
         onOpenCreateTask={() => setIsCreateTaskModalOpen(true)}
         onOpenInviteHuman={() => setIsInviteModalOpen(true)}
+        selectedAgent={selectedAgent}
       />
 
       {/* Right Thread Panel */}

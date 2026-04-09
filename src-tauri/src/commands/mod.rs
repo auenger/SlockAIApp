@@ -260,6 +260,80 @@ pub fn get_agent_context(
 }
 
 // ---------------------------------------------------------------------------
+// Agent + Runtime status command
+// ---------------------------------------------------------------------------
+
+/// Combined status of an agent: workspace info fused with runtime availability.
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentWithRuntime {
+    /// Agent workspace summary (from AgentManager).
+    pub agent: AgentSummary,
+    /// Runtime status string: "available" | "not-installed" | "unhealthy" | "detecting"
+    pub runtime_status: String,
+    /// Detected version (if runtime is available).
+    pub runtime_version: Option<String>,
+    /// Install hint (shown when runtime is not installed).
+    pub runtime_install_hint: Option<String>,
+}
+
+/// Get all agents with their runtime status fused together.
+///
+/// Scans registered runtimes and joins the result with the agent list
+/// from the workspace manager. Each agent entry includes the runtime
+/// availability information.
+#[tauri::command]
+pub fn get_agent_runtime_status(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<AgentWithRuntime>, String> {
+    // Get agent list from workspace manager
+    let agents = {
+        let manager = state
+            .agent_manager
+            .lock()
+            .map_err(|e| format!("lock error: {e}"))?;
+        manager.list_agents()
+    };
+
+    // Get runtime status from registry (uses cached detection data)
+    let runtimes = {
+        let registry = state
+            .agent_runtime_registry
+            .lock()
+            .map_err(|e| e.to_string())?;
+        registry.list_all()
+    };
+
+    // Build a lookup map: runtime_id -> AgentRuntimeInfo
+    // Currently each agent maps to "claude-code" runtime as the default.
+    // In the future, agents may have different runtime assignments.
+    let runtime_map: std::collections::HashMap<String, &crate::runtime::AgentRuntimeInfo> = runtimes
+        .iter()
+        .map(|rt| (rt.id.clone(), rt))
+        .collect();
+
+    // Fuse agent workspace info with runtime status
+    let result: Vec<AgentWithRuntime> = agents
+        .into_iter()
+        .map(|agent| {
+            // Currently all agents use the "claude-code" runtime.
+            // This will be configurable per-agent in the future.
+            let runtime = runtime_map.get("claude-code");
+
+            AgentWithRuntime {
+                runtime_status: runtime
+                    .map(|rt| rt.status.clone())
+                    .unwrap_or_else(|| "not-installed".to_string()),
+                runtime_version: runtime.and_then(|rt| rt.version.clone()),
+                runtime_install_hint: runtime.map(|rt| rt.install_hint.clone()),
+                agent,
+            }
+        })
+        .collect();
+
+    Ok(result)
+}
+
+// ---------------------------------------------------------------------------
 // Original test command
 // ---------------------------------------------------------------------------
 

@@ -13,6 +13,8 @@ import type {
   InitWorkspaceResult,
   IdentitySummary,
   AgentContextResult,
+  AgentWithRuntime,
+  AgentRuntimeInfo,
 } from "../types";
 
 /**
@@ -29,6 +31,15 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 /** Send a greeting to the Rust backend (test command). */
 export async function greet(name: string): Promise<string> {
   return invoke<string>("greet", { name });
+}
+
+// ---------------------------------------------------------------------------
+// Runtime commands
+// ---------------------------------------------------------------------------
+
+/** Scan for available agent runtimes. */
+export async function scanAgentRuntimes(): Promise<AgentRuntimeInfo[]> {
+  return invoke<AgentRuntimeInfo[]>("scan_agent_runtimes");
 }
 
 // ---------------------------------------------------------------------------
@@ -90,4 +101,13 @@ export async function getAgentIdentity(agentId: string): Promise<IdentitySummary
 /** Get the context information for an Agent. */
 export async function getAgentContext(agentId: string): Promise<AgentContextResult> {
   return invoke<AgentContextResult>("get_agent_context", { agentId });
+}
+
+// ---------------------------------------------------------------------------
+// Agent + Runtime status commands
+// ---------------------------------------------------------------------------
+
+/** Get all agents fused with their runtime availability status. */
+export async function getAgentRuntimeStatus(): Promise<AgentWithRuntime[]> {
+  return invoke<AgentWithRuntime[]>("get_agent_runtime_status");
 }
