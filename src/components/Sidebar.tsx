@@ -8,6 +8,7 @@ import {
   Settings,
   User,
   Circle,
+  Clock,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAgentStatus, getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
@@ -136,6 +137,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         {thread.preview}
                       </div>
                     )}
+                    <div className={cn(
+                      "text-[9px] mt-0.5 flex items-center gap-1",
+                      activeThreadId === thread.id ? "text-white/60" : "text-gray-400"
+                    )}>
+                      <Clock size={8} />
+                      {thread.updated_at && new Date(thread.updated_at).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                      <span className="ml-1">{thread.message_count} msg{thread.message_count !== 1 ? 's' : ''}</span>
+                    </div>
                   </div>
                 </button>
               ))

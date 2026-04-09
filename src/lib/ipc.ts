@@ -17,6 +17,7 @@ import type {
   AgentRuntimeInfo,
   Thread,
   ThreadInfo,
+  ThreadMessageData,
 } from "../types";
 
 /**
@@ -155,4 +156,13 @@ export async function saveAgentResponse(
   sessionId: string | null
 ): Promise<Thread> {
   return invoke<Thread>("save_agent_response", { agentId, threadId, content, sessionId });
+}
+
+/** Load messages for a thread from JSONL storage (for crash recovery). */
+export async function loadThreadMessages(
+  agentId: string,
+  threadId: string,
+  limit?: number
+): Promise<ThreadMessageData[]> {
+  return invoke<ThreadMessageData[]>("load_thread_messages", { agentId, threadId, limit: limit ?? null });
 }
