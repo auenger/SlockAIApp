@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAgentStatus, getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
-import type { AgentWithRuntime } from '../types';
+import type { AgentWithRuntime, ThreadInfo } from '../types';
 
 interface SidebarProps {
   activeChannel: string;
@@ -20,6 +20,14 @@ interface SidebarProps {
   selectedAgentId: string | null;
   /** Callback when user clicks an agent */
   onAgentSelect: (agent: AgentWithRuntime) => void;
+  /** Thread list for the selected agent */
+  threads?: ThreadInfo[];
+  /** Currently active thread ID */
+  activeThreadId?: string | null;
+  /** Callback when user clicks a thread */
+  onThreadSelect?: (threadId: string) => void;
+  /** Callback when user wants to create a new thread */
+  onCreateThread?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -27,6 +35,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onChannelSelect,
   selectedAgentId,
   onAgentSelect,
+  threads = [],
+  activeThreadId,
+  onThreadSelect,
+  onCreateThread,
 }) => {
   const { agents, loading } = useAgentStatus();
 
@@ -78,23 +90,60 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </section>
 
-        {/* Threads */}
+        {/* Threads - real data from backend */}
         <section>
           <div className="flex items-center justify-between px-2 mb-2">
             <h3 className="font-black text-xs uppercase tracking-wider flex items-center gap-1">
-              <ChevronDown size={14} /> Threads <span className="text-gray-600">2</span>
+              <ChevronDown size={14} /> Threads{' '}
+              <span className="text-gray-600">{threads.length}</span>
             </h3>
+            {selectedAgentId && onCreateThread && (
+              <button
+                onClick={onCreateThread}
+                className="brutal-border bg-white p-0.5 hover:bg-gray-100"
+                title="New Thread"
+              >
+                <Plus size={14} />
+              </button>
+            )}
           </div>
           <div className="space-y-2">
-            {[
-              { id: 't1', text: '@Alice 或许我们可以把架构设...' },
-              { id: 't2', text: '@Alice @克劳德 我们现在要将...' }
-            ].map(thread => (
-              <button key={thread.id} className="w-full text-left px-3 py-1 text-xs font-medium hover:underline flex items-start gap-2">
-                <MessageSquare size={12} className="mt-0.5 shrink-0" />
-                <span className="truncate">{thread.text}</span>
-              </button>
-            ))}
+            {threads.length > 0 ? (
+              threads.map((thread) => (
+                <button
+                  key={thread.id}
+                  onClick={() => onThreadSelect?.(thread.id)}
+                  className={cn(
+                    "w-full text-left px-3 py-1.5 text-xs font-medium flex items-start gap-2 transition-all",
+                    activeThreadId === thread.id
+                      ? "bg-brutal-pink text-white brutal-shadow-sm translate-x-[-2px] translate-y-[-2px]"
+                      : "hover:bg-white/50"
+                  )}
+                >
+                  <MessageSquare size={12} className="mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className={cn(
+                      "font-bold text-[11px] truncate",
+                      activeThreadId === thread.id ? "text-white" : "text-gray-800"
+                    )}>
+                      {thread.title}
+                    </div>
+                    {thread.preview && (
+                      <div className={cn(
+                        "truncate text-[10px]",
+                        activeThreadId === thread.id ? "text-white/80" : "text-gray-500"
+                      )}>
+                        {thread.preview}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="text-[10px] text-gray-500 italic px-2 py-1">
+                {selectedAgentId ? 'No threads yet' : 'Select an agent'}
+              </div>
+            )}
           </div>
         </section>
 

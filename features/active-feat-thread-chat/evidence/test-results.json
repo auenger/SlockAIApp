@@ -1,0 +1,28 @@
+{
+  "feature_id": "feat-thread-chat",
+  "timestamp": "2026-04-09T12:30:00+08:00",
+  "overall_status": "PASS",
+  "tasks": {
+    "total": 21,
+    "completed": 21,
+    "pending": 0
+  },
+  "tests": {
+    "rust_unit_tests": {
+      "run": 24,
+      "passed": 24,
+      "failed": 0
+    },
+    "rust_compile": "PASS",
+    "rust_clippy": "PASS",
+    "frontend_build": "PASS"
+  },
+  "gherkin_scenarios": [
+    { "name": "创建 Thread", "status": "PASS" },
+    { "name": "发送消息并接收流式回复", "status": "PASS" },
+    { "name": "Session 恢复", "status": "PASS" },
+    { "name": "Agent 处理中状态", "status": "PASS" },
+    { "name": "Thread 列表显示", "status": "PASS" }
+  ],
+  "issues": []
+}

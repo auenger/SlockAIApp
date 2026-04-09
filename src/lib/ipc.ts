@@ -15,6 +15,8 @@ import type {
   AgentContextResult,
   AgentWithRuntime,
   AgentRuntimeInfo,
+  Thread,
+  ThreadInfo,
 } from "../types";
 
 /**
@@ -110,4 +112,47 @@ export async function getAgentContext(agentId: string): Promise<AgentContextResu
 /** Get all agents fused with their runtime availability status. */
 export async function getAgentRuntimeStatus(): Promise<AgentWithRuntime[]> {
   return invoke<AgentWithRuntime[]>("get_agent_runtime_status");
+}
+
+// ---------------------------------------------------------------------------
+// Thread commands
+// ---------------------------------------------------------------------------
+
+/** Create a new Thread for a specific agent. */
+export async function createThread(agentId: string): Promise<Thread> {
+  return invoke<Thread>("create_thread", { agentId });
+}
+
+/** List all threads for a specific agent. */
+export async function listThreads(agentId: string): Promise<ThreadInfo[]> {
+  return invoke<ThreadInfo[]>("list_threads", { agentId });
+}
+
+/** Get a single thread by ID. */
+export async function getThread(agentId: string, threadId: string): Promise<Thread> {
+  return invoke<Thread>("get_thread", { agentId, threadId });
+}
+
+/** Delete a thread by ID. */
+export async function deleteThread(agentId: string, threadId: string): Promise<void> {
+  return invoke<void>("delete_thread", { agentId, threadId });
+}
+
+/** Send a message in a thread (triggers runtime streaming). */
+export async function sendMessage(
+  agentId: string,
+  threadId: string,
+  message: string
+): Promise<Thread> {
+  return invoke<Thread>("send_message", { agentId, threadId, message });
+}
+
+/** Save an agent response to a thread (after streaming completes). */
+export async function saveAgentResponse(
+  agentId: string,
+  threadId: string,
+  content: string,
+  sessionId: string | null
+): Promise<Thread> {
+  return invoke<Thread>("save_agent_response", { agentId, threadId, content, sessionId });
 }
