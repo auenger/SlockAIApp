@@ -28,12 +28,14 @@
 //! ```
 
 pub mod agent;
+pub mod channel;
 pub mod identity;
 pub mod manager;
 pub mod templates;
 pub mod thread;
 
 pub use agent::AgentWorkspace;
+pub use channel::{Channel, ChannelInfo, ChannelMember, ChannelMessage, ChannelStore};
 pub use identity::AgentIdentity;
 pub use manager::AgentManager;
 pub use templates::WorkspaceTemplates;

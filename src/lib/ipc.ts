@@ -17,6 +17,8 @@ import type {
   AgentRuntimeInfo,
   Thread,
   ThreadInfo,
+  Channel,
+  ChannelInfo,
 } from "../types";
 
 /**
@@ -155,4 +157,74 @@ export async function saveAgentResponse(
   sessionId: string | null
 ): Promise<Thread> {
   return invoke<Thread>("save_agent_response", { agentId, threadId, content, sessionId });
+}
+
+// ---------------------------------------------------------------------------
+// Channel commands
+// ---------------------------------------------------------------------------
+
+/** Create a new Channel with the given name and Agent members. */
+export async function createChannel(
+  name: string,
+  memberAgentIds: string[]
+): Promise<Channel> {
+  return invoke<Channel>("create_channel", {
+    request: { name, member_agent_ids: memberAgentIds },
+  });
+}
+
+/** List all channels. */
+export async function listChannels(): Promise<ChannelInfo[]> {
+  return invoke<ChannelInfo[]>("list_channels");
+}
+
+/** Get a single channel by ID (with full details). */
+export async function getChannel(channelId: string): Promise<Channel> {
+  return invoke<Channel>("get_channel", { channelId });
+}
+
+/** Update a channel's settings. */
+export async function updateChannel(
+  channelId: string,
+  name?: string
+): Promise<Channel> {
+  return invoke<Channel>("update_channel", { channelId, request: { name } });
+}
+
+/** Delete a channel by ID. */
+export async function deleteChannel(channelId: string): Promise<void> {
+  return invoke<void>("delete_channel", { channelId });
+}
+
+/** Add an Agent member to a channel. */
+export async function addChannelMember(
+  channelId: string,
+  agentId: string
+): Promise<Channel> {
+  return invoke<Channel>("add_channel_member", { channelId, agentId });
+}
+
+/** Remove an Agent member from a channel. */
+export async function removeChannelMember(
+  channelId: string,
+  agentId: string
+): Promise<Channel> {
+  return invoke<Channel>("remove_channel_member", { channelId, agentId });
+}
+
+/** Send a message in a channel (triggers runtime streaming). */
+export async function sendChannelMessage(
+  channelId: string,
+  message: string
+): Promise<Channel> {
+  return invoke<Channel>("send_channel_message", { channelId, message });
+}
+
+/** Save an agent response to a channel (after streaming completes). */
+export async function saveChannelResponse(
+  channelId: string,
+  agentId: string,
+  content: string
+): Promise<Channel> {
+  return invoke<Channel>("save_channel_response", { channelId, agentId, content });
 }

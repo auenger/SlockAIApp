@@ -15,10 +15,47 @@ export interface Agent {
   color: string;
 }
 
+// ===========================================================================
+// Channel types
+// ===========================================================================
+
+/** A collaboration channel containing multiple Agent members. */
 export interface Channel {
   id: string;
   name: string;
-  unreadCount?: number;
+  members: ChannelMember[];
+  messages: ChannelMessage[];
+  created_at: string;
+  updated_at: string;
+}
+
+/** A member (Agent) in a channel. */
+export interface ChannelMember {
+  agent_id: string;
+  role: string;
+  joined_at: string;
+}
+
+/** A message within a channel. */
+export interface ChannelMessage {
+  id: string;
+  channel_id: string;
+  sender_type: "user" | "agent";
+  sender_id: string;
+  content: string;
+  timestamp: string;
+}
+
+/** Lightweight channel info for listing. */
+export interface ChannelInfo {
+  id: string;
+  name: string;
+  member_count: number;
+  unread_count: number;
+  preview: string;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Thread {
