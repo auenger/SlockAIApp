@@ -38,7 +38,30 @@
 - feat-thread-chat（后续）— 依赖本 feature 的 Agent 选择
 
 ## Technical Solution
-<!-- To be filled during implementation -->
+
+### Architecture
+
+1. **Backend (Rust)**: Added `get_agent_runtime_status` Tauri command that fuses data from `AgentManager.list_agents()` with `RuntimeRegistry.list_all()`. Returns `Vec<AgentWithRuntime>` combining workspace agent summary with runtime status/version/install_hint.
+
+2. **Frontend Hook**: Created `useAgentStatus` hook that:
+   - Calls `scan_agent_runtimes` first to refresh detection data
+   - Then calls `get_agent_runtime_status` to get fused agent+runtime data
+   - Auto-triggers on mount
+   - Provides dev fallback mock data when not in Tauri
+
+3. **Sidebar**: Replaced hardcoded mock agents with real data from `useAgentStatus`. Each agent shows a status indicator dot (green/gray/yellow) based on runtime availability. Hover shows tooltip with status and install hint.
+
+4. **Agent Selection**: App component manages `selectedAgent` state. Clicking an agent in Sidebar passes the full `AgentWithRuntime` object up to App, which forwards it to MainContent. MainContent header dynamically shows the selected agent's name, emoji, status, and version.
+
+### Files Changed
+- `src-tauri/src/commands/mod.rs` — Added `AgentWithRuntime` struct and `get_agent_runtime_status` command
+- `src-tauri/src/lib.rs` — Registered new command
+- `src/types.ts` — Added `AgentWithRuntime` interface
+- `src/lib/ipc.ts` — Added `scanAgentRuntimes` and `getAgentRuntimeStatus` functions
+- `src/lib/useAgentStatus.ts` — New hook (agent status with auto-scan)
+- `src/components/Sidebar.tsx` — Rewritten to use real agent data
+- `src/components/MainContent.tsx` — Header updates with selected agent info
+- `src/App.tsx` — Added selectedAgent state management
 
 ## Acceptance Criteria (Gherkin)
 

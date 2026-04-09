@@ -144,3 +144,19 @@ export interface AgentContextResult {
   has_history: boolean;
   context_prefix_length: number;
 }
+
+// ===========================================================================
+// Agent with Runtime status types
+// ===========================================================================
+
+/** Agent summary fused with its runtime availability status */
+export interface AgentWithRuntime {
+  /** Agent workspace summary */
+  agent: AgentSummary;
+  /** Runtime status: "available" | "not-installed" | "unhealthy" | "detecting" */
+  runtime_status: AgentRuntimeStatusType;
+  /** Detected runtime version (if available) */
+  runtime_version?: string;
+  /** Install hint (shown when runtime not installed) */
+  runtime_install_hint?: string;
+}

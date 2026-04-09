@@ -24,16 +24,19 @@ import {
   Database
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { TabType, Task, Message } from '../types';
+import { TabType, Task, Message, AgentWithRuntime } from '../types';
+import { getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
 
 interface MainContentProps {
   activeTab: TabType;
   onTabChange: (tab: TabType) => void;
   onOpenCreateTask?: () => void;
   onOpenInviteHuman?: () => void;
+  /** Currently selected agent (null = no agent selected) */
+  selectedAgent?: AgentWithRuntime | null;
 }
 
-export const MainContent: React.FC<MainContentProps> = ({ activeTab, onTabChange, onOpenCreateTask }) => {
+export const MainContent: React.FC<MainContentProps> = ({ activeTab, onTabChange, onOpenCreateTask, selectedAgent }) => {
   const [taskFilter, setTaskFilter] = useState('All');
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -126,16 +129,48 @@ export const MainContent: React.FC<MainContentProps> = ({ activeTab, onTabChange
       <div className="p-3 brutal-border-b flex items-center justify-between bg-white">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 brutal-border bg-brutal-cyan flex items-center justify-center">
-            <Bot size={24} />
+            {selectedAgent ? (
+              <span className="text-xl">{selectedAgent.agent.emoji}</span>
+            ) : (
+              <Bot size={24} />
+            )}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="font-black text-lg">克劳德</h2>
-              <span className="text-[10px] text-gray-500 font-medium">你是一个非常资深的软件开发工程师...</span>
+              <h2 className="font-black text-lg">
+                {selectedAgent ? selectedAgent.agent.name : 'Select an Agent'}
+              </h2>
+              {selectedAgent && (
+                <span className="text-[10px] text-gray-500 font-medium">
+                  {selectedAgent.agent.agent_id}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1.5">
-              <Circle size={8} fill="#39FF14" className="text-brutal-green" />
-              <span className="text-[10px] font-bold uppercase tracking-tighter">Online</span>
+              {selectedAgent ? (
+                <>
+                  <Circle
+                    size={8}
+                    fill={getRuntimeStatusColor(selectedAgent.runtime_status)}
+                    className="shrink-0"
+                  />
+                  <span className="text-[10px] font-bold uppercase tracking-tighter">
+                    {getRuntimeStatusLabel(selectedAgent.runtime_status)}
+                  </span>
+                  {selectedAgent.runtime_version && (
+                    <span className="text-[10px] text-gray-400 ml-1">
+                      v{selectedAgent.runtime_version}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Circle size={8} fill="#9CA3AF" className="text-gray-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-tighter text-gray-400">
+                    No Agent Selected
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>

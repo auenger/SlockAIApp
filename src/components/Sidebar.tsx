@@ -1,50 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Hash,
   MessageSquare,
-  Bot,
-  User,
   Plus,
   ChevronDown,
   Monitor,
   Settings,
-  Circle
+  User,
+  Circle,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { listAgents, switchAgent, getActiveAgent } from '../lib/ipc';
-import type { AgentSummary } from '../types';
+import { useAgentStatus, getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
+import type { AgentWithRuntime } from '../types';
 
 interface SidebarProps {
   activeChannel: string;
   onChannelSelect: (id: string) => void;
+  /** Currently selected agent ID */
+  selectedAgentId: string | null;
+  /** Callback when user clicks an agent */
+  onAgentSelect: (agent: AgentWithRuntime) => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeChannel, onChannelSelect }) => {
-  const [workspaceAgents, setWorkspaceAgents] = useState<AgentSummary[]>([]);
-  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
-
-  useEffect(() => {
-    loadWorkspaceAgents();
-  }, []);
-
-  async function loadWorkspaceAgents() {
-    try {
-      const [agents, active] = await Promise.all([listAgents(), getActiveAgent()]);
-      setWorkspaceAgents(agents);
-      setActiveAgentId(active?.agent_id ?? null);
-    } catch {
-      // Backend not available during development
-    }
-  }
-
-  async function handleSwitchAgent(agentId: string) {
-    try {
-      const result = await switchAgent(agentId);
-      setActiveAgentId(result.agent_id);
-    } catch {
-      // Backend not available
-    }
-  }
+export const Sidebar: React.FC<SidebarProps> = ({
+  activeChannel,
+  onChannelSelect,
+  selectedAgentId,
+  onAgentSelect,
+}) => {
+  const { agents, loading } = useAgentStatus();
 
   return (
     <div className="w-64 h-full bg-brutal-yellow brutal-border flex flex-col overflow-hidden">
@@ -118,22 +102,32 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeChannel, onChannelSelect
         <section>
           <div className="flex items-center justify-between px-2 mb-2">
             <h3 className="font-black text-xs uppercase tracking-wider flex items-center gap-1">
-              <ChevronDown size={14} /> Agents <span className="text-gray-600">{workspaceAgents.length || 3}</span>
+              <ChevronDown size={14} /> Agents{' '}
+              <span className="text-gray-600">{loading ? '...' : agents.length}</span>
             </h3>
             <button className="brutal-border bg-white p-0.5 hover:bg-gray-100">
               <Plus size={14} />
             </button>
           </div>
           <div className="space-y-1">
-            {workspaceAgents.length > 0 ? (
-              // Workspace agents from IDENTITY.md
-              workspaceAgents.map((agent) => (
+            {agents.map((agentWithRuntime) => {
+              const { agent, runtime_status, runtime_install_hint } = agentWithRuntime;
+              const isSelected = selectedAgentId === agent.agent_id;
+              const statusColor = getRuntimeStatusColor(runtime_status);
+              const statusLabel = getRuntimeStatusLabel(runtime_status);
+
+              return (
                 <button
                   key={agent.agent_id}
-                  onClick={() => handleSwitchAgent(agent.agent_id)}
+                  onClick={() => onAgentSelect(agentWithRuntime)}
+                  title={
+                    runtime_status === 'not-installed' && runtime_install_hint
+                      ? `${statusLabel}\nInstall: ${runtime_install_hint}`
+                      : statusLabel
+                  }
                   className={cn(
                     "w-full text-left px-2 py-1.5 flex items-center gap-2 brutal-border transition-all",
-                    activeAgentId === agent.agent_id
+                    isSelected
                       ? "bg-brutal-pink text-white brutal-shadow-sm translate-x-[-2px] translate-y-[-2px]"
                       : "hover:bg-white/50 border-transparent"
                   )}
@@ -144,29 +138,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeChannel, onChannelSelect
                   <div className="flex-1 min-w-0">
                     <div className="font-black text-sm truncate">{agent.name}</div>
                   </div>
-                  {activeAgentId === agent.agent_id && (
-                    <Circle size={8} fill="#39FF14" className="shrink-0" />
-                  )}
+                  <Circle
+                    size={8}
+                    fill={statusColor}
+                    className="shrink-0"
+                  />
                 </button>
-              ))
-            ) : (
-              // Fallback demo agents
-              [
-                { id: 'claude', name: '克劳德', desc: '你是一个非常资深...', color: 'bg-brutal-pink', status: 'online' },
-                { id: 'alice', name: 'Alice', desc: '你是一个在云原生领...', color: 'bg-brutal-cyan', status: 'online' },
-                { id: 'perter', name: 'Perter', desc: '你是一个非常善于...', color: 'bg-brutal-yellow', status: 'busy' }
-              ].map(agent => (
-                <button key={agent.id} className="w-full text-left px-2 py-1.5 flex items-center gap-2 hover:bg-white/50 brutal-border border-transparent">
-                  <div className={cn("w-6 h-6 brutal-border flex items-center justify-center shrink-0", agent.color)}>
-                    <Bot size={14} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-black text-sm truncate">{agent.name}</div>
-                    <div className="text-[10px] text-gray-700 truncate">{agent.desc}</div>
-                  </div>
-                  <Circle size={8} fill={agent.status === 'online' ? '#39FF14' : '#FFDE00'} className="shrink-0" />
-                </button>
-              ))
+              );
+            })}
+            {agents.length === 0 && !loading && (
+              <div className="text-[10px] text-gray-500 italic px-2 py-1">
+                No agents found
+              </div>
             )}
           </div>
         </section>
