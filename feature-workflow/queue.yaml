@@ -1,18 +1,9 @@
 meta:
-  last_updated: "2026-04-09T10:30:00+08:00"
-  version: 13
+  last_updated: "2026-04-09T10:45:00+08:00"
+  version: 14
 
 parents: []
-active:
-  - id: feat-agent-status
-    name: "Agent 状态与选择器"
-    priority: 90
-    size: S
-    dependencies: []
-    branch: feature/feat-agent-status
-    worktree: ../AgentsZone-feat-agent-status
-    started_at: "2026-04-09T10:30:00+08:00"
-
+active: []
 pending:
   - id: feat-thread-chat
     name: "Thread: 1对1 Agent 对话"
@@ -64,3 +55,7 @@ completed:
     name: "Rename to AgentsZone"
     completed_at: "2026-04-08T18:10:00Z"
     tag: feat-rename-agentszone-20260408
+  - id: feat-agent-status
+    name: "Agent 状态与选择器"
+    completed_at: "2026-04-09T10:45:00+08:00"
+    tag: feat-agent-status-20260409

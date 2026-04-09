@@ -63,6 +63,17 @@
 - `src/components/MainContent.tsx` — Header updates with selected agent info
 - `src/App.tsx` — Added selectedAgent state management
 
+## Merge Record
+
+- **Completed**: 2026-04-09T10:45:00+08:00
+- **Merged Branch**: feature/feat-agent-status
+- **Merge Commit**: 306682e
+- **Archive Tag**: feat-agent-status-20260409
+- **Conflicts**: None
+- **Verification**: PASSED (10/10 tasks, 3/3 Gherkin scenarios, 24 Rust tests, tsc clean)
+- **Commits**: 4 (on feature branch)
+- **Files Changed**: 14
+
 ## Acceptance Criteria (Gherkin)
 
 ### User Story
