@@ -20,7 +20,7 @@ export default function App() {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
   // Thread chat hook (shared between Sidebar and MainContent)
-  const { threads, loadThreads, createNewThread, selectThread } = useThreadChat();
+  const { threads, loadThreads, createNewThread, selectThread, activeThread, send: sendThreadMessage } = useThreadChat();
 
   // Channel hook
   const {
@@ -70,6 +70,12 @@ export default function App() {
       selectThread(selectedAgent.agent.agent_id, threadId);
     }
     setActiveTab('CHAT');
+  };
+
+  /** Handle sending a message in ThreadPanel */
+  const handleSendThreadMessage = async (message: string) => {
+    if (!selectedAgent || !activeThreadId) return;
+    await sendThreadMessage(selectedAgent.agent.agent_id, activeThreadId, message);
   };
 
   /** Handle new thread creation from sidebar */
@@ -142,6 +148,9 @@ export default function App() {
       {/* Right Thread Panel */}
       <ThreadPanel
         isOpen={isThreadOpen}
+        thread={activeThread}
+        agent={selectedAgent}
+        onSend={handleSendThreadMessage}
         onClose={() => setIsThreadOpen(false)}
       />
 
