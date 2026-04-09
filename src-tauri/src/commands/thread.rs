@@ -230,6 +230,13 @@ pub async fn send_message(
             log::warn!("[send_message] JSONL append failed for thread {}: {}", thread_id, e);
         }
 
+        // Build context prefix using ContextBuilder (same as Channel mode)
+        let workspace_root = workspace.base_path();
+        let builder = crate::context::ContextBuilder::new(workspace_root);
+        let context_prefix = builder
+            .build_context_prefix(&agent_id)
+            .unwrap_or_default();
+
         // Get workspace path for runtime execution
         let workspace_path = workspace.base_path().to_string_lossy().to_string();
         let session_id = thread.session_id.clone();
@@ -246,7 +253,7 @@ pub async fn send_message(
                 message,
                 session_id,
                 workspace: Some(workspace_path),
-                system_prompt: None,
+                system_prompt: Some(context_prefix),
                 timeout_secs: 120,
             };
 
