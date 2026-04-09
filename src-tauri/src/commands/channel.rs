@@ -1,12 +1,13 @@
 //! Tauri IPC commands for Channel operations.
 //!
 //! Provides CRUD operations for Channels, member management,
-//! and basic message sending.
+//! message sending with multi-Agent @mention support,
+//! and context-orchestrated execution.
 
-use crate::AppState;
 use crate::workspace::channel::{
     self, Channel, ChannelInfo, ChannelMember, ChannelMessage, ChannelStore,
 };
+use crate::workspace::mention;
 use tauri::{AppHandle, Emitter};
 
 // ---------------------------------------------------------------------------
@@ -22,7 +23,7 @@ pub struct CreateChannelRequest {
 /// Create a new Channel with the given name and Agent members.
 #[tauri::command]
 pub fn create_channel(
-    state: tauri::State<'_, AppState>,
+    state: tauri::State<'_, crate::AppState>,
     request: CreateChannelRequest,
 ) -> Result<Channel, String> {
     let manager = state
@@ -75,7 +76,7 @@ pub fn create_channel(
 /// List all channels.
 #[tauri::command]
 pub fn list_channels(
-    state: tauri::State<'_, AppState>,
+    state: tauri::State<'_, crate::AppState>,
 ) -> Result<Vec<ChannelInfo>, String> {
     let manager = state
         .agent_manager
@@ -90,7 +91,7 @@ pub fn list_channels(
 /// Get a single channel by ID (with full details including members).
 #[tauri::command]
 pub fn get_channel(
-    state: tauri::State<'_, AppState>,
+    state: tauri::State<'_, crate::AppState>,
     channel_id: String,
 ) -> Result<Channel, String> {
     let manager = state
@@ -111,7 +112,7 @@ pub struct UpdateChannelRequest {
 /// Update a channel's settings (e.g., name).
 #[tauri::command]
 pub fn update_channel(
-    state: tauri::State<'_, AppState>,
+    state: tauri::State<'_, crate::AppState>,
     channel_id: String,
     request: UpdateChannelRequest,
 ) -> Result<Channel, String> {
@@ -138,7 +139,7 @@ pub fn update_channel(
 /// Delete a channel by ID.
 #[tauri::command]
 pub fn delete_channel(
-    state: tauri::State<'_, AppState>,
+    state: tauri::State<'_, crate::AppState>,
     channel_id: String,
 ) -> Result<(), String> {
     let manager = state
@@ -161,7 +162,7 @@ pub fn delete_channel(
 /// Add an Agent member to a channel.
 #[tauri::command]
 pub fn add_channel_member(
-    state: tauri::State<'_, AppState>,
+    state: tauri::State<'_, crate::AppState>,
     channel_id: String,
     agent_id: String,
 ) -> Result<Channel, String> {
@@ -204,7 +205,7 @@ pub fn add_channel_member(
 /// Remove an Agent member from a channel.
 #[tauri::command]
 pub fn remove_channel_member(
-    state: tauri::State<'_, AppState>,
+    state: tauri::State<'_, crate::AppState>,
     channel_id: String,
     agent_id: String,
 ) -> Result<Channel, String> {
@@ -235,22 +236,32 @@ pub fn remove_channel_member(
 }
 
 // ---------------------------------------------------------------------------
-// Channel messaging
+// Channel messaging with multi-Agent @mention support
 // ---------------------------------------------------------------------------
 
-/// Send a message in a channel and trigger Agent response.
+/// Maximum number of recent messages to include as Channel context.
+const CHANNEL_CONTEXT_HISTORY_LIMIT: usize = 20;
+
+/// Send a message in a channel, parse @mentions, and trigger multi-Agent responses.
 ///
-/// For now, routes the message to the first agent member for a single-agent reply.
-/// Multi-agent @mention support is in feat-channel-multi-agent.
+/// Flow:
+/// 1. Parse @mentions from the user message
+/// 2. Resolve to agent IDs (fallback to first member if no mentions)
+/// 3. For each mentioned agent (serial execution):
+///    a. Build agent context (SOUL.md + IDENTITY.md + MEMORY.md)
+///    b. Build channel context (recent N messages as conversation history)
+///    c. Execute via runtime with assembled system prompt
+///    d. Stream events to frontend with agent_id identifier
+/// 4. Each agent's response is saved independently
 #[tauri::command]
 pub async fn send_channel_message(
     app: AppHandle,
-    state: tauri::State<'_, AppState>,
+    state: tauri::State<'_, crate::AppState>,
     channel_id: String,
     message: String,
 ) -> Result<Channel, String> {
-    // 1. Load channel and add user message
-    let channel = {
+    // ---- Phase 1: Load channel, add user message, parse mentions ----
+    let (_channel, target_agents, workspace_root) = {
         let manager = state
             .agent_manager
             .lock()
@@ -272,24 +283,114 @@ pub async fn send_channel_message(
         channel.messages.push(user_msg);
         channel.updated_at = channel::now_iso();
 
-        // Get the first agent member as the default responder
-        let responder_agent_id = channel
-            .members
-            .first()
-            .map(|m| m.agent_id.clone())
-            .ok_or_else(|| "channel has no agent members".to_string())?;
+        // Parse @mentions
+        let mention_result = mention::parse_mentions(&message, &channel.members);
+        let target_agents = mention::resolve_agents(&mention_result.mentions, &channel.members);
 
-        // Get workspace path for runtime execution
-        let workspace = manager
-            .get_workspace(&responder_agent_id)
-            .ok_or_else(|| format!("workspace not found for agent: {responder_agent_id}"))?;
+        if target_agents.is_empty() {
+            return Err("channel has no agent members".to_string());
+        }
 
-        let workspace_path = workspace.base_path().to_string_lossy().to_string();
+        log::info!(
+            "[send_channel_message] channel_id={}, parsed {} mentions, targets: {:?}",
+            channel_id,
+            mention_result.mentions.len(),
+            target_agents
+        );
 
-        // Get session info for the responder (create a session ID for channel context)
-        let session_id = Some(crate::workspace::thread::generate_id());
+        // Save channel with user message
+        store.save(&channel).map_err(|e| format!("save failed: {e}"))?;
 
-        // Start runtime execution
+        let workspace_root = manager.workspace_root().to_path_buf();
+
+        (channel, target_agents, workspace_root)
+    };
+
+    // ---- Phase 2: Execute each mentioned agent serially ----
+    let total_agents = target_agents.len();
+    for (agent_idx, agent_id) in target_agents.iter().enumerate() {
+        let agent_id = agent_id.clone();
+        let channel_id = channel_id.clone();
+        let workspace_root = workspace_root.clone();
+
+        // Build context for this agent
+        let (system_prompt, workspace_path, recent_count) = {
+            let manager = state
+                .agent_manager
+                .lock()
+                .map_err(|e| format!("lock error: {e}"))?;
+
+            // Load latest channel state for context
+            let channels_dir = manager.channels_dir();
+            let store = ChannelStore::new(&channels_dir);
+            let latest_channel = store.load(&channel_id).map_err(|e| format!("load failed: {e}"))?;
+
+            // Build agent context via ContextBuilder
+            let builder = crate::context::ContextBuilder::new(&workspace_root);
+            let mut context_prefix = builder
+                .build_context_prefix(&agent_id)
+                .unwrap_or_default();
+
+            // Append channel context: recent N messages as conversation history
+            let recent: Vec<&ChannelMessage> = latest_channel
+                .messages
+                .iter()
+                .rev()
+                .take(CHANNEL_CONTEXT_HISTORY_LIMIT)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect();
+
+            if !recent.is_empty() {
+                context_prefix.push_str("\n\n# Channel Conversation History\n\n");
+                context_prefix.push_str(&format!(
+                    "You are in a channel named \"{}\". Here are the recent messages:\n\n",
+                    latest_channel.name
+                ));
+                for msg in &recent {
+                    let sender = if msg.sender_type == "user" {
+                        "User".to_string()
+                    } else {
+                        manager
+                            .get_agent(&msg.sender_id)
+                            .map(|a| a.identity.name.clone())
+                            .unwrap_or_else(|| msg.sender_id.clone())
+                    };
+                    context_prefix.push_str(&format!("[{}]: {}\n", sender, msg.content));
+                }
+                context_prefix.push_str("\n---\n\n");
+            }
+
+            // Get workspace path for this agent
+            let workspace = manager
+                .get_workspace(&agent_id)
+                .ok_or_else(|| format!("workspace not found for agent: {agent_id}"))?;
+            let ws_path = workspace.base_path().to_string_lossy().to_string();
+
+            (Some(context_prefix), ws_path, recent.len())
+        };
+
+        log::info!(
+            "[send_channel_message] executing agent {}/{}, agent_id={}, context: {} recent messages",
+            agent_idx + 1,
+            total_agents,
+            agent_id,
+            recent_count
+        );
+
+        // Emit agent-start event so frontend knows which agent is responding
+        let _ = app.emit(
+            "agent://channel-agent-start",
+            serde_json::json!({
+                "channel_id": channel_id,
+                "agent_id": agent_id,
+                "agent_index": agent_idx,
+                "total_agents": total_agents,
+            }),
+        );
+
+        // Start runtime execution for this agent
         let receiver = {
             let registry = state
                 .agent_runtime_registry
@@ -298,26 +399,36 @@ pub async fn send_channel_message(
             let runtime = registry.get_runtime_instance("claude-code")?;
 
             let params = crate::runtime::ExecuteParams {
-                message,
-                session_id,
+                message: message.clone(),
+                session_id: None,
                 workspace: Some(workspace_path),
-                system_prompt: None,
+                system_prompt,
                 timeout_secs: 120,
             };
 
             runtime.execute(params)?
         };
 
-        // Save channel with user message
-        store.save(&channel).map_err(|e| format!("save failed: {e}"))?;
-
-        // Spawn thread to forward streaming events to frontend
+        // Spawn thread to forward streaming events to frontend and collect response
         let app_clone = app.clone();
         let channel_id_clone = channel_id.clone();
-        let responder_id = responder_agent_id.clone();
+        let agent_id_clone = agent_id.clone();
+        let agent_manager_ptr = {
+            state
+                .agent_manager
+                .lock()
+                .map_err(|e| format!("lock error: {e}"))?
+                .workspace_root()
+                .to_path_buf()
+        };
+
+        // Channel to signal completion
+        let (tx_done, rx_done) = std::sync::mpsc::channel::<Result<(), String>>();
+
         std::thread::spawn(move || {
             let mut full_response = String::new();
             let mut result_session_id: Option<String> = None;
+            let mut had_error = false;
 
             while let Ok(event) = receiver.recv() {
                 if event.is_done {
@@ -326,40 +437,103 @@ pub async fn send_channel_message(
                 if event.msg_type.as_deref() == Some("assistant") && !event.text.is_empty() {
                     full_response.push_str(&event.text);
                 }
-                // Forward event to frontend with channel context
+
+                // Forward event to frontend with agent_id context
                 let _ = app_clone.emit(
                     "agent://channel-chunk",
                     serde_json::json!({
                         "channel_id": channel_id_clone,
+                        "agent_id": agent_id_clone,
+                        "agent_index": agent_idx,
+                        "total_agents": total_agents,
                         "event": event,
                     }),
                 );
+
                 if event.is_done {
+                    if event.error.is_some() {
+                        had_error = true;
+                        log::warn!(
+                            "[send_channel_message] agent {} had error: {:?}",
+                            agent_id_clone,
+                            event.error
+                        );
+                    }
                     break;
                 }
             }
 
-            // Emit channel-response event for saving
-            if !full_response.is_empty() {
-                let _ = app_clone.emit("agent://channel-response", serde_json::json!({
-                    "channel_id": channel_id_clone,
-                    "agent_id": responder_id,
-                    "content": full_response,
-                    "session_id": result_session_id,
-                }));
+            // Save agent response to channel
+            if !full_response.is_empty() && !had_error {
+                let channels_dir = agent_manager_ptr.join("channels");
+                let store = ChannelStore::new(&channels_dir);
+                if let Ok(mut ch) = store.load(&channel_id_clone) {
+                    let agent_msg = ChannelMessage {
+                        id: crate::workspace::thread::generate_id(),
+                        channel_id: channel_id_clone.clone(),
+                        sender_type: "agent".to_string(),
+                        sender_id: agent_id_clone.clone(),
+                        content: full_response.clone(),
+                        timestamp: channel::now_iso(),
+                    };
+                    ch.messages.push(agent_msg);
+                    ch.updated_at = channel::now_iso();
+                    let _ = store.save(&ch);
+                }
+
+                // Emit response event for frontend
+                let _ = app_clone.emit(
+                    "agent://channel-response",
+                    serde_json::json!({
+                        "channel_id": channel_id_clone,
+                        "agent_id": agent_id_clone,
+                        "content": full_response,
+                        "session_id": result_session_id,
+                    }),
+                );
             }
+
+            // Signal completion
+            let result = if had_error {
+                Err("agent execution had error".to_string())
+            } else {
+                Ok(())
+            };
+            let _ = tx_done.send(result);
         });
 
-        channel
+        // Wait for this agent to complete before starting the next one
+        match rx_done.recv_timeout(std::time::Duration::from_secs(300)) {
+            Ok(Ok(())) => {} // Success, continue to next agent
+            Ok(Err(e)) => {
+                log::warn!("[send_channel_message] agent {} failed: {}, continuing", agent_id, e);
+                // Continue to next agent even on failure
+            }
+            Err(_) => {
+                log::warn!("[send_channel_message] agent {} timed out, continuing", agent_id);
+                // Continue to next agent even on timeout
+            }
+        }
+    }
+
+    // Reload and return the final channel state
+    let final_channel = {
+        let manager = state
+            .agent_manager
+            .lock()
+            .map_err(|e| format!("lock error: {e}"))?;
+        let channels_dir = manager.channels_dir();
+        let store = ChannelStore::new(&channels_dir);
+        store.load(&channel_id).map_err(|e| format!("load failed: {e}"))?
     };
 
-    Ok(channel)
+    Ok(final_channel)
 }
 
 /// Save an agent response to a channel (called after streaming completes).
 #[tauri::command]
 pub fn save_channel_response(
-    state: tauri::State<'_, AppState>,
+    state: tauri::State<'_, crate::AppState>,
     channel_id: String,
     agent_id: String,
     content: String,

@@ -143,6 +143,37 @@ export interface StreamEvent {
   session_id?: string;
 }
 
+/** Channel streaming chunk event (wraps StreamEvent with agent context) */
+export interface ChannelChunkEvent {
+  channel_id: string;
+  agent_id: string;
+  agent_index: number;
+  total_agents: number;
+  event: StreamEvent;
+}
+
+/** Channel agent start event */
+export interface ChannelAgentStartEvent {
+  channel_id: string;
+  agent_id: string;
+  agent_index: number;
+  total_agents: number;
+}
+
+/** Channel response event (after streaming completes) */
+export interface ChannelResponseEvent {
+  channel_id: string;
+  agent_id: string;
+  content: string;
+  session_id: string | null;
+}
+
+/** Parsed @mention from a message */
+export interface ParsedMention {
+  raw: string;
+  agent_id: string;
+}
+
 // ===========================================================================
 // Agent Workspace types
 // ===========================================================================

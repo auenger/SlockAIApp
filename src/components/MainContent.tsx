@@ -23,11 +23,97 @@ import {
   Globe,
   Database,
   Hash,
+  AtSign,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { TabType, Task, Message, AgentWithRuntime, Channel, ChannelMessage } from '../types';
 import { getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
 import { useThreadChat } from '../lib/useThreadChat';
+import { MentionAutocomplete, renderMentionText } from './MentionAutocomplete';
+import type { AgentStreamState } from '../lib/useChannel';
+
+// ---------------------------------------------------------------------------
+// Agent color palette for distinguishing multi-Agent replies
+// ---------------------------------------------------------------------------
+
+const AGENT_COLORS = [
+  'bg-brutal-cyan',
+  'bg-brutal-pink',
+  'bg-brutal-yellow',
+  'bg-purple-400',
+  'bg-brutal-green',
+  'bg-orange-400',
+  'bg-teal-400',
+  'bg-red-400',
+];
+
+function getAgentColor(index: number): string {
+  return AGENT_COLORS[index % AGENT_COLORS.length];
+}
+
+// ---------------------------------------------------------------------------
+// Agent Streaming Bubble
+// ---------------------------------------------------------------------------
+
+interface AgentStreamBubbleProps {
+  stream: AgentStreamState;
+  agentInfo?: AgentWithRuntime;
+  colorIndex: number;
+}
+
+const AgentStreamBubble: React.FC<AgentStreamBubbleProps> = ({
+  stream,
+  agentInfo,
+  colorIndex,
+}) => {
+  const agentName = agentInfo?.agent.name || stream.agent_id;
+  const agentEmoji = agentInfo?.agent.emoji?.charAt(0) || 'A';
+  const bgColor = getAgentColor(colorIndex);
+
+  return (
+    <div className="flex gap-3 px-2">
+      <div className={cn(
+        "w-8 h-8 brutal-border flex items-center justify-center shrink-0 font-black",
+        bgColor
+      )}>
+        {agentEmoji}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <span className={cn("font-black text-xs", bgColor === 'bg-brutal-yellow' ? 'text-black' : 'text-black')}>
+            {agentName}
+          </span>
+          {stream.thinking ? (
+            <span className="text-[8px] text-gray-500 uppercase italic">Thinking...</span>
+          ) : stream.streaming ? (
+            <span className="text-[8px] text-gray-500 uppercase italic">Streaming...</span>
+          ) : stream.done ? (
+            <span className="text-[8px] text-brutal-green uppercase italic">Done</span>
+          ) : null}
+          {stream.total_agents > 1 && (
+            <span className="text-[8px] text-gray-400">
+              ({stream.agent_index + 1}/{stream.total_agents})
+            </span>
+          )}
+        </div>
+        {stream.thinking && !stream.text ? (
+          <div className="h-4 bg-gray-200 w-2/3 brutal-border-b animate-pulse" />
+        ) : (
+          <div className="text-sm leading-relaxed whitespace-pre-wrap">
+            {stream.text}
+            {stream.streaming && (
+              <span className="inline-block w-1.5 h-4 bg-brutal-cyan ml-0.5 animate-pulse" />
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// MainContent Props
+// ---------------------------------------------------------------------------
 
 interface MainContentProps {
   activeTab: TabType;
@@ -52,6 +138,8 @@ interface MainContentProps {
   channelIsThinking?: boolean;
   /** Buffered streaming text for channel */
   channelStreamingText?: string;
+  /** Per-agent streaming states for multi-Agent responses */
+  channelAgentStreams?: AgentStreamState[];
 }
 
 export const MainContent: React.FC<MainContentProps> = ({
@@ -67,6 +155,7 @@ export const MainContent: React.FC<MainContentProps> = ({
   channelIsStreaming = false,
   channelIsThinking = false,
   channelStreamingText = '',
+  channelAgentStreams = [],
 }) => {
   const [taskFilter, setTaskFilter] = useState('All');
   const [inputValue, setInputValue] = useState('');
@@ -83,6 +172,13 @@ export const MainContent: React.FC<MainContentProps> = ({
 
   // Build a lookup map for agent info (used by channel messages)
   const agentMap = new Map(allAgents.map((a) => [a.agent.agent_id, a]));
+
+  // Track color assignments for agents
+  const agentColorMap = new Map<string, number>();
+  let colorIdx = 0;
+  for (const member of activeChannel?.members || []) {
+    agentColorMap.set(member.agent_id, colorIdx++);
+  }
 
   // Thread chat hook
   const {
@@ -106,7 +202,7 @@ export const MainContent: React.FC<MainContentProps> = ({
 
   useEffect(() => {
     scrollToBottom();
-  }, [activeThread?.messages, activeChannel?.messages, isThinking, streamingText, channelIsThinking, channelStreamingText]);
+  }, [activeThread?.messages, activeChannel?.messages, isThinking, streamingText, channelIsThinking, channelStreamingText, channelAgentStreams]);
 
   // When activeThreadId changes (from sidebar), load the thread
   useEffect(() => {
@@ -166,12 +262,13 @@ export const MainContent: React.FC<MainContentProps> = ({
     }));
   })();
 
-  // Convert channel messages to display format
-  const channelDisplayMessages: Message[] = (() => {
+  // Convert channel messages to display format with per-agent colors
+  const channelDisplayMessages: (Message & { agentColor?: string; agentEmoji?: string })[] = (() => {
     if (!activeChannel) return [];
     return activeChannel.messages.map((msg: ChannelMessage) => {
       const isAgent = msg.sender_type === 'agent';
       const agentInfo = isAgent ? agentMap.get(msg.sender_id) : null;
+      const cIdx = isAgent ? (agentColorMap.get(msg.sender_id) ?? 0) : 0;
       return {
         id: msg.id,
         sender: {
@@ -181,6 +278,8 @@ export const MainContent: React.FC<MainContentProps> = ({
         },
         content: msg.content,
         timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        agentColor: isAgent ? getAgentColor(cIdx) : undefined,
+        agentEmoji: isAgent ? agentInfo?.agent.emoji : undefined,
       };
     });
   })();
@@ -232,6 +331,13 @@ export const MainContent: React.FC<MainContentProps> = ({
     { id: 2, title: 'test', status: 'TODO' },
     { id: 1, title: '总结oauth2在kagent中的流程', status: 'IN PROGRESS', assignee: '克劳德' },
   ];
+
+  // Get channel members as AgentWithRuntime[] for MentionAutocomplete
+  const channelMembers = isChannelMode
+    ? activeChannel!.members
+        .map((m) => agentMap.get(m.agent_id))
+        .filter((a): a is AgentWithRuntime => a !== undefined)
+    : [];
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-white">
@@ -473,13 +579,17 @@ export const MainContent: React.FC<MainContentProps> = ({
         {activeTab === 'CHAT' && (
           <div className="h-full flex flex-col">
              <div className="flex-1 overflow-y-auto space-y-6 pb-4">
-                {/* Channel mode */}
+                {/* Channel mode empty state */}
                 {isChannelMode && channelDisplayMessages.length === 0 && !channelIsThinking && !channelIsStreaming && (
                   <div className="h-full flex flex-col justify-center items-center text-gray-400 italic text-sm">
-                    No messages yet in #{activeChannel!.name}.
+                    <div className="flex items-center gap-2 mb-2">
+                      <AtSign size={16} />
+                      <span>No messages yet in #{activeChannel!.name}.</span>
+                    </div>
+                    <span className="text-[10px]">Type @AgentName to mention a specific agent.</span>
                   </div>
                 )}
-                {/* Agent/Thread mode */}
+                {/* Agent/Thread mode empty state */}
                 {!isChannelMode && displayMessages.length === 0 && !isThinking && !isStreaming && (
                   <div className="h-full flex flex-col justify-center items-center text-gray-400 italic text-sm">
                     {selectedAgent
@@ -488,25 +598,79 @@ export const MainContent: React.FC<MainContentProps> = ({
                   </div>
                 )}
 
-                {(isChannelMode ? channelDisplayMessages : displayMessages).map((msg) => (
+                {(isChannelMode ? channelDisplayMessages : displayMessages).map((msgRaw) => {
+                  const msg = msgRaw as (Message & { agentColor?: string; agentEmoji?: string });
+                  return (
                   <div key={msg.id} className="flex gap-3 px-2">
                     <div className={cn(
                       "w-8 h-8 brutal-border flex items-center justify-center shrink-0 font-black",
-                      msg.sender.isAgent ? "bg-brutal-cyan" : "bg-purple-400"
+                      msg.sender.isAgent ? (msg.agentColor || "bg-brutal-cyan") : "bg-purple-400"
                     )}>
-                      {msg.sender.isAgent ? <Bot size={18} /> : <User size={18} />}
+                      {msg.sender.isAgent ? (
+                        <span className="text-sm">{msg.agentEmoji?.charAt(0) || msg.sender.avatar}</span>
+                      ) : (
+                        <User size={18} />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-black text-xs">{msg.sender.name}</span>
+                        <span className="font-black text-xs">
+                          {msg.sender.name}
+                        </span>
                         <span className="text-[8px] text-gray-500 uppercase">{msg.timestamp}</span>
                       </div>
                       <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                        {msg.content}
+                        {/* Highlight @mentions in channel messages */}
+                        {isChannelMode
+                          ? renderMentionText(msg.content, allAgents)
+                          : msg.content
+                        }
+                      </div>
+                      {/* Context info badge for agent messages in channels */}
+                      {isChannelMode && msg.sender.isAgent && (
+                        <div className="mt-1 flex items-center gap-2 text-[8px] text-gray-400">
+                          <span className="px-1 py-0.5 bg-gray-100 brutal-border">SOUL.md</span>
+                          <span className="px-1 py-0.5 bg-gray-100 brutal-border">Channel History</span>
+                          <span className="px-1 py-0.5 bg-gray-100 brutal-border">MEMORY.md</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  );
+                })}
+
+                {/* Multi-Agent streaming bubbles */}
+                {isChannelMode && channelAgentStreams.map((stream) => {
+                  const agentInfo = agentMap.get(stream.agent_id);
+                  const cIdx = agentColorMap.get(stream.agent_id) ?? 0;
+                  return (
+                    <AgentStreamBubble
+                      key={stream.agent_id}
+                      stream={stream}
+                      agentInfo={agentInfo}
+                      colorIndex={cIdx}
+                    />
+                  );
+                })}
+
+                {/* Single-agent streaming text display (backward compat, when no agentStreams) */}
+                {isChannelMode && channelAgentStreams.length === 0 && channelStreamingText && (
+                  <div className="flex gap-3 px-2">
+                    <div className="w-8 h-8 brutal-border bg-brutal-cyan flex items-center justify-center shrink-0 font-black">
+                      <Bot size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-black text-xs">Agent</span>
+                        <span className="text-[8px] text-gray-500 uppercase italic">Streaming...</span>
+                      </div>
+                      <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                        {channelStreamingText}
+                        <span className="inline-block w-1.5 h-4 bg-brutal-cyan ml-0.5 animate-pulse" />
                       </div>
                     </div>
                   </div>
-                ))}
+                )}
 
                 {/* Streaming text display (thread mode) */}
                 {!isChannelMode && streamingText && (
@@ -521,25 +685,6 @@ export const MainContent: React.FC<MainContentProps> = ({
                       </div>
                       <div className="text-sm leading-relaxed whitespace-pre-wrap">
                         {streamingText}
-                        <span className="inline-block w-1.5 h-4 bg-brutal-cyan ml-0.5 animate-pulse" />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Streaming text display (channel mode) */}
-                {isChannelMode && channelStreamingText && (
-                  <div className="flex gap-3 px-2">
-                    <div className="w-8 h-8 brutal-border bg-brutal-cyan flex items-center justify-center shrink-0 font-black">
-                      <Bot size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-black text-xs">Agent</span>
-                        <span className="text-[8px] text-gray-500 uppercase italic">Streaming...</span>
-                      </div>
-                      <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                        {channelStreamingText}
                         <span className="inline-block w-1.5 h-4 bg-brutal-cyan ml-0.5 animate-pulse" />
                       </div>
                     </div>
@@ -562,8 +707,8 @@ export const MainContent: React.FC<MainContentProps> = ({
                   </div>
                 )}
 
-                {/* Thinking indicator (channel mode) */}
-                {isChannelMode && channelIsThinking && !channelStreamingText && (
+                {/* Thinking indicator (channel mode, single agent) */}
+                {isChannelMode && channelIsThinking && !channelStreamingText && channelAgentStreams.length === 0 && (
                   <div className="flex gap-3 px-2 animate-pulse">
                     <div className="w-8 h-8 brutal-border bg-brutal-cyan flex items-center justify-center shrink-0">
                       <Bot size={18} />
@@ -581,41 +726,41 @@ export const MainContent: React.FC<MainContentProps> = ({
              </div>
 
              <div className="mt-4">
-                <div className="relative">
-                  <textarea
+                {isChannelMode ? (
+                  /* @Mention autocomplete input for channel mode */
+                  <MentionAutocomplete
                     value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        if (isChannelMode) {
-                          handleSendChannelMessage();
-                        } else {
+                    onChange={setInputValue}
+                    members={channelMembers}
+                    disabled={!activeChannel || channelIsStreaming || channelIsThinking}
+                    placeholder={`Message #${activeChannel!.name}... (type @ to mention)`}
+                    onSend={handleSendChannelMessage}
+                  />
+                ) : (
+                  /* Standard textarea for thread mode */
+                  <div className="relative">
+                    <textarea
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
                           handleSendMessage();
                         }
+                      }}
+                      placeholder={
+                        selectedAgent
+                          ? `Message @${agentName}...`
+                          : 'Select an agent or channel to start chatting...'
                       }
-                    }}
-                    placeholder={
-                      isChannelMode
-                        ? `Message #${activeChannel!.name}...`
-                        : selectedAgent
-                        ? `Message @${agentName}...`
-                        : 'Select an agent or channel to start chatting...'
-                    }
-                    disabled={
-                      isChannelMode
-                        ? !activeChannel || channelIsStreaming || channelIsThinking
-                        : !selectedAgent || isStreaming || isThinking
-                    }
-                    className={cn(
-                      "w-full brutal-border bg-white p-3 min-h-[100px] text-sm focus:outline-none focus:bg-brutal-bg resize-none",
-                      (isChannelMode
-                        ? !activeChannel || channelIsStreaming || channelIsThinking
-                        : !selectedAgent || isStreaming || isThinking
-                      ) && "opacity-50 cursor-not-allowed"
-                    )}
-                  />
-                </div>
+                      disabled={!selectedAgent || isStreaming || isThinking}
+                      className={cn(
+                        "w-full brutal-border bg-white p-3 min-h-[100px] text-sm focus:outline-none focus:bg-brutal-bg resize-none",
+                        (!selectedAgent || isStreaming || isThinking) && "opacity-50 cursor-not-allowed"
+                      )}
+                    />
+                  </div>
+                )}
                 <div className="flex items-center justify-between mt-2">
                   <div className="flex gap-1">
                     <button className="p-2 brutal-border hover:bg-gray-100">
