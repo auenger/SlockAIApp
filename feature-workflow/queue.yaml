@@ -1,29 +1,32 @@
 meta:
-  last_updated: "2026-04-09T13:00:00+08:00"
-  version: 16
+  last_updated: "2026-04-09T21:20:00+08:00"
+  version: 32
 
 parents: []
-active: []
+active:
+  - id: feat-workspace-browser
+    name: "Workspace 文件浏览器"
+    priority: 45
+    size: M
+    branch: feature/feat-workspace-browser
+    worktree: /Users/ryan/mycode/SlockAI
+    started: "2026-04-09T21:20:00+08:00"
+  - id: feat-skills-management
+    name: "Skills 管理 UI"
+    priority: 40
+    size: M
+    branch: feature/feat-skills-management
+    worktree: /Users/ryan/mycode/SlockAI-feat-skills-management
+    started: "2026-04-09T21:20:00+08:00"
 pending:
-
-  - id: feat-conversation-store
-    name: "对话持久化与历史"
-    priority: 75
+  - id: feat-activity-log
+    name: "Activity 日志后端集成"
+    priority: 35
     size: S
-    dependencies: [feat-thread-chat]
-
-  - id: feat-channel-infra
-    name: "Channel 基础设施"
-    priority: 70
-    size: M
-    dependencies: [feat-agent-status, feat-thread-chat]
-
-  - id: feat-channel-multi-agent
-    name: "Channel 多Agent协作"
-    priority: 65
-    size: M
-    dependencies: [feat-conversation-store, feat-channel-infra]
-
+  - id: feat-apikey-management-ui
+    name: "API Key 管理 UI（低优先级，Runtime CLI 自管理认证）"
+    priority: 10
+    size: S
 blocked: []
 completed:
   - id: feat-project-init
@@ -58,3 +61,31 @@ completed:
     name: "Thread: 1对1 Agent 对话"
     completed_at: "2026-04-09T13:00:00+08:00"
     tag: feat-thread-chat-20260409
+  - id: feat-conversation-store
+    name: "对话持久化与历史"
+    completed_at: "2026-04-09T15:30:00+08:00"
+    tag: feat-conversation-store-20260409
+  - id: feat-channel-infra
+    name: "Channel 基础设施"
+    completed_at: "2026-04-09T17:00:00+08:00"
+    tag: feat-channel-infra-20260409
+  - id: feat-channel-multi-agent
+    name: "Channel 多Agent协作"
+    completed_at: "2026-04-09T18:00:00+08:00"
+    tag: feat-channel-multi-agent-20260409
+  - id: feat-thread-context-inject
+    name: "Thread 模式 Context 注入"
+    completed_at: "2026-04-09T20:45:00+08:00"
+    tag: feat-thread-context-inject-20260409
+  - id: feat-agent-profile-page
+    name: "Agent Profile 页真实数据"
+    completed_at: "2026-04-09T21:00:00+08:00"
+    tag: feat-agent-profile-page-20260409
+  - id: feat-agent-create-ui
+    name: "Agent 创建 UI"
+    completed_at: "2026-04-09T20:50:00+08:00"
+    tag: feat-agent-create-ui-20260409
+  - id: feat-thread-panel-live
+    name: "ThreadPanel 真实数据接入"
+    completed_at: "2026-04-09T21:20:00+08:00"
+    tag: feat-thread-panel-live-20260409

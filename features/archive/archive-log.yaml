@@ -1,8 +1,8 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-09T13:00:00+08:00"
-  version: 8
-  total_completed: 8
+  last_updated: "2026-04-09T21:20:00+08:00"
+  version: 9
+  total_completed: 9
 
 records:
   - id: feat-project-init
@@ -183,3 +183,26 @@ records:
       duration: "1h"
       commits: 3
       files_changed: 16
+  - id: feat-thread-panel-live
+    name: "ThreadPanel 真实数据接入"
+    completed: "2026-04-09T21:20:00+08:00"
+    tag: feat-thread-panel-live-20260409
+    merge_commit: "11d451b"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-thread-panel-live
+    worktree_deleted: false
+    worktree_path: .
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 3
+      scenarios_passed: 3
+    stats:
+      started: "2026-04-09T21:15:00+08:00"
+      duration: "5min"
+      commits: 1
+      files_changed: 6
+    note: "Worktree is main repo, no separate worktree created"
