@@ -28,6 +28,7 @@ import {
 import { cn } from '../lib/utils';
 import { TabType, Task, Message, AgentWithRuntime, Channel, ChannelMessage } from '../types';
 import { getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
+import { useAgentProfile } from '../lib/useAgentProfile';
 import { useThreadChat } from '../lib/useThreadChat';
 import { MentionAutocomplete, renderMentionText } from './MentionAutocomplete';
 import type { AgentStreamState } from '../lib/useChannel';
@@ -210,6 +211,16 @@ export const MainContent: React.FC<MainContentProps> = ({
       selectThread(selectedAgent.agent.agent_id, activeThreadId);
     }
   }, [activeThreadId, selectedAgent]);
+
+  // Profile data loading
+  const { data: profileData, loading: profileLoading, loadProfile } = useAgentProfile();
+
+  // Load profile when selectedAgent changes
+  useEffect(() => {
+    if (selectedAgent?.agent.agent_id) {
+      loadProfile(selectedAgent.agent.agent_id);
+    }
+  }, [selectedAgent?.agent.agent_id, loadProfile]);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || !selectedAgent) return;
@@ -849,45 +860,96 @@ export const MainContent: React.FC<MainContentProps> = ({
 
         {activeTab === 'PROFILE' && (
           <div className="space-y-6">
-            <div className="flex flex-col items-center py-8 brutal-border bg-white brutal-shadow-sm">
-              <div className="w-20 h-20 brutal-border bg-brutal-cyan flex items-center justify-center mb-4">
-                <Bot size={48} />
+            {!selectedAgent ? (
+              // No agent selected - empty state
+              <div className="flex flex-col items-center justify-center py-16 brutal-border bg-white brutal-shadow-sm">
+                <Bot size={48} className="text-gray-300 mb-4" />
+                <p className="text-gray-500 text-sm">Select an agent to view profile</p>
               </div>
-              <h2 className="text-2xl font-black">克劳德</h2>
-              <span className="text-gray-500 font-mono text-xs">@克劳德</span>
-            </div>
+            ) : profileLoading ? (
+              // Loading state
+              <div className="flex flex-col items-center justify-center py-16 brutal-border bg-white brutal-shadow-sm">
+                <div className="w-8 h-8 border-4 border-brutal-cyan border-t-transparent rounded-full animate-spin mb-4" />
+                <p className="text-gray-500 text-sm">Loading profile...</p>
+              </div>
+            ) : profileData.identity ? (
+              // Profile content
+              <>
+                {/* Agent Header */}
+                <div className="flex flex-col items-center py-8 brutal-border bg-white brutal-shadow-sm">
+                  <div className="w-20 h-20 brutal-border bg-brutal-cyan flex items-center justify-center mb-4">
+                    {profileData.identity.emoji ? (
+                      <span className="text-4xl">{profileData.identity.emoji}</span>
+                    ) : (
+                      <Bot size={48} />
+                    )}
+                  </div>
+                  <h2 className="text-2xl font-black">{profileData.identity.name}</h2>
+                  <span className="text-gray-500 font-mono text-xs">@{profileData.identity.agent_id}</span>
+                  {profileData.identity.creature && (
+                    <span className="mt-1 text-xs text-gray-400">
+                      {profileData.identity.creature} · {profileData.identity.vibe}
+                    </span>
+                  )}
+                </div>
 
-            <section className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="font-black text-xs uppercase tracking-widest text-gray-500">Role</h3>
-                <button className="p-1 hover:bg-gray-200 rounded"><Plus size={14}/></button>
-              </div>
-              <div className="brutal-card text-sm leading-relaxed">
-                你是一个非常资深的软件开发工程师，负责软件的架构设计和开发
-              </div>
-            </section>
+                {/* Role Section */}
+                <section className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-black text-xs uppercase tracking-widest text-gray-500">Role</h3>
+                    <button className="p-1 hover:bg-gray-200 rounded"><Plus size={14}/></button>
+                  </div>
+                  <div className="brutal-card text-sm leading-relaxed">
+                    {profileData.context?.system_prompt || 'No role description set'}
+                  </div>
+                </section>
 
-            <section className="space-y-2">
-              <h3 className="font-black text-xs uppercase tracking-widest text-gray-500">Configuration</h3>
-              <div className="brutal-card grid grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Runtime</label>
-                  <div className="brutal-btn bg-brutal-cyan text-xs inline-block">Claude Code</div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Model</label>
-                  <div className="brutal-btn bg-purple-300 text-xs inline-block">Opus</div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Machine</label>
-                  <div className="text-xs font-mono font-bold">LQJF7PWH66 <Circle size={8} fill="#39FF14" className="inline ml-1" /> <span className="text-[10px] text-gray-500">Connected</span></div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Created</label>
-                  <div className="text-xs font-mono font-bold">Apr 3, 2026</div>
-                </div>
+                {/* Configuration Section */}
+                <section className="space-y-2">
+                  <h3 className="font-black text-xs uppercase tracking-widest text-gray-500">Configuration</h3>
+                  <div className="brutal-card grid grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Runtime</label>
+                      <div className="brutal-btn bg-brutal-cyan text-xs inline-block">
+                        {selectedAgent.runtime_status === 'available' ? 'Claude Code' : 'Not Available'}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Status</label>
+                      <div className="flex items-center gap-1">
+                        <Circle
+                          size={8}
+                          fill={getRuntimeStatusColor(selectedAgent.runtime_status)}
+                          className="shrink-0"
+                        />
+                        <span className="text-xs font-bold">
+                          {getRuntimeStatusLabel(selectedAgent.runtime_status)}
+                        </span>
+                      </div>
+                    </div>
+                    {selectedAgent.runtime_version && (
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Version</label>
+                        <div className="text-xs font-mono font-bold">v{selectedAgent.runtime_version}</div>
+                      </div>
+                    )}
+                    {profileData.workspace && (
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Workspace</label>
+                        <div className="text-xs font-mono font-bold truncate max-w-[200px]" title={profileData.workspace.workspace_root}>
+                          {profileData.workspace.workspace_root.split('/').pop()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </>
+            ) : (
+              // Error state - no profile data
+              <div className="flex flex-col items-center justify-center py-16 brutal-border bg-white brutal-shadow-sm">
+                <p className="text-gray-500 text-sm">Failed to load profile data</p>
               </div>
-            </section>
+            )}
           </div>
         )}
       </div>
