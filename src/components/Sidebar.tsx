@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAgentStatus, getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
+import { CreateAgentModal } from './CreateAgentModal';
 import type { AgentWithRuntime, ThreadInfo, ChannelInfo } from '../types';
 
 interface SidebarProps {
@@ -51,8 +52,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCreateChannel,
   agents: propAgents,
 }) => {
-  const { agents: statusAgents, loading } = useAgentStatus();
+  const { agents: statusAgents, loading, scan } = useAgentStatus();
   const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [showCreateAgent, setShowCreateAgent] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
 
@@ -272,7 +274,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <ChevronDown size={14} /> Agents{' '}
               <span className="text-gray-600">{loading ? '...' : agents.length}</span>
             </h3>
-            <button className="brutal-border bg-white p-0.5 hover:bg-gray-100">
+            <button
+              onClick={() => setShowCreateAgent(true)}
+              className="brutal-border bg-white p-0.5 hover:bg-gray-100"
+            >
               <Plus size={14} />
             </button>
           </div>
@@ -355,6 +360,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <Settings size={16} />
         </button>
       </div>
+
+      {/* Create Agent Modal */}
+      <CreateAgentModal
+        isOpen={showCreateAgent}
+        onClose={() => setShowCreateAgent(false)}
+        onSuccess={scan}
+      />
     </div>
   );
 };
