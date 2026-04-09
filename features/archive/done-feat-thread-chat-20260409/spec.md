@@ -125,3 +125,13 @@ And 点击 Thread 可切换到对应对话
 - [x] Session create/resume 机制正常
 - [x] 移除 MainContent 中的 mock handleSendMessage
 - [x] Thread 列表渲染在 Sidebar
+
+## Merge Record
+
+- **Completed**: 2026-04-09
+- **Merged Branch**: feature/feat-thread-chat
+- **Merge Commit**: 46a950c31629e795ae5b08a6389eee27da6ebe56
+- **Archive Tag**: feat-thread-chat-20260409
+- **Conflicts**: none
+- **Verification**: passed (24/24 Rust tests, frontend builds clean, 5/5 Gherkin scenarios)
+- **Stats**: 3 commits, 16 files changed (+1483, -58 lines)

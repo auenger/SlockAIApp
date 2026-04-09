@@ -1,15 +1,10 @@
 meta:
-  last_updated: "2026-04-09T10:45:00+08:00"
-  version: 14
+  last_updated: "2026-04-09T13:00:00+08:00"
+  version: 16
 
 parents: []
 active: []
 pending:
-  - id: feat-thread-chat
-    name: "Thread: 1对1 Agent 对话"
-    priority: 85
-    size: M
-    dependencies: [feat-agent-status]
 
   - id: feat-conversation-store
     name: "对话持久化与历史"
@@ -59,3 +54,7 @@ completed:
     name: "Agent 状态与选择器"
     completed_at: "2026-04-09T10:45:00+08:00"
     tag: feat-agent-status-20260409
+  - id: feat-thread-chat
+    name: "Thread: 1对1 Agent 对话"
+    completed_at: "2026-04-09T13:00:00+08:00"
+    tag: feat-thread-chat-20260409
