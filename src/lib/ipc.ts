@@ -20,6 +20,8 @@ import type {
   ThreadMessageData,
   Channel,
   ChannelInfo,
+  DirectoryEntry,
+  FileContent,
 } from "../types";
 
 /**
@@ -115,6 +117,26 @@ export async function getAgentContext(agentId: string): Promise<AgentContextResu
 /** Get all agents fused with their runtime availability status. */
 export async function getAgentRuntimeStatus(): Promise<AgentWithRuntime[]> {
   return invoke<AgentWithRuntime[]>("get_agent_runtime_status");
+}
+
+// ---------------------------------------------------------------------------
+// Workspace browsing commands
+// ---------------------------------------------------------------------------
+
+/** List directory entries in an agent's workspace. */
+export async function listWorkspaceDir(
+  agentId: string,
+  subpath?: string
+): Promise<DirectoryEntry[]> {
+  return invoke<DirectoryEntry[]>("list_workspace_dir", { agentId, subpath: subpath ?? null });
+}
+
+/** Read the content of a file from an agent's workspace. */
+export async function readWorkspaceFile(
+  agentId: string,
+  filePath: string
+): Promise<FileContent> {
+  return invoke<FileContent>("read_workspace_file", { agentId, filePath });
 }
 
 // ---------------------------------------------------------------------------

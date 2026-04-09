@@ -10,6 +10,7 @@ import {
   Trash2,
   Users,
   ChevronRight,
+  ChevronLeft,
   Bot,
   Circle,
   Square,
@@ -24,12 +25,15 @@ import {
   Database,
   Hash,
   AtSign,
+  FileText,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { TabType, Task, Message, AgentWithRuntime, Channel, ChannelMessage } from '../types';
 import { getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
 import { useAgentProfile } from '../lib/useAgentProfile';
 import { useThreadChat } from '../lib/useThreadChat';
+import { useWorkspace } from '../lib/useWorkspace';
 import { MentionAutocomplete, renderMentionText } from './MentionAutocomplete';
 import type { AgentStreamState } from '../lib/useChannel';
 
@@ -50,6 +54,15 @@ const AGENT_COLORS = [
 
 function getAgentColor(index: number): string {
   return AGENT_COLORS[index % AGENT_COLORS.length];
+}
+
+/** Format file size in bytes to human-readable string */
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -160,7 +173,6 @@ export const MainContent: React.FC<MainContentProps> = ({
 }) => {
   const [taskFilter, setTaskFilter] = useState('All');
   const [inputValue, setInputValue] = useState('');
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [logs, setLogs] = useState<{ time: string; status: string; text?: string; color?: string }[]>([
     { time: '08:27:17 AM', status: 'Thinking', color: 'text-brutal-yellow' },
     { time: '08:27:17 AM', status: 'Idle', color: 'text-brutal-green', text: 'Idle' },
@@ -221,6 +233,28 @@ export const MainContent: React.FC<MainContentProps> = ({
       loadProfile(selectedAgent.agent.agent_id);
     }
   }, [selectedAgent?.agent.agent_id, loadProfile]);
+
+  // Workspace browser hook
+  const {
+    entries,
+    selectedFile,
+    workspacePath,
+    currentPath,
+    loadingDir,
+    loadingFile,
+    error: workspaceError,
+    loadDir,
+    loadFile,
+    navigateInto,
+    navigateUp,
+  } = useWorkspace();
+
+  // Load workspace when selectedAgent changes or tab becomes WORKSPACE
+  useEffect(() => {
+    if (selectedAgent?.agent.agent_id && activeTab === 'WORKSPACE') {
+      loadDir(selectedAgent.agent.agent_id);
+    }
+  }, [selectedAgent?.agent.agent_id, activeTab, loadDir]);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || !selectedAgent) return;
@@ -520,70 +554,113 @@ export const MainContent: React.FC<MainContentProps> = ({
 
         {activeTab === 'WORKSPACE' && (
           <div className="h-full flex flex-col">
-            <div className="flex items-center gap-2 mb-4 text-[10px] font-mono text-gray-500 bg-white brutal-border p-1">
-              <span>~/.slock/agents/8ce6fe04-742e-4e16-bfa2-0ec0a48b2c06/</span>
-              <button className="p-0.5 brutal-border hover:bg-gray-100">
-                <Copy size={10} />
-              </button>
-            </div>
-            <div className="flex-1 flex brutal-border bg-white overflow-hidden">
-              <div className="w-64 brutal-border-r p-2 space-y-1 overflow-y-auto">
-                <div className="flex items-center justify-between px-1 mb-2">
-                  <span className="text-[10px] font-black uppercase text-gray-500">Workspace</span>
-                  <RotateCcw size={12} className="text-gray-400" />
-                </div>
-                <div className="space-y-1">
-                  {['kagent', 'kubectl-mcp-server', 'notes'].map(dir => (
-                    <div key={dir} className="flex items-center gap-2 px-2 py-1 text-sm font-bold hover:bg-gray-100 cursor-pointer">
-                      <ChevronRight size={14} className="text-gray-400" />
-                      <Folder size={14} className="text-brutal-yellow fill-brutal-yellow" />
-                      {dir}
-                    </div>
-                  ))}
-                  <div
-                    onClick={() => setSelectedFile('MEMORY.md')}
+            {!selectedAgent ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
+                <Folder size={48} strokeWidth={1} className="mb-2 opacity-20" />
+                <span className="text-sm italic">Select an agent to view workspace</span>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 mb-4 text-[10px] font-mono text-gray-500 bg-white brutal-border p-1">
+                  <button
+                    onClick={() => navigateUp(selectedAgent.agent.agent_id)}
+                    disabled={!currentPath}
                     className={cn(
-                      "flex items-center gap-2 px-2 py-1 text-sm font-bold cursor-pointer transition-colors",
-                      selectedFile === 'MEMORY.md' ? "bg-brutal-bg brutal-border-l-4 border-l-black" : "hover:bg-gray-100"
+                      "p-0.5 brutal-border hover:bg-gray-100",
+                      !currentPath && "opacity-30 cursor-not-allowed"
                     )}
                   >
-                    <MessageSquare size={14} className="text-gray-500" />
-                    MEMORY.md
+                    <ChevronLeft size={10} />
+                  </button>
+                  <span className="truncate flex-1">{workspacePath}{currentPath}</span>
+                  <button
+                    onClick={() => loadDir(selectedAgent.agent.agent_id, currentPath || undefined)}
+                    className="p-0.5 brutal-border hover:bg-gray-100"
+                  >
+                    <RotateCcw size={10} className={loadingDir ? "animate-spin" : ""} />
+                  </button>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(workspacePath + currentPath)}
+                    className="p-0.5 brutal-border hover:bg-gray-100"
+                  >
+                    <Copy size={10} />
+                  </button>
+                </div>
+                <div className="flex-1 flex brutal-border bg-white overflow-hidden">
+                  <div className="w-64 brutal-border-r p-2 space-y-1 overflow-y-auto">
+                    <div className="flex items-center justify-between px-1 mb-2">
+                      <span className="text-[10px] font-black uppercase text-gray-500">
+                        {currentPath ? currentPath.split("/").pop() : "Workspace"}
+                      </span>
+                      <span className="text-[10px] text-gray-400">{entries.length} items</span>
+                    </div>
+                    {loadingDir ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 size={24} className="animate-spin text-gray-400" />
+                      </div>
+                    ) : workspaceError ? (
+                      <div className="text-xs text-red-500 p-2">{workspaceError}</div>
+                    ) : (
+                      <div className="space-y-1">
+                        {entries.map((entry) => (
+                          <div
+                            key={entry.name}
+                            onClick={() => {
+                              if (entry.is_dir) {
+                                navigateInto(selectedAgent.agent.agent_id, entry.name);
+                              } else {
+                                const filePath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+                                loadFile(selectedAgent.agent.agent_id, filePath);
+                              }
+                            }}
+                            className={cn(
+                              "flex items-center gap-2 px-2 py-1 text-sm font-bold cursor-pointer transition-colors",
+                              selectedFile?.name === entry.name ? "bg-brutal-bg brutal-border-l-4 border-l-black" : "hover:bg-gray-100"
+                            )}
+                          >
+                            {entry.is_dir ? (
+                              <>
+                                <ChevronRight size={14} className="text-gray-400" />
+                                <Folder size={14} className="text-brutal-yellow fill-brutal-yellow" />
+                              </>
+                            ) : (
+                              <>
+                                <FileText size={14} className="text-gray-500" />
+                              </>
+                            )}
+                            <span className="truncate">{entry.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 flex flex-col p-4 overflow-y-auto bg-gray-50">
+                    {loadingFile ? (
+                      <div className="flex items-center justify-center h-full">
+                        <Loader2 size={32} className="animate-spin text-gray-400" />
+                      </div>
+                    ) : selectedFile ? (
+                      <div className="w-full h-full font-mono text-xs space-y-4">
+                        <div className="flex items-center justify-between border-b pb-2">
+                          <span className="font-black">{selectedFile.name}</span>
+                          <span className="text-gray-400">
+                            {selectedFile.mime_type.includes("markdown") ? "Markdown" : selectedFile.mime_type} &bull; {formatFileSize(selectedFile.size)}
+                          </span>
+                        </div>
+                        <pre className="whitespace-pre-wrap break-all text-xs leading-relaxed">
+                          {selectedFile.content}
+                        </pre>
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
+                        <Folder size={48} strokeWidth={1} className="mb-2 opacity-20" />
+                        <span className="text-xs italic">Select a file to view</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
-              <div className="flex-1 flex flex-col p-4 overflow-y-auto bg-gray-50">
-                {selectedFile === 'MEMORY.md' ? (
-                  <div className="w-full h-full font-mono text-xs space-y-4">
-                    <div className="flex items-center justify-between border-b pb-2">
-                      <span className="font-black">MEMORY.md</span>
-                      <span className="text-gray-400">Markdown &bull; 1.2KB</span>
-                    </div>
-                    <div className="prose prose-sm max-w-none">
-                      <h1 className="font-black text-lg">Agent Memory</h1>
-                      <p>This file contains persistent context for the agent.</p>
-                      <h2 className="font-bold mt-4">Current Context:</h2>
-                      <ul className="list-disc pl-4 space-y-1">
-                        <li>Project: KAgent Integration</li>
-                        <li>Platform: SAP AI Core</li>
-                        <li>Status: Architecture Review</li>
-                      </ul>
-                      <div className="mt-6 p-3 bg-black text-white brutal-border">
-                        <code className="text-[10px]">
-                          last_sync: 2026-04-07T02:30:00Z<br/>
-                          active_threads: 2
-                        </code>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
-                    <Folder size={48} strokeWidth={1} className="mb-2 opacity-20" />
-                    <span className="text-xs italic">Select a file to view</span>
-                  </div>
-                )}
-              </div>
-            </div>
+              </>
+            )}
           </div>
         )}
 

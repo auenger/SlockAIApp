@@ -249,3 +249,24 @@ export interface AgentWithRuntime {
   /** Install hint (shown when runtime not installed) */
   runtime_install_hint?: string;
 }
+
+// ===========================================================================
+// Workspace Browser types
+// ===========================================================================
+
+/** A single entry (file or directory) in a workspace directory listing */
+export interface DirectoryEntry {
+  name: string;
+  is_dir: boolean;
+  size: number;
+  modified: number;
+}
+
+/** Content of a file from the workspace */
+export interface FileContent {
+  path: string;
+  name: string;
+  size: number;
+  mime_type: string;
+  content: string;
+}
