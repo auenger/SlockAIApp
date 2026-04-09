@@ -110,6 +110,11 @@ impl AgentManager {
         &self.agents_dir
     }
 
+    /// Get the channels directory path (workspace-level).
+    pub fn channels_dir(&self) -> PathBuf {
+        self.workspace_root.join("channels")
+    }
+
     /// Get the currently active agent ID.
     pub fn active_agent_id(&self) -> Option<&str> {
         self.active_agent_id.as_deref()

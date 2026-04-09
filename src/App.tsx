@@ -5,9 +5,11 @@ import { ThreadPanel } from './components/ThreadPanel';
 import { CreateTaskModal, InviteHumanModal } from './components/Modals';
 import { TabType, AgentWithRuntime } from './types';
 import { useThreadChat } from './lib/useThreadChat';
+import { useChannel } from './lib/useChannel';
+import { useAgentStatus } from './lib/useAgentStatus';
 
 export default function App() {
-  const [activeChannel, setActiveChannel] = useState('kagent-integrate-sap-ai-core');
+  const [activeChannel, setActiveChannel] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('CHAT');
   const [isThreadOpen, setIsThreadOpen] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<AgentWithRuntime | null>(null);
@@ -19,6 +21,28 @@ export default function App() {
 
   // Thread chat hook (shared between Sidebar and MainContent)
   const { threads, loadThreads, createNewThread, selectThread } = useThreadChat();
+
+  // Channel hook
+  const {
+    channels,
+    activeChannel: channelData,
+    loadChannels,
+    create: createChannelAction,
+    selectChannel,
+    send: sendChannelMessage,
+    isStreaming: channelIsStreaming,
+    isThinking: channelIsThinking,
+    streamingText: channelStreamingText,
+    clearActive: _clearActiveChannel,
+  } = useChannel();
+
+  // Agent status for channel member selection
+  const { agents: allAgents } = useAgentStatus();
+
+  // Load channels on mount
+  useEffect(() => {
+    loadChannels();
+  }, [loadChannels]);
 
   // Load threads when agent changes
   useEffect(() => {
@@ -59,18 +83,41 @@ export default function App() {
     }
   };
 
+  /** Handle channel selection from sidebar */
+  const handleChannelSelect = (channelId: string) => {
+    setActiveChannel(channelId);
+    setSelectedAgent(null);
+    setActiveThreadId(null);
+    selectChannel(channelId);
+    setActiveTab('CHAT');
+  };
+
+  /** Handle channel creation */
+  const handleCreateChannel = async (name: string, memberAgentIds: string[]) => {
+    try {
+      const channel = await createChannelAction(name, memberAgentIds);
+      setActiveChannel(channel.id);
+      setActiveTab('CHAT');
+    } catch (err) {
+      console.error('Failed to create channel:', err);
+    }
+  };
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-brutal-bg">
       {/* Left Sidebar */}
       <Sidebar
-        activeChannel={activeChannel}
-        onChannelSelect={setActiveChannel}
+        activeChannel={activeChannel ?? ''}
+        onChannelSelect={handleChannelSelect}
         selectedAgentId={selectedAgent?.agent.agent_id ?? null}
         onAgentSelect={setSelectedAgent}
         threads={threads}
         activeThreadId={activeThreadId}
         onThreadSelect={handleThreadSelect}
         onCreateThread={handleCreateThread}
+        channels={channels}
+        onCreateChannel={handleCreateChannel}
+        agents={allAgents}
       />
 
       {/* Main Content Area */}
@@ -82,6 +129,12 @@ export default function App() {
         selectedAgent={selectedAgent}
         activeThreadId={activeThreadId}
         onThreadCreated={handleThreadCreated}
+        activeChannel={activeChannel ? channelData : null}
+        allAgents={allAgents}
+        onSendChannelMessage={(channelId, message) => sendChannelMessage(channelId, message, allAgents)}
+        channelIsStreaming={channelIsStreaming}
+        channelIsThinking={channelIsThinking}
+        channelStreamingText={channelStreamingText}
       />
 
       {/* Right Thread Panel */}

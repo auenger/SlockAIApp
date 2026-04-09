@@ -1,0 +1,392 @@
+//! Channel data model for multi-Agent collaboration.
+//!
+//! A Channel is a collaboration container that can include multiple Agent
+//! members. Messages in a Channel are visible to all members.
+//!
+//! Channels are stored at the workspace level (not per-agent) under
+//! `workspaces/channels/<channel_id>/`.
+
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::{Path, PathBuf};
+
+// ===========================================================================
+// Channel data model
+// ===========================================================================
+
+/// A collaboration channel containing multiple Agent members.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Channel {
+    /// Unique channel identifier.
+    pub id: String,
+    /// Display name of the channel.
+    pub name: String,
+    /// Agent members of this channel.
+    pub members: Vec<ChannelMember>,
+    /// Messages in this channel.
+    pub messages: Vec<ChannelMessage>,
+    /// Creation timestamp (ISO 8601).
+    pub created_at: String,
+    /// Last update timestamp (ISO 8601).
+    pub updated_at: String,
+}
+
+/// A member (Agent) in a channel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelMember {
+    /// Agent identifier.
+    pub agent_id: String,
+    /// Member role in the channel.
+    pub role: String,
+    /// When the agent joined the channel (ISO 8601).
+    pub joined_at: String,
+}
+
+/// A message within a channel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelMessage {
+    /// Unique message identifier.
+    pub id: String,
+    /// Channel this message belongs to.
+    pub channel_id: String,
+    /// Who sent the message: "user" or "agent".
+    pub sender_type: String,
+    /// Agent or user identifier.
+    pub sender_id: String,
+    /// Message text content.
+    pub content: String,
+    /// Timestamp (ISO 8601).
+    pub timestamp: String,
+}
+
+/// Lightweight channel info for listing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelInfo {
+    pub id: String,
+    pub name: String,
+    /// Number of members in the channel.
+    pub member_count: usize,
+    /// Number of unread messages (placeholder, always 0 for now).
+    pub unread_count: usize,
+    /// Preview: first 80 chars of the last message.
+    pub preview: String,
+    /// Total message count.
+    pub message_count: usize,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+// ===========================================================================
+// Channel storage
+// ===========================================================================
+
+/// Manages Channel persistence on disk within the workspace root.
+///
+/// Channel data is stored under `<workspace_root>/channels/` with each channel
+/// as a JSON file: `channels/channel_<id>.json`.
+pub struct ChannelStore<'a> {
+    channels_dir: &'a Path,
+}
+
+impl<'a> ChannelStore<'a> {
+    /// Create a new ChannelStore for the given channels directory.
+    pub fn new(channels_dir: &'a Path) -> Self {
+        Self { channels_dir }
+    }
+
+    /// Ensure the channels directory exists.
+    fn ensure_dir(&self) -> Result<(), ChannelError> {
+        fs::create_dir_all(self.channels_dir).map_err(|e| ChannelError::Io {
+            path: self.channels_dir.to_path_buf(),
+            source: e,
+        })
+    }
+
+    /// Get the file path for a channel by ID.
+    fn channel_file(&self, channel_id: &str) -> PathBuf {
+        self.channels_dir.join(format!("channel_{}.json", channel_id))
+    }
+
+    /// Save a channel to disk.
+    pub fn save(&self, channel: &Channel) -> Result<(), ChannelError> {
+        self.ensure_dir()?;
+        let path = self.channel_file(&channel.id);
+        let json = serde_json::to_string_pretty(channel).map_err(|e| ChannelError::Serialization {
+            message: e.to_string(),
+        })?;
+        fs::write(&path, json).map_err(|e| ChannelError::Io {
+            path,
+            source: e,
+        })
+    }
+
+    /// Load a channel from disk by ID.
+    pub fn load(&self, channel_id: &str) -> Result<Channel, ChannelError> {
+        let path = self.channel_file(channel_id);
+        let data = fs::read_to_string(&path).map_err(|e| ChannelError::Io {
+            path: path.clone(),
+            source: e,
+        })?;
+        serde_json::from_str(&data).map_err(|e| ChannelError::Serialization {
+            message: e.to_string(),
+        })
+    }
+
+    /// Delete a channel from disk by ID.
+    pub fn delete(&self, channel_id: &str) -> Result<(), ChannelError> {
+        let path = self.channel_file(channel_id);
+        if path.exists() {
+            fs::remove_file(&path).map_err(|e| ChannelError::Io {
+                path,
+                source: e,
+            })
+        } else {
+            Err(ChannelError::NotFound {
+                channel_id: channel_id.to_string(),
+            })
+        }
+    }
+
+    /// List all channels (as lightweight ChannelInfo).
+    pub fn list(&self) -> Result<Vec<ChannelInfo>, ChannelError> {
+        self.ensure_dir()?;
+        let mut channels = Vec::new();
+
+        let entries = fs::read_dir(self.channels_dir).map_err(|e| ChannelError::Io {
+            path: self.channels_dir.to_path_buf(),
+            source: e,
+        })?;
+
+        for entry in entries {
+            let entry = entry.map_err(|e| ChannelError::Io {
+                path: self.channels_dir.to_path_buf(),
+                source: e,
+            })?;
+            let path = entry.path();
+
+            if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                let name = path.file_stem().and_then(|n| n.to_str()).unwrap_or("");
+                if !name.starts_with("channel_") {
+                    continue;
+                }
+
+                match fs::read_to_string(&path) {
+                    Ok(data) => match serde_json::from_str::<Channel>(&data) {
+                        Ok(channel) => {
+                            let preview = channel
+                                .messages
+                                .last()
+                                .map(|m| {
+                                    let content = &m.content;
+                                    if content.len() > 80 {
+                                        format!("{}...", &content[..80])
+                                    } else {
+                                        content.clone()
+                                    }
+                                })
+                                .unwrap_or_default();
+
+                            channels.push(ChannelInfo {
+                                id: channel.id,
+                                name: channel.name,
+                                member_count: channel.members.len(),
+                                unread_count: 0,
+                                preview,
+                                message_count: channel.messages.len(),
+                                created_at: channel.created_at,
+                                updated_at: channel.updated_at,
+                            });
+                        }
+                        Err(_) => continue,
+                    },
+                    Err(_) => continue,
+                }
+            }
+        }
+
+        // Sort by updated_at descending (most recent first)
+        channels.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        Ok(channels)
+    }
+}
+
+// ===========================================================================
+// Helpers
+// ===========================================================================
+
+/// Generate a simple unique ID (timestamp-based with random suffix).
+pub fn generate_channel_id() -> String {
+    use std::time::SystemTime;
+    let nanos = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    format!("ch_{:016x}", nanos & 0xFFFF_FFFF_FFFF_FFFF)
+}
+
+/// Get current ISO 8601 timestamp.
+pub fn now_iso() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let days = secs / 86400;
+    let time_secs = secs % 86400;
+    let hours = time_secs / 3600;
+    let minutes = (time_secs % 3600) / 60;
+    let seconds = time_secs % 60;
+    let (year, month, day) = days_to_ymd(days);
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        year, month, day, hours, minutes, seconds
+    )
+}
+
+fn days_to_ymd(mut days: u64) -> (u64, u64, u64) {
+    let mut year = 1970u64;
+    loop {
+        let days_in_year = if is_leap(year) { 366 } else { 365 };
+        if days < days_in_year {
+            break;
+        }
+        days -= days_in_year;
+        year += 1;
+    }
+    let leap = is_leap(year);
+    let month_days: [u64; 12] = if leap {
+        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    } else {
+        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    };
+    let mut month = 1u64;
+    for &md in &month_days {
+        if days < md {
+            break;
+        }
+        days -= md;
+        month += 1;
+    }
+    (year, month, days + 1)
+}
+
+fn is_leap(year: u64) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+}
+
+// ===========================================================================
+// Error type
+// ===========================================================================
+
+#[derive(Debug, thiserror::Error)]
+pub enum ChannelError {
+    #[error("I/O error at {path}: {source}")]
+    Io {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("channel not found: {channel_id}")]
+    NotFound { channel_id: String },
+
+    #[error("channel already exists: {channel_id}")]
+    AlreadyExists { channel_id: String },
+
+    #[error("serialization error: {message}")]
+    Serialization { message: String },
+
+    #[error("agent not found in workspace: {agent_id}")]
+    AgentNotFound { agent_id: String },
+}
+
+// ===========================================================================
+// Tests
+// ===========================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_test_channel(name: &str, agent_ids: &[&str]) -> Channel {
+        let now = now_iso();
+        Channel {
+            id: generate_channel_id(),
+            name: name.to_string(),
+            members: agent_ids
+                .iter()
+                .map(|&aid| ChannelMember {
+                    agent_id: aid.to_string(),
+                    role: "member".to_string(),
+                    joined_at: now.clone(),
+                })
+                .collect(),
+            messages: Vec::new(),
+            created_at: now.clone(),
+            updated_at: now,
+        }
+    }
+
+    #[test]
+    fn test_channel_store_save_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ChannelStore::new(dir.path());
+
+        let channel = make_test_channel("test-channel", &["agent-1", "agent-2"]);
+        store.save(&channel).unwrap();
+
+        let loaded = store.load(&channel.id).unwrap();
+        assert_eq!(loaded.name, "test-channel");
+        assert_eq!(loaded.members.len(), 2);
+    }
+
+    #[test]
+    fn test_channel_store_list() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ChannelStore::new(dir.path());
+
+        let ch1 = make_test_channel("alpha", &["a1"]);
+        let ch2 = make_test_channel("beta", &["b1", "b2"]);
+        store.save(&ch1).unwrap();
+        store.save(&ch2).unwrap();
+
+        let list = store.list().unwrap();
+        assert_eq!(list.len(), 2);
+
+        let names: Vec<&str> = list.iter().map(|c| c.name.as_str()).collect();
+        assert!(names.contains(&"alpha"));
+        assert!(names.contains(&"beta"));
+    }
+
+    #[test]
+    fn test_channel_store_delete() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ChannelStore::new(dir.path());
+
+        let channel = make_test_channel("to-delete", &["a1"]);
+        store.save(&channel).unwrap();
+        store.delete(&channel.id).unwrap();
+
+        assert!(store.load(&channel.id).is_err());
+    }
+
+    #[test]
+    fn test_channel_not_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ChannelStore::new(dir.path());
+        assert!(store.load("nonexistent").is_err());
+    }
+
+    #[test]
+    fn test_channel_info_member_count() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ChannelStore::new(dir.path());
+
+        let channel = make_test_channel("multi", &["a1", "a2", "a3"]);
+        store.save(&channel).unwrap();
+
+        let list = store.list().unwrap();
+        let info = list.iter().find(|c| c.name == "multi").unwrap();
+        assert_eq!(info.member_count, 3);
+    }
+}

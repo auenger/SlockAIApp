@@ -3,6 +3,7 @@
 //! Each command handles a specific domain of IPC calls from the frontend.
 //! Commands are registered in lib.rs via `invoke_handler`.
 
+pub mod channel;
 pub mod thread;
 
 use serde::{Deserialize, Serialize};

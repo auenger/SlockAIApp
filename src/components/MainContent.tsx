@@ -21,10 +21,11 @@ import {
   Search,
   Code,
   Globe,
-  Database
+  Database,
+  Hash,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { TabType, Task, Message, AgentWithRuntime } from '../types';
+import { TabType, Task, Message, AgentWithRuntime, Channel, ChannelMessage } from '../types';
 import { getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
 import { useThreadChat } from '../lib/useThreadChat';
 
@@ -39,6 +40,18 @@ interface MainContentProps {
   activeThreadId?: string | null;
   /** Callback when a new thread is created */
   onThreadCreated?: (threadId: string) => void;
+  /** Active channel data (when a channel is selected) */
+  activeChannel?: Channel | null;
+  /** All agents (for resolving channel member names) */
+  allAgents?: AgentWithRuntime[];
+  /** Send a message in a channel */
+  onSendChannelMessage?: (channelId: string, message: string) => Promise<void>;
+  /** Whether a channel message is streaming */
+  channelIsStreaming?: boolean;
+  /** Whether the channel agent is thinking */
+  channelIsThinking?: boolean;
+  /** Buffered streaming text for channel */
+  channelStreamingText?: string;
 }
 
 export const MainContent: React.FC<MainContentProps> = ({
@@ -48,6 +61,12 @@ export const MainContent: React.FC<MainContentProps> = ({
   selectedAgent,
   activeThreadId,
   onThreadCreated,
+  activeChannel,
+  allAgents = [],
+  onSendChannelMessage,
+  channelIsStreaming = false,
+  channelIsThinking = false,
+  channelStreamingText = '',
 }) => {
   const [taskFilter, setTaskFilter] = useState('All');
   const [inputValue, setInputValue] = useState('');
@@ -58,6 +77,12 @@ export const MainContent: React.FC<MainContentProps> = ({
     { time: '08:30:09 AM', status: 'Working', color: 'text-brutal-cyan', text: 'Message received' },
   ]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Whether we're in channel mode (vs agent/thread mode)
+  const isChannelMode = !!activeChannel;
+
+  // Build a lookup map for agent info (used by channel messages)
+  const agentMap = new Map(allAgents.map((a) => [a.agent.agent_id, a]));
 
   // Thread chat hook
   const {
@@ -81,7 +106,7 @@ export const MainContent: React.FC<MainContentProps> = ({
 
   useEffect(() => {
     scrollToBottom();
-  }, [activeThread?.messages, isThinking, streamingText]);
+  }, [activeThread?.messages, activeChannel?.messages, isThinking, streamingText, channelIsThinking, channelStreamingText]);
 
   // When activeThreadId changes (from sidebar), load the thread
   useEffect(() => {
@@ -141,8 +166,58 @@ export const MainContent: React.FC<MainContentProps> = ({
     }));
   })();
 
+  // Convert channel messages to display format
+  const channelDisplayMessages: Message[] = (() => {
+    if (!activeChannel) return [];
+    return activeChannel.messages.map((msg: ChannelMessage) => {
+      const isAgent = msg.sender_type === 'agent';
+      const agentInfo = isAgent ? agentMap.get(msg.sender_id) : null;
+      return {
+        id: msg.id,
+        sender: {
+          name: isAgent ? (agentInfo?.agent.name || msg.sender_id) : 'You',
+          avatar: isAgent ? (agentInfo?.agent.emoji?.charAt(0) || 'A') : 'U',
+          isAgent,
+        },
+        content: msg.content,
+        timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+    });
+  })();
+
+  /** Handle sending a message in channel mode */
+  const handleSendChannelMessage = async () => {
+    if (!inputValue.trim() || !activeChannel || !onSendChannelMessage) return;
+    if (channelIsStreaming || channelIsThinking) return;
+
+    const userInput = inputValue;
+    setInputValue('');
+    addLog('Working', 'Channel message sent', 'text-brutal-cyan');
+    addLog('Thinking', undefined, 'text-brutal-yellow');
+
+    try {
+      await onSendChannelMessage(activeChannel.id, userInput);
+      addLog('Output', `Channel responded to: ${userInput.substring(0, 20)}...`);
+    } catch (error) {
+      console.error("Channel Error:", error);
+      addLog('Error', 'Failed to generate channel response', 'text-brutal-pink');
+    } finally {
+      addLog('Idle', 'Channel task completed', 'text-brutal-green');
+    }
+  };
+
   const agentName = selectedAgent?.agent.name || 'Agent';
-  const canSend = inputValue.trim() && !isStreaming && !isThinking;
+  const canSend = isChannelMode
+    ? inputValue.trim() && !channelIsStreaming && !channelIsThinking
+    : inputValue.trim() && !isStreaming && !isThinking;
+
+  // Determine header info based on mode
+  const headerTitle = isChannelMode
+    ? activeChannel!.name
+    : (selectedAgent ? selectedAgent.agent.name : 'Select an Agent');
+  const headerSubtitle = isChannelMode
+    ? `${activeChannel!.members.length} member${activeChannel!.members.length !== 1 ? 's' : ''}`
+    : (selectedAgent ? selectedAgent.agent.agent_id : '');
 
   const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
     { id: 'CHAT', label: 'CHAT', icon: MessageSquare },
@@ -164,7 +239,9 @@ export const MainContent: React.FC<MainContentProps> = ({
       <div className="p-3 brutal-border-b flex items-center justify-between bg-white">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 brutal-border bg-brutal-cyan flex items-center justify-center">
-            {selectedAgent ? (
+            {isChannelMode ? (
+              <Hash size={24} />
+            ) : selectedAgent ? (
               <span className="text-xl">{selectedAgent.agent.emoji}</span>
             ) : (
               <Bot size={24} />
@@ -172,41 +249,59 @@ export const MainContent: React.FC<MainContentProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="font-black text-lg">
-                {selectedAgent ? selectedAgent.agent.name : 'Select an Agent'}
-              </h2>
-              {selectedAgent && (
-                <span className="text-[10px] text-gray-500 font-medium">
-                  {selectedAgent.agent.agent_id}
-                </span>
-              )}
+              <h2 className="font-black text-lg">{headerTitle}</h2>
+              <span className="text-[10px] text-gray-500 font-medium">
+                {headerSubtitle}
+              </span>
             </div>
-            <div className="flex items-center gap-1.5">
-              {selectedAgent ? (
-                <>
-                  <Circle
-                    size={8}
-                    fill={getRuntimeStatusColor(selectedAgent.runtime_status)}
-                    className="shrink-0"
-                  />
-                  <span className="text-[10px] font-bold uppercase tracking-tighter">
-                    {getRuntimeStatusLabel(selectedAgent.runtime_status)}
+            {isChannelMode ? (
+              <div className="flex items-center gap-1">
+                {activeChannel!.members.slice(0, 5).map((member) => {
+                  const memberAgent = agentMap.get(member.agent_id);
+                  return (
+                    <div
+                      key={member.agent_id}
+                      className="w-5 h-5 brutal-border bg-brutal-cyan flex items-center justify-center text-[10px]"
+                      title={memberAgent?.agent.name || member.agent_id}
+                    >
+                      {memberAgent?.agent.emoji?.charAt(0) || '?'}
+                    </div>
+                  );
+                })}
+                {activeChannel!.members.length > 5 && (
+                  <span className="text-[9px] text-gray-500">
+                    +{activeChannel!.members.length - 5}
                   </span>
-                  {selectedAgent.runtime_version && (
-                    <span className="text-[10px] text-gray-400 ml-1">
-                      v{selectedAgent.runtime_version}
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                {selectedAgent ? (
+                  <>
+                    <Circle
+                      size={8}
+                      fill={getRuntimeStatusColor(selectedAgent.runtime_status)}
+                      className="shrink-0"
+                    />
+                    <span className="text-[10px] font-bold uppercase tracking-tighter">
+                      {getRuntimeStatusLabel(selectedAgent.runtime_status)}
                     </span>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Circle size={8} fill="#9CA3AF" className="text-gray-400" />
-                  <span className="text-[10px] font-bold uppercase tracking-tighter text-gray-400">
-                    No Agent Selected
-                  </span>
-                </>
-              )}
-            </div>
+                    {selectedAgent.runtime_version && (
+                      <span className="text-[10px] text-gray-400 ml-1">
+                        v{selectedAgent.runtime_version}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Circle size={8} fill="#9CA3AF" className="text-gray-400" />
+                    <span className="text-[10px] font-bold uppercase tracking-tighter text-gray-400">
+                      No Agent Selected
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -378,15 +473,22 @@ export const MainContent: React.FC<MainContentProps> = ({
         {activeTab === 'CHAT' && (
           <div className="h-full flex flex-col">
              <div className="flex-1 overflow-y-auto space-y-6 pb-4">
-                {displayMessages.length === 0 && !isThinking && !isStreaming && (
+                {/* Channel mode */}
+                {isChannelMode && channelDisplayMessages.length === 0 && !channelIsThinking && !channelIsStreaming && (
+                  <div className="h-full flex flex-col justify-center items-center text-gray-400 italic text-sm">
+                    No messages yet in #{activeChannel!.name}.
+                  </div>
+                )}
+                {/* Agent/Thread mode */}
+                {!isChannelMode && displayMessages.length === 0 && !isThinking && !isStreaming && (
                   <div className="h-full flex flex-col justify-center items-center text-gray-400 italic text-sm">
                     {selectedAgent
                       ? `No messages yet. Start a conversation with ${agentName}.`
-                      : 'No messages yet. Select an agent to start chatting.'}
+                      : 'No messages yet. Select an agent or channel to start chatting.'}
                   </div>
                 )}
 
-                {displayMessages.map((msg) => (
+                {(isChannelMode ? channelDisplayMessages : displayMessages).map((msg) => (
                   <div key={msg.id} className="flex gap-3 px-2">
                     <div className={cn(
                       "w-8 h-8 brutal-border flex items-center justify-center shrink-0 font-black",
@@ -406,8 +508,8 @@ export const MainContent: React.FC<MainContentProps> = ({
                   </div>
                 ))}
 
-                {/* Streaming text display */}
-                {streamingText && (
+                {/* Streaming text display (thread mode) */}
+                {!isChannelMode && streamingText && (
                   <div className="flex gap-3 px-2">
                     <div className="w-8 h-8 brutal-border bg-brutal-cyan flex items-center justify-center shrink-0 font-black">
                       <Bot size={18} />
@@ -425,8 +527,27 @@ export const MainContent: React.FC<MainContentProps> = ({
                   </div>
                 )}
 
-                {/* Thinking indicator (before any text arrives) */}
-                {isThinking && !streamingText && (
+                {/* Streaming text display (channel mode) */}
+                {isChannelMode && channelStreamingText && (
+                  <div className="flex gap-3 px-2">
+                    <div className="w-8 h-8 brutal-border bg-brutal-cyan flex items-center justify-center shrink-0 font-black">
+                      <Bot size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-black text-xs">Agent</span>
+                        <span className="text-[8px] text-gray-500 uppercase italic">Streaming...</span>
+                      </div>
+                      <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                        {channelStreamingText}
+                        <span className="inline-block w-1.5 h-4 bg-brutal-cyan ml-0.5 animate-pulse" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Thinking indicator (thread mode) */}
+                {!isChannelMode && isThinking && !streamingText && (
                   <div className="flex gap-3 px-2 animate-pulse">
                     <div className="w-8 h-8 brutal-border bg-brutal-cyan flex items-center justify-center shrink-0">
                       <Bot size={18} />
@@ -434,6 +555,22 @@ export const MainContent: React.FC<MainContentProps> = ({
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-black text-xs">{agentName}</span>
+                        <span className="text-[8px] text-gray-500 uppercase italic">Thinking...</span>
+                      </div>
+                      <div className="h-4 bg-gray-200 w-2/3 brutal-border-b" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Thinking indicator (channel mode) */}
+                {isChannelMode && channelIsThinking && !channelStreamingText && (
+                  <div className="flex gap-3 px-2 animate-pulse">
+                    <div className="w-8 h-8 brutal-border bg-brutal-cyan flex items-center justify-center shrink-0">
+                      <Bot size={18} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-black text-xs">Agent</span>
                         <span className="text-[8px] text-gray-500 uppercase italic">Thinking...</span>
                       </div>
                       <div className="h-4 bg-gray-200 w-2/3 brutal-border-b" />
@@ -451,14 +588,31 @@ export const MainContent: React.FC<MainContentProps> = ({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
-                        handleSendMessage();
+                        if (isChannelMode) {
+                          handleSendChannelMessage();
+                        } else {
+                          handleSendMessage();
+                        }
                       }
                     }}
-                    placeholder={selectedAgent ? `Message @${agentName}...` : 'Select an agent to start chatting...'}
-                    disabled={!selectedAgent || isStreaming || isThinking}
+                    placeholder={
+                      isChannelMode
+                        ? `Message #${activeChannel!.name}...`
+                        : selectedAgent
+                        ? `Message @${agentName}...`
+                        : 'Select an agent or channel to start chatting...'
+                    }
+                    disabled={
+                      isChannelMode
+                        ? !activeChannel || channelIsStreaming || channelIsThinking
+                        : !selectedAgent || isStreaming || isThinking
+                    }
                     className={cn(
                       "w-full brutal-border bg-white p-3 min-h-[100px] text-sm focus:outline-none focus:bg-brutal-bg resize-none",
-                      (!selectedAgent || isStreaming || isThinking) && "opacity-50 cursor-not-allowed"
+                      (isChannelMode
+                        ? !activeChannel || channelIsStreaming || channelIsThinking
+                        : !selectedAgent || isStreaming || isThinking
+                      ) && "opacity-50 cursor-not-allowed"
                     )}
                   />
                 </div>
@@ -477,7 +631,7 @@ export const MainContent: React.FC<MainContentProps> = ({
                       As Task
                     </label>
                     <button
-                      onClick={handleSendMessage}
+                      onClick={isChannelMode ? handleSendChannelMessage : handleSendMessage}
                       disabled={!canSend}
                       className={cn(
                         "brutal-btn flex items-center gap-2",

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Hash,
   MessageSquare,
@@ -9,10 +9,11 @@ import {
   User,
   Circle,
   Clock,
+  X,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAgentStatus, getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
-import type { AgentWithRuntime, ThreadInfo } from '../types';
+import type { AgentWithRuntime, ThreadInfo, ChannelInfo } from '../types';
 
 interface SidebarProps {
   activeChannel: string;
@@ -29,6 +30,12 @@ interface SidebarProps {
   onThreadSelect?: (threadId: string) => void;
   /** Callback when user wants to create a new thread */
   onCreateThread?: () => void;
+  /** Channel list */
+  channels?: ChannelInfo[];
+  /** Callback when user wants to create a new channel */
+  onCreateChannel?: (name: string, memberAgentIds: string[]) => void;
+  /** Available agents for channel member selection */
+  agents?: AgentWithRuntime[];
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -40,8 +47,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeThreadId,
   onThreadSelect,
   onCreateThread,
+  channels = [],
+  onCreateChannel,
+  agents: propAgents,
 }) => {
-  const { agents, loading } = useAgentStatus();
+  const { agents: statusAgents, loading } = useAgentStatus();
+  const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [newChannelName, setNewChannelName] = useState('');
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+
+  // Use prop agents if provided (they have runtime status), otherwise use status agents
+  const agents = propAgents ?? statusAgents;
+
+  /** Handle channel creation */
+  const handleCreateChannel = () => {
+    if (!newChannelName.trim() || !onCreateChannel) return;
+    onCreateChannel(newChannelName.trim(), selectedMemberIds);
+    setNewChannelName('');
+    setSelectedMemberIds([]);
+    setShowCreateChannel(false);
+  };
+
+  /** Toggle member selection for channel creation */
+  const toggleMember = (agentId: string) => {
+    setSelectedMemberIds((prev) =>
+      prev.includes(agentId)
+        ? prev.filter((id) => id !== agentId)
+        : [...prev, agentId]
+    );
+  };
 
   return (
     <div className="w-64 h-full bg-brutal-yellow brutal-border flex flex-col overflow-hidden">
@@ -69,26 +103,96 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <section>
           <div className="flex items-center justify-between px-2 mb-2">
             <h3 className="font-black text-xs uppercase tracking-wider flex items-center gap-1">
-              <ChevronDown size={14} /> Channels <span className="text-gray-600">2</span>
+              <ChevronDown size={14} /> Channels <span className="text-gray-600">{channels.length}</span>
             </h3>
-            <button className="brutal-border bg-white p-0.5 hover:bg-gray-100">
+            <button
+              onClick={() => setShowCreateChannel(true)}
+              className="brutal-border bg-white p-0.5 hover:bg-gray-100"
+              title="Create Channel"
+            >
               <Plus size={14} />
             </button>
           </div>
           <div className="space-y-1">
-            {['all', 'kagent-integrate-sap-ai-core'].map(id => (
+            {channels.map((ch) => (
               <button
-                key={id}
-                onClick={() => onChannelSelect(id)}
+                key={ch.id}
+                onClick={() => onChannelSelect(ch.id)}
                 className={cn(
                   "w-full text-left px-3 py-1.5 font-bold text-sm flex items-center gap-2 brutal-border transition-all",
-                  activeChannel === id ? "bg-brutal-pink text-white brutal-shadow-sm translate-x-[-2px] translate-y-[-2px]" : "hover:bg-white/50 border-transparent"
+                  activeChannel === ch.id ? "bg-brutal-pink text-white brutal-shadow-sm translate-x-[-2px] translate-y-[-2px]" : "hover:bg-white/50 border-transparent"
                 )}
               >
-                <Hash size={14} /> {id}
+                <Hash size={14} /> {ch.name}
+                {ch.unread_count > 0 && (
+                  <span className="ml-auto text-[9px] bg-brutal-pink text-white px-1 brutal-border">
+                    {ch.unread_count}
+                  </span>
+                )}
               </button>
             ))}
+            {channels.length === 0 && (
+              <div className="text-[10px] text-gray-500 italic px-2 py-1">
+                No channels yet
+              </div>
+            )}
           </div>
+
+          {/* Create Channel Form */}
+          {showCreateChannel && (
+            <div className="mt-2 p-2 bg-white brutal-border space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase">New Channel</span>
+                <button
+                  onClick={() => setShowCreateChannel(false)}
+                  className="p-0.5 hover:bg-gray-100"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+              <input
+                type="text"
+                value={newChannelName}
+                onChange={(e) => setNewChannelName(e.target.value)}
+                placeholder="Channel name"
+                className="w-full brutal-border px-2 py-1 text-xs focus:outline-none focus:bg-brutal-bg"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCreateChannel();
+                }}
+              />
+              <div className="space-y-1">
+                <span className="text-[9px] font-bold uppercase text-gray-500">Members</span>
+                {agents.map((awr) => {
+                  const checked = selectedMemberIds.includes(awr.agent.agent_id);
+                  return (
+                    <label
+                      key={awr.agent.agent_id}
+                      className="flex items-center gap-2 px-1 py-0.5 hover:bg-gray-50 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleMember(awr.agent.agent_id)}
+                        className="brutal-border w-3 h-3 accent-black"
+                      />
+                      <span className="text-[10px] font-bold">{awr.agent.emoji} {awr.agent.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <button
+                onClick={handleCreateChannel}
+                disabled={!newChannelName.trim()}
+                className={cn(
+                  "w-full brutal-btn text-[10px] font-black",
+                  newChannelName.trim() ? "bg-brutal-pink text-white" : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                )}
+              >
+                Create Channel
+              </button>
+            </div>
+          )}
         </section>
 
         {/* Threads - real data from backend */}
@@ -173,7 +277,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           </div>
           <div className="space-y-1">
-            {agents.map((agentWithRuntime) => {
+            {agents.map((agentWithRuntime: AgentWithRuntime) => {
               const { agent, runtime_status, runtime_install_hint } = agentWithRuntime;
               const isSelected = selectedAgentId === agent.agent_id;
               const statusColor = getRuntimeStatusColor(runtime_status);
