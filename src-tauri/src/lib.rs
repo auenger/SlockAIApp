@@ -75,6 +75,7 @@ pub fn run() {
             commands::thread::delete_thread,
             commands::thread::send_message,
             commands::thread::save_agent_response,
+            commands::thread::load_thread_messages,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

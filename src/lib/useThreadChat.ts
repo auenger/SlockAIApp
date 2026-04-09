@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { Thread, ThreadInfo, ThreadMessageData, StreamEvent } from "../types";
+import type { Thread, ThreadInfo, StreamEvent } from "../types";
 import {
   createThread,
   listThreads,
@@ -259,7 +259,7 @@ export function useThreadChat(): ThreadChatState {
 
       const unlistenChunk = await listen<StreamEvent>("agent://chunk", (event) => {
         const payload = event.payload;
-        if (payload.msg_type === "assistant" && payload.text) {
+        if (payload.type === "assistant" && payload.text) {
           accumulatedText += payload.text;
           setStreamingText(accumulatedText);
           setIsThinking(false); // We received first text chunk

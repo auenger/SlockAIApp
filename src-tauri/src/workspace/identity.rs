@@ -259,7 +259,7 @@ pub struct IdentitySummary {
 
 /// Convert a snake_case or kebab-case string to Title Case.
 fn title_case(s: &str) -> String {
-    s.split(|c: char| c == '_' || c == '-')
+    s.split(['_', '-'])
         .filter(|part| !part.is_empty())
         .map(|part| {
             let mut chars = part.chars();

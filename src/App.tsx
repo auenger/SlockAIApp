@@ -3,7 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { MainContent } from './components/MainContent';
 import { ThreadPanel } from './components/ThreadPanel';
 import { CreateTaskModal, InviteHumanModal } from './components/Modals';
-import { TabType, AgentWithRuntime, ThreadInfo } from './types';
+import { TabType, AgentWithRuntime } from './types';
 import { useThreadChat } from './lib/useThreadChat';
 
 export default function App() {

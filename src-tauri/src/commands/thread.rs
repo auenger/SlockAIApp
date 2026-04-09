@@ -2,11 +2,42 @@
 //!
 //! Provides CRUD operations for Threads, plus the `send_message` command
 //! that integrates with the Claude Code Runtime for streaming responses.
+//!
+//! ## Persistence Strategy
+//!
+//! Messages are persisted in **two** complementary formats:
+//!
+//! 1. **Thread JSON** (`thread_{id}.json`) -- Full thread object including all
+//!    messages, metadata, and session info. Used as the primary data source.
+//!
+//! 2. **JSONL** (`{thread_id}.jsonl`) -- Append-only log of individual messages.
+//!    Each message is appended as a single JSON line. Used for crash recovery
+//!    and as a redundant backup. On thread load, JSONL messages are reconciled
+//!    with the thread JSON to recover any lost data.
 
+use crate::storage::jsonl::JsonlStore;
 use crate::AppState;
 use crate::runtime::ExecuteParams;
 use crate::workspace::thread::{self, Thread, ThreadInfo, ThreadMessage, ThreadStore};
 use tauri::{AppHandle, Emitter};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Create a JsonlStore for the given agent's thread JSONL directory.
+///
+/// The JSONL files are stored in `conversations/threads/` under the agent workspace.
+fn jsonl_store_for_agent(
+    manager: &crate::workspace::manager::AgentManager,
+    agent_id: &str,
+) -> Result<JsonlStore, String> {
+    let workspace = manager
+        .get_workspace(agent_id)
+        .ok_or_else(|| format!("workspace not found for agent: {agent_id}"))?;
+    let threads_dir = workspace.conversations_dir().join("threads");
+    Ok(JsonlStore::new(threads_dir))
+}
 
 // ---------------------------------------------------------------------------
 // Thread CRUD
@@ -78,6 +109,9 @@ pub fn list_threads(
 }
 
 /// Get a single thread by ID.
+///
+/// Loads the thread JSON and reconciles with any JSONL messages that may
+/// not have been saved to the JSON (e.g. after a crash during write).
 #[tauri::command]
 pub fn get_thread(
     state: tauri::State<'_, AppState>,
@@ -94,7 +128,27 @@ pub fn get_thread(
 
     let conv_dir = workspace.conversations_dir();
     let store = ThreadStore::new(&conv_dir);
-    store.load(&thread_id).map_err(|e| format!("load failed: {e}"))
+    let mut thread = store.load(&thread_id).map_err(|e| format!("load failed: {e}"))?;
+
+    // Reconcile with JSONL: recover any messages not in the JSON
+    let jsonl = jsonl_store_for_agent(&manager, &agent_id)?;
+    let jsonl_messages = jsonl.load_messages(&thread_id).unwrap_or_default();
+
+    if jsonl_messages.len() > thread.messages.len() {
+        log::info!(
+            "[get_thread] Recovering {} messages from JSONL for thread {}",
+            jsonl_messages.len() - thread.messages.len(),
+            thread_id
+        );
+        thread.messages = jsonl_messages;
+        thread.updated_at = thread::now_iso();
+        // Persist the reconciled state back to JSON
+        if let Err(e) = store.save(&thread) {
+            log::warn!("[get_thread] Failed to save reconciled thread: {}", e);
+        }
+    }
+
+    Ok(thread)
 }
 
 /// Delete a thread by ID.
@@ -115,6 +169,12 @@ pub fn delete_thread(
     let conv_dir = workspace.conversations_dir();
     let store = ThreadStore::new(&conv_dir);
     store.delete(&thread_id).map_err(|e| format!("delete failed: {e}"))?;
+
+    // Also delete JSONL file
+    let jsonl = jsonl_store_for_agent(&manager, &agent_id)?;
+    if let Err(e) = jsonl.delete_thread(&thread_id) {
+        log::warn!("[delete_thread] JSONL delete failed for thread {}: {}", thread_id, e);
+    }
 
     log::info!("[delete_thread] thread_id={}, agent_id={}", thread_id, agent_id);
     Ok(())
@@ -158,11 +218,17 @@ pub async fn send_message(
             content: message.clone(),
             timestamp: thread::now_iso(),
         };
-        thread.messages.push(user_msg);
+        thread.messages.push(user_msg.clone());
         thread.updated_at = thread::now_iso();
 
-        // Save updated thread
+        // Save updated thread (JSON)
         store.save(&thread).map_err(|e| format!("save failed: {e}"))?;
+
+        // Also persist to JSONL (append-only)
+        let jsonl = jsonl_store_for_agent(&manager, &agent_id)?;
+        if let Err(e) = jsonl.append_message(&thread_id, &user_msg) {
+            log::warn!("[send_message] JSONL append failed for thread {}: {}", thread_id, e);
+        }
 
         // Get workspace path for runtime execution
         let workspace_path = workspace.base_path().to_string_lossy().to_string();
@@ -261,10 +327,41 @@ pub fn save_agent_response(
         content,
         timestamp: thread::now_iso(),
     };
-    thread.messages.push(agent_msg);
+    thread.messages.push(agent_msg.clone());
     thread.updated_at = thread::now_iso();
 
     store.save(&thread).map_err(|e| format!("save failed: {e}"))?;
 
+    // Also persist to JSONL (append-only)
+    let jsonl = jsonl_store_for_agent(&manager, &agent_id)?;
+    if let Err(e) = jsonl.append_message(&thread_id, &agent_msg) {
+        log::warn!("[save_agent_response] JSONL append failed for thread {}: {}", thread_id, e);
+    }
+
     Ok(thread)
+}
+
+/// Load messages for a thread from JSONL storage.
+///
+/// This is primarily for crash recovery or when the JSON file is missing
+/// but the JSONL log still exists. Returns messages in chronological order.
+#[tauri::command]
+pub fn load_thread_messages(
+    state: tauri::State<'_, AppState>,
+    agent_id: String,
+    thread_id: String,
+    limit: Option<usize>,
+) -> Result<Vec<ThreadMessage>, String> {
+    let manager = state
+        .agent_manager
+        .lock()
+        .map_err(|e| format!("lock error: {e}"))?;
+
+    let jsonl = jsonl_store_for_agent(&manager, &agent_id)?;
+
+    match limit {
+        Some(n) => jsonl.load_recent_messages(&thread_id, n),
+        None => jsonl.load_messages(&thread_id),
+    }
+    .map_err(|e| format!("load failed: {e}"))
 }
