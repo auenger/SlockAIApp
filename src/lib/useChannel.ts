@@ -4,12 +4,13 @@
  * Provides:
  * - Channel CRUD (create, list, get, update, delete)
  * - Channel member management (add, remove)
- * - Real-time streaming message send/receive in channels
- * - State management for active channel and messages
+ * - Real-time multi-Agent streaming message send/receive in channels
+ * - @Mention-aware agent resolution
+ * - Per-agent streaming state tracking
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { Channel, ChannelInfo, StreamEvent, AgentWithRuntime } from "../types";
+import type { Channel, ChannelInfo, AgentWithRuntime, ChannelChunkEvent, ChannelResponseEvent } from "../types";
 import {
   createChannel,
   listChannels,
@@ -29,6 +30,22 @@ import {
 const isTauri = "__TAURI_INTERNALS__" in window;
 
 // ---------------------------------------------------------------------------
+// Per-agent streaming state
+// ---------------------------------------------------------------------------
+
+/** Tracks the streaming state for a single agent in a multi-agent response. */
+export interface AgentStreamState {
+  agent_id: string;
+  agent_index: number;
+  total_agents: number;
+  streaming: boolean;
+  thinking: boolean;
+  text: string;
+  done: boolean;
+  error?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Hook return type
 // ---------------------------------------------------------------------------
 
@@ -37,12 +54,14 @@ export interface ChannelState {
   channels: ChannelInfo[];
   /** Currently active channel (null when no channel is selected) */
   activeChannel: Channel | null;
-  /** Whether a message is currently being streamed */
+  /** Whether any agent is currently streaming */
   isStreaming: boolean;
-  /** Whether the agent is "thinking" (streaming in progress) */
+  /** Whether any agent is "thinking" (waiting for first chunk) */
   isThinking: boolean;
-  /** Buffered streaming text from the current response */
+  /** Buffered streaming text from the current single-agent response (backward compat) */
   streamingText: string;
+  /** Per-agent streaming states for multi-agent responses */
+  agentStreams: AgentStreamState[];
   /** Loading state for async operations */
   loading: boolean;
   /** Error message (if any) */
@@ -79,17 +98,20 @@ export function useChannel(): ChannelState {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [streamingText, setStreamingText] = useState("");
+  const [agentStreams, setAgentStreams] = useState<AgentStreamState[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const unlistenChunkRef = useRef<(() => void) | null>(null);
   const unlistenResponseRef = useRef<(() => void) | null>(null);
+  const unlistenAgentStartRef = useRef<(() => void) | null>(null);
 
   // Clean up listeners on unmount
   useEffect(() => {
     return () => {
       if (unlistenChunkRef.current) unlistenChunkRef.current();
       if (unlistenResponseRef.current) unlistenResponseRef.current();
+      if (unlistenAgentStartRef.current) unlistenAgentStartRef.current();
     };
   }, []);
 
@@ -130,7 +152,6 @@ export function useChannel(): ChannelState {
     setError(null);
     try {
       if (!isTauri) {
-        // Dev fallback
         const mockChannel: Channel = {
           id: `ch-dev-${Date.now()}`,
           name,
@@ -192,7 +213,6 @@ export function useChannel(): ChannelState {
         await updateChannel(channelId, name);
       }
       await loadChannels();
-      // Refresh active channel if it's the one updated
       setActiveChannel((prev) => {
         if (prev && prev.id === channelId) {
           return { ...prev, name };
@@ -258,6 +278,7 @@ export function useChannel(): ChannelState {
     setIsThinking(true);
     setIsStreaming(true);
     setStreamingText("");
+    setAgentStreams([]);
     setError(null);
 
     try {
@@ -269,6 +290,10 @@ export function useChannel(): ChannelState {
       if (unlistenResponseRef.current) {
         unlistenResponseRef.current();
         unlistenResponseRef.current = null;
+      }
+      if (unlistenAgentStartRef.current) {
+        unlistenAgentStartRef.current();
+        unlistenAgentStartRef.current = null;
       }
 
       if (!isTauri) {
@@ -318,6 +343,7 @@ export function useChannel(): ChannelState {
         });
         setStreamingText("");
         setIsStreaming(false);
+        setIsThinking(false);
         return;
       }
 
@@ -325,56 +351,127 @@ export function useChannel(): ChannelState {
       const updatedChannel = await sendChannelMessage(channelId, message);
       setActiveChannel(updatedChannel);
 
-      // Listen for streaming chunk events
+      // Listen for agent-start events (multi-agent coordination)
       const { listen } = await import("@tauri-apps/api/event");
 
-      let accumulatedText = "";
-
-      const unlistenChunk = await listen<{ channel_id: string; event: StreamEvent }>(
-        "agent://channel-chunk",
-        (event) => {
+      const unlistenAgentStart = await listen(
+        "agent://channel-agent-start",
+        (event: { payload: { channel_id: string; agent_id: string; agent_index: number; total_agents: number } }) => {
           const payload = event.payload;
+          if (payload.channel_id !== channelId) return;
+
+          setAgentStreams((prev) => [
+            ...prev,
+            {
+              agent_id: payload.agent_id,
+              agent_index: payload.agent_index,
+              total_agents: payload.total_agents,
+              streaming: true,
+              thinking: true,
+              text: "",
+              done: false,
+            },
+          ]);
+        }
+      );
+      unlistenAgentStartRef.current = unlistenAgentStart;
+
+      // Per-agent accumulated text
+      const agentTexts = new Map<string, string>();
+
+      // Listen for streaming chunk events
+      const unlistenChunk = await listen(
+        "agent://channel-chunk",
+        (event: { payload: ChannelChunkEvent }) => {
+          const payload = event.payload;
+          if (payload.channel_id !== channelId) return;
+
           const streamEvent = payload.event;
-          if ((streamEvent as unknown as Record<string, unknown>).msg_type === "assistant" && streamEvent.text) {
-            accumulatedText += streamEvent.text;
-            setStreamingText(accumulatedText);
+          const agentId = payload.agent_id;
+
+          if ((streamEvent as unknown as Record<string, unknown>).type === "assistant" && streamEvent.text) {
+            // Update per-agent text
+            const prev = agentTexts.get(agentId) || "";
+            const newText = prev + streamEvent.text;
+            agentTexts.set(agentId, newText);
+
+            // Update per-agent stream state
+            setAgentStreams((prev) =>
+              prev.map((s) =>
+                s.agent_id === agentId
+                  ? { ...s, thinking: false, text: newText }
+                  : s
+              )
+            );
+
+            // Also update single-agent compat streaming text
+            setStreamingText(newText);
             setIsThinking(false);
           }
+
           if (streamEvent.is_done) {
-            setIsStreaming(false);
-            setIsThinking(false);
+            setAgentStreams((prev) =>
+              prev.map((s) =>
+                s.agent_id === agentId
+                  ? { ...s, streaming: false, thinking: false, done: true, error: streamEvent.error }
+                  : s
+              )
+            );
           }
         }
       );
       unlistenChunkRef.current = unlistenChunk;
 
       // Listen for the channel-response event
-      const unlistenResponse = await listen<{
-        channel_id: string;
-        agent_id: string;
-        content: string;
-        session_id: string | null;
-      }>("agent://channel-response", async (event) => {
-        const { channel_id, agent_id, content } = event.payload;
+      const unlistenResponse = await listen(
+        "agent://channel-response",
+        async (event: { payload: ChannelResponseEvent }) => {
+          const { channel_id, agent_id, content } = event.payload;
+          if (channel_id !== channelId) return;
 
-        try {
-          const finalChannel = await saveChannelResponse(channel_id, agent_id, content);
-          setActiveChannel(finalChannel);
-        } catch (err) {
-          console.error("[useChannel] save_channel_response failed:", err);
+          try {
+            const finalChannel = await saveChannelResponse(channel_id, agent_id, content);
+            setActiveChannel(finalChannel);
+          } catch (err) {
+            console.error("[useChannel] save_channel_response failed:", err);
+          }
+
+          // Check if all agents are done
+          setAgentStreams((prev) => {
+            const allDone = prev.every((s) => s.done);
+            if (allDone) {
+              setStreamingText("");
+              setIsStreaming(false);
+              setIsThinking(false);
+
+              // Clean up listeners
+              unlistenAgentStart();
+              unlistenChunk();
+              unlistenResponse();
+              unlistenChunkRef.current = null;
+              unlistenResponseRef.current = null;
+              unlistenAgentStartRef.current = null;
+
+              // Refresh channel list
+              loadChannels();
+            }
+            return prev;
+          });
         }
-
-        setStreamingText("");
-
-        unlistenChunk();
-        unlistenResponse();
-        unlistenChunkRef.current = null;
-        unlistenResponseRef.current = null;
-
-        // Refresh channel list (to update preview/message_count)
-        await loadChannels();
-      });
+      );
       unlistenResponseRef.current = unlistenResponse;
+
+      // Fallback timeout: if no agent-start event within 5s, consider it single-agent
+      setTimeout(() => {
+        setAgentStreams((prev) => {
+          if (prev.length === 0 && isStreaming) {
+            setIsStreaming(false);
+            setIsThinking(false);
+            setStreamingText("");
+          }
+          return prev;
+        });
+      }, 30000);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
@@ -389,6 +486,7 @@ export function useChannel(): ChannelState {
     setStreamingText("");
     setIsStreaming(false);
     setIsThinking(false);
+    setAgentStreams([]);
   }, []);
 
   return {
@@ -397,6 +495,7 @@ export function useChannel(): ChannelState {
     isStreaming,
     isThinking,
     streamingText,
+    agentStreams,
     loading,
     error,
     loadChannels,

@@ -33,6 +33,7 @@ export default function App() {
     isStreaming: channelIsStreaming,
     isThinking: channelIsThinking,
     streamingText: channelStreamingText,
+    agentStreams: channelAgentStreams,
     clearActive: _clearActiveChannel,
   } = useChannel();
 
@@ -135,6 +136,7 @@ export default function App() {
         channelIsStreaming={channelIsStreaming}
         channelIsThinking={channelIsThinking}
         channelStreamingText={channelStreamingText}
+        channelAgentStreams={channelAgentStreams}
       />
 
       {/* Right Thread Panel */}
