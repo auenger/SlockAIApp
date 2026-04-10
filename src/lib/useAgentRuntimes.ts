@@ -22,12 +22,14 @@ const MOCK_RUNTIMES: AgentRuntimeInfo[] = [
   {
     id: "claude-code",
     name: "Claude Code",
-    runtime_type: "cli",
+    runtime_category: "cli",
+    runtime_type: "claude_code",
     status: "available",
     version: "1.0.0-dev",
     install_path: "/usr/local/bin/claude",
     capabilities: ["streaming", "sessions", "tool_use", "structured_output"],
     install_hint: "npm install -g @anthropic-ai/claude-code",
+    binary_name: "claude",
   },
 ];
 

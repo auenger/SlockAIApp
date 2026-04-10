@@ -19,8 +19,10 @@ const MOCK_IDENTITY: IdentitySummary = {
   name: "克劳德",
   emoji: "🤖",
   avatar: null,
+  icon: null,
   creature: "AI",
   vibe: "专业",
+  runtime_type: "claude_code",
 };
 
 const MOCK_CONTEXT: AgentContextResult = {

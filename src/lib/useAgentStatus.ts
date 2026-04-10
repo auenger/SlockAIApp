@@ -23,12 +23,15 @@ const MOCK_AGENTS: AgentWithRuntime[] = [
       name: "AgentsZone",
       emoji: "robot",
       avatar: null,
+      icon: null,
       enabled: true,
       session_count: 0,
+      runtime_type: "claude_code",
     },
     runtime_status: "available",
     runtime_version: "1.0.0-dev",
     runtime_install_hint: "npm install -g @anthropic-ai/claude-code",
+    runtime_type: "claude_code",
   },
 ];
 
