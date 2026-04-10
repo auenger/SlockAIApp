@@ -1,8 +1,8 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-09T21:20:00+08:00"
-  version: 9
-  total_completed: 9
+  last_updated: "2026-04-10T12:10:00+08:00"
+  version: 10
+  total_completed: 10
 
 records:
   - id: feat-project-init
@@ -229,3 +229,31 @@ records:
       commits: 1
       files_changed: 11
     note: "Cherry-picked onto main, worktree is main repo"
+  - id: feat-activity-log
+    name: "Activity 日志后端集成"
+    completed: "2026-04-10T12:10:00+08:00"
+    tag: feat-activity-log-20260410
+    merge_commit: "b1aed5a"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-activity-log
+    worktree_deleted: true
+    worktree_path: ../SlockAI-feat-activity-log
+    conflicts:
+      had_conflict: true
+      conflict_files:
+        - src-tauri/src/lib.rs
+        - src/components/MainContent.tsx
+        - src/lib/ipc.ts
+        - src/types.ts
+      resolved_at: "2026-04-10T12:05:00+08:00"
+      re_verified: true
+    verification:
+      status: passed
+      scenarios_total: 2
+      scenarios_passed: 2
+    stats:
+      started: "2026-04-10T11:00:00+08:00"
+      duration: "1h10min"
+      commits: 3
+      files_changed: 17

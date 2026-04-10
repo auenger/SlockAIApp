@@ -44,11 +44,24 @@
 - 无
 
 ## Technical Solution
-待实现时细化。初步方向：
-1. 定义 Activity Log 数据模型（id, timestamp, type, agent_id, details）
-2. Rust 后端在关键操作点插入日志记录
-3. 提供 `list_activities` command 支持分页和过滤
-4. 前端新增 Activity 时间线组件
+1. 定义 ActivityLog 数据模型（id, timestamp, type, agent_id, details, workspace_id）- JSONL 追加写入存储
+2. Rust 后端 `ActivityStore` 提供 append/load_filtered/clear 操作
+3. Tauri commands: `log_activity`, `list_activities`（分页+agent过滤）, `clear_activities`
+4. 日志埋点: Agent创建/删除, Thread创建/删除, Channel创建/更新/删除
+5. 前端 `useActivityLog` hook + ACTIVITY tab 时间线组件，支持按 Agent 过滤
+
+## Merge Record
+- **Completed**: 2026-04-10
+- **Merged Branch**: feature/feat-activity-log
+- **Merge Commit**: b1aed5a
+- **Archive Tag**: feat-activity-log-20260410
+- **Conflicts**: Yes (4 files during rebase, auto-resolved by merging both sides)
+  - src-tauri/src/lib.rs (command registration)
+  - src/components/MainContent.tsx (imports, hooks, UI tabs)
+  - src/lib/ipc.ts (imports, IPC functions)
+  - src/types.ts (type definitions)
+- **Verification**: PASSED (4/4 Rust unit tests, 2/2 Gherkin scenarios, TypeScript clean)
+- **Stats**: 3 commits, 17 files changed
 
 ## Acceptance Criteria (Gherkin)
 
