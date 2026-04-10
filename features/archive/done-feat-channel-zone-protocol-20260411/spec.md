@@ -195,8 +195,19 @@ Then Claude 可能在回复中建议 "@Codex 可能更适合回答市场研究�
 ```
 
 ### General Checklist
-- [ ] Zone Agent Protocol 层正确渲染 Channel 成员信息
-- [ ] 7 层 Prompt 按正确顺序组装
-- [ ] 不影响现有 Thread 对话（Thread 不注入 Zone Protocol）
-- [ ] 性能：Zone Protocol 渲染不超过 1ms
-- [ ] 兼容所有 Runtime 类型（Claude Code, Codex, Gemini）
+- [x] Zone Agent Protocol 层正确渲染 Channel 成员信息
+- [x] 7 层 Prompt 按正确顺序组装
+- [x] 不影响现有 Thread 对话（Thread 不注入 Zone Protocol）
+- [x] 性能：Zone Protocol 渲染不超过 1ms
+- [x] 兼容所有 Runtime 类型（Claude Code, Codex, Gemini）
+
+## Merge Record
+
+- **Completed**: 2026-04-11
+- **Merged Branch**: feature/feat-channel-zone-protocol
+- **Merge Commit**: 38783a5
+- **Archive Tag**: feat-channel-zone-protocol-20260411
+- **Conflicts**: None
+- **Verification**: PASS (72/72 tests, 4/4 Gherkin scenarios validated)
+- **Files Changed**: 3 (1 new, 2 modified)
+- **New Tests**: 9 (7 zone_protocol + 2 ContextBuilder integration)

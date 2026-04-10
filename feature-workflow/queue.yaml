@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-11T18:00:00+08:00"
-  version: 72
+  last_updated: "2026-04-11T18:30:00+08:00"
+  version: 73
 
 parents:
   - id: feat-agent-runtime-select
@@ -16,13 +16,7 @@ parents:
     children:
       - feat-channel-zone-protocol
       - feat-agent-a2a-trigger
-active:
-  - id: feat-channel-zone-protocol
-    name: "Channel Zone Protocol（Prompt 7层架构 + Zone Agent Protocol）"
-    priority: 60
-    branch: feature/feat-channel-zone-protocol
-    worktree: ../SlockAI-feat-channel-zone-protocol
-    started_at: "2026-04-11T18:00:00+08:00"
+active: []
 pending:
   - id: feat-agent-a2a-trigger
     name: "Agent-to-Agent @{agent} 触发机制"
@@ -152,3 +146,7 @@ completed:
     name: "Markdown 渲染优化 & Tool Call 结构化展示"
     completed_at: "2026-04-11T17:00:00+08:00"
     tag: feat-md-rendering-20260411
+  - id: feat-channel-zone-protocol
+    name: "Channel Zone Protocol（Prompt 7层架构 + Zone Agent Protocol）"
+    completed_at: "2026-04-11T18:30:00+08:00"
+    tag: feat-channel-zone-protocol-20260411
