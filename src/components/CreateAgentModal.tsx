@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Modal } from './Modals';
+import { IconPicker } from './IconPicker';
 import { createAgent } from '../lib/ipc';
 import type { CreateAgentRequest } from '../types';
 
@@ -19,7 +20,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
   onSuccess,
 }) => {
   const [name, setName] = useState('');
-  const [emoji, setEmoji] = useState('robot');
+  const [icon, setIcon] = useState<string | null>(null);
   const [creature, setCreature] = useState('AI');
   const [vibe, setVibe] = useState('helpful');
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +35,8 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
     try {
       const request: CreateAgentRequest = {
         name: name.trim(),
-        emoji: emoji.trim() || 'robot',
+        icon: icon || undefined,
+        emoji: icon ? undefined : 'robot',
         creature: creature.trim() || 'AI',
         vibe: vibe.trim() || 'helpful',
       };
@@ -51,7 +53,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
 
   const handleClose = () => {
     setName('');
-    setEmoji('robot');
+    setIcon(null);
     setCreature('AI');
     setVibe('helpful');
     setError(null);
@@ -104,17 +106,14 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
           />
         </div>
 
-        {/* Emoji */}
+        {/* Icon */}
         <div>
           <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">
-            Emoji
+            Icon
           </label>
-          <input
-            type="text"
-            value={emoji}
-            onChange={(e) => setEmoji(e.target.value)}
-            placeholder="robot"
-            className="w-full brutal-border p-3 text-sm font-bold focus:outline-none focus:bg-brutal-bg"
+          <IconPicker
+            value={icon}
+            onChange={setIcon}
           />
         </div>
 

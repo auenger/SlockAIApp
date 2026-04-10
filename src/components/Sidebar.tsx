@@ -16,6 +16,7 @@ import { useAgentStatus, getRuntimeStatusColor, getRuntimeStatusLabel } from '..
 import { useUserProfile } from '../lib/useUserProfile';
 import { CreateAgentModal } from './CreateAgentModal';
 import { ApiKeyManager } from './ApiKeyManager';
+import { AgentIcon } from './AgentIcon';
 import type { AgentWithRuntime, ThreadInfo, ChannelInfo } from '../types';
 
 interface SidebarProps {
@@ -308,9 +309,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       : "hover:bg-white/50 border-transparent"
                   )}
                 >
-                  <div className="w-6 h-6 brutal-border bg-brutal-cyan flex items-center justify-center shrink-0 text-sm">
-                    {agent.emoji}
-                  </div>
+                  <AgentIcon
+                    icon={agent.icon}
+                    emoji={agent.emoji}
+                    size="sm"
+                    bgColor="bg-brutal-cyan"
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="font-black text-sm truncate">{agent.name}</div>
                   </div>

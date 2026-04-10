@@ -40,6 +40,7 @@ import { SkillFormModal } from './SkillsPanel';
 import type { SkillInfo } from '../types';
 import { useActivityLog, getActivityTypeConfig } from '../lib/useActivityLog';
 import { MentionAutocomplete, renderMentionText } from './MentionAutocomplete';
+import { AgentIcon } from './AgentIcon';
 import type { AgentStreamState } from '../lib/useChannel';
 
 // ---------------------------------------------------------------------------
@@ -86,17 +87,16 @@ const AgentStreamBubble: React.FC<AgentStreamBubbleProps> = ({
   colorIndex,
 }) => {
   const agentName = agentInfo?.agent.name || stream.agent_id;
-  const agentEmoji = agentInfo?.agent.emoji?.charAt(0) || 'A';
   const bgColor = getAgentColor(colorIndex);
 
   return (
     <div className="flex gap-3 px-2">
-      <div className={cn(
-        "w-8 h-8 brutal-border flex items-center justify-center shrink-0 font-black",
-        bgColor
-      )}>
-        {agentEmoji}
-      </div>
+      <AgentIcon
+        icon={agentInfo?.agent.icon}
+        emoji={agentInfo?.agent.emoji}
+        size="md"
+        bgColor={bgColor}
+      />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <span className={cn("font-black text-xs", bgColor === 'bg-brutal-yellow' ? 'text-black' : 'text-black')}>
@@ -398,15 +398,22 @@ export const MainContent: React.FC<MainContentProps> = ({
       {/* Top Header */}
       <div className="p-3 brutal-border-b flex items-center justify-between bg-white">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 brutal-border bg-brutal-cyan flex items-center justify-center">
-            {isChannelMode ? (
+          {isChannelMode ? (
+            <div className="w-10 h-10 brutal-border bg-brutal-cyan flex items-center justify-center">
               <Hash size={24} />
-            ) : selectedAgent ? (
-              <span className="text-xl">{selectedAgent.agent.emoji}</span>
-            ) : (
+            </div>
+          ) : selectedAgent ? (
+            <AgentIcon
+              icon={selectedAgent.agent.icon}
+              emoji={selectedAgent.agent.emoji}
+              size="lg"
+              bgColor="bg-brutal-cyan"
+            />
+          ) : (
+            <div className="w-10 h-10 brutal-border bg-brutal-cyan flex items-center justify-center">
               <Bot size={24} />
-            )}
-          </div>
+            </div>
+          )}
           <div>
             <div className="flex items-center gap-2">
               <h2 className="font-black text-lg">{headerTitle}</h2>
@@ -419,13 +426,14 @@ export const MainContent: React.FC<MainContentProps> = ({
                 {activeChannel!.members.slice(0, 5).map((member) => {
                   const memberAgent = agentMap.get(member.agent_id);
                   return (
-                    <div
+                    <AgentIcon
                       key={member.agent_id}
-                      className="w-5 h-5 brutal-border bg-brutal-cyan flex items-center justify-center text-[10px]"
+                      icon={memberAgent?.agent.icon}
+                      emoji={memberAgent?.agent.emoji}
+                      size="sm"
+                      bgColor="bg-brutal-cyan"
                       title={memberAgent?.agent.name || member.agent_id}
-                    >
-                      {memberAgent?.agent.emoji?.charAt(0) || '?'}
-                    </div>
+                    />
                   );
                 })}
                 {activeChannel!.members.length > 5 && (
@@ -698,16 +706,18 @@ export const MainContent: React.FC<MainContentProps> = ({
                   const msg = msgRaw as (Message & { agentColor?: string; agentEmoji?: string });
                   return (
                   <div key={msg.id} className="flex gap-3 px-2">
-                    <div className={cn(
-                      "w-8 h-8 brutal-border flex items-center justify-center shrink-0 font-black",
-                      msg.sender.isAgent ? (msg.agentColor || "bg-brutal-cyan") : "bg-purple-400"
-                    )}>
-                      {msg.sender.isAgent ? (
-                        <span className="text-sm">{msg.agentEmoji?.charAt(0) || msg.sender.avatar}</span>
-                      ) : (
-                        <User size={18} />
-                      )}
-                    </div>
+                    {msg.sender.isAgent ? (
+                      <AgentIcon
+                        icon={allAgents.find(a => a.agent.name === msg.sender.name)?.agent.icon}
+                        emoji={msg.agentEmoji || msg.sender.avatar}
+                        size="md"
+                        bgColor={msg.agentColor || "bg-brutal-cyan"}
+                      />
+                    ) : (
+                      <div className="w-8 h-8 brutal-border bg-purple-400 flex items-center justify-center shrink-0">
+                        <User size={18} className="text-white" />
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-black text-xs">
@@ -752,9 +762,12 @@ export const MainContent: React.FC<MainContentProps> = ({
                 {/* Single-agent streaming text display (backward compat, when no agentStreams) */}
                 {isChannelMode && channelAgentStreams.length === 0 && channelStreamingText && (
                   <div className="flex gap-3 px-2">
-                    <div className="w-8 h-8 brutal-border bg-brutal-cyan flex items-center justify-center shrink-0 font-black">
-                      <Bot size={18} />
-                    </div>
+                    <AgentIcon
+                      icon={null}
+                      emoji="B"
+                      size="md"
+                      bgColor="bg-brutal-cyan"
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-black text-xs">Agent</span>
@@ -771,9 +784,12 @@ export const MainContent: React.FC<MainContentProps> = ({
                 {/* Streaming text display (thread mode) */}
                 {!isChannelMode && streamingText && (
                   <div className="flex gap-3 px-2">
-                    <div className="w-8 h-8 brutal-border bg-brutal-cyan flex items-center justify-center shrink-0 font-black">
-                      <Bot size={18} />
-                    </div>
+                    <AgentIcon
+                      icon={selectedAgent?.agent.icon}
+                      emoji={selectedAgent?.agent.emoji}
+                      size="md"
+                      bgColor="bg-brutal-cyan"
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-black text-xs">{agentName}</span>
@@ -790,9 +806,12 @@ export const MainContent: React.FC<MainContentProps> = ({
                 {/* Thinking indicator (thread mode) */}
                 {!isChannelMode && isThinking && !streamingText && (
                   <div className="flex gap-3 px-2 animate-pulse">
-                    <div className="w-8 h-8 brutal-border bg-brutal-cyan flex items-center justify-center shrink-0">
-                      <Bot size={18} />
-                    </div>
+                    <AgentIcon
+                      icon={selectedAgent?.agent.icon}
+                      emoji={selectedAgent?.agent.emoji}
+                      size="md"
+                      bgColor="bg-brutal-cyan"
+                    />
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-black text-xs">{agentName}</span>
@@ -806,9 +825,12 @@ export const MainContent: React.FC<MainContentProps> = ({
                 {/* Thinking indicator (channel mode, single agent) */}
                 {isChannelMode && channelIsThinking && !channelStreamingText && channelAgentStreams.length === 0 && (
                   <div className="flex gap-3 px-2 animate-pulse">
-                    <div className="w-8 h-8 brutal-border bg-brutal-cyan flex items-center justify-center shrink-0">
-                      <Bot size={18} />
-                    </div>
+                    <AgentIcon
+                      icon={null}
+                      emoji="B"
+                      size="md"
+                      bgColor="bg-brutal-cyan"
+                    />
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-black text-xs">Agent</span>
@@ -1168,13 +1190,13 @@ export const MainContent: React.FC<MainContentProps> = ({
               <>
                 {/* Agent Header */}
                 <div className="flex flex-col items-center py-8 brutal-border bg-white brutal-shadow-sm">
-                  <div className="w-20 h-20 brutal-border bg-brutal-cyan flex items-center justify-center mb-4">
-                    {profileData.identity.emoji ? (
-                      <span className="text-4xl">{profileData.identity.emoji}</span>
-                    ) : (
-                      <Bot size={48} />
-                    )}
-                  </div>
+                  <AgentIcon
+                    icon={profileData.identity.icon}
+                    emoji={profileData.identity.emoji}
+                    size="lg"
+                    bgColor="bg-brutal-cyan"
+                    className="mb-4"
+                  />
                   <h2 className="text-2xl font-black">{profileData.identity.name}</h2>
                   <span className="text-gray-500 font-mono text-xs">@{profileData.identity.agent_id}</span>
                   {profileData.identity.creature && (

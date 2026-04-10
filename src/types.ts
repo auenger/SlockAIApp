@@ -184,6 +184,8 @@ export interface AgentSummary {
   name: string;
   emoji: string;
   avatar: string | null;
+  /** SVG icon name from the icon registry (e.g. "Bot", "Rocket") */
+  icon: string | null;
   enabled: boolean;
   session_count: number;
 }
@@ -194,6 +196,8 @@ export interface IdentitySummary {
   name: string;
   emoji: string;
   avatar: string | null;
+  /** SVG icon name from the icon registry */
+  icon: string | null;
   creature: string;
   vibe: string;
 }
@@ -205,6 +209,8 @@ export interface CreateAgentRequest {
   vibe?: string;
   emoji?: string;
   avatar?: string;
+  /** SVG icon name from the icon registry */
+  icon?: string;
 }
 
 /** Workspace and Agent manager status */

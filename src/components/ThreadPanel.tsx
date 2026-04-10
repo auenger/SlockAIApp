@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, User } from 'lucide-react';
+import { AgentIcon } from './AgentIcon';
 import type { Thread, ThreadMessageData, AgentWithRuntime } from '../types';
 
 interface ThreadPanelProps {
@@ -90,17 +91,18 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
         ) : (
           thread.messages.map((msg: ThreadMessageData) => (
             <div key={msg.id} className="flex gap-2">
-              <div
-                className={`w-8 h-8 brutal-border flex items-center justify-center shrink-0 font-black text-sm ${
-                  msg.role === 'user' ? 'bg-purple-400 text-white' : 'bg-brutal-cyan'
-                }`}
-              >
-                {msg.role === 'user' ? <User size={16} /> : (
-                  <span className="text-sm">
-                    {agent?.agent.emoji?.charAt(0) || 'A'}
-                  </span>
-                )}
-              </div>
+              {msg.role === 'user' ? (
+                <div className="w-8 h-8 brutal-border bg-purple-400 flex items-center justify-center shrink-0">
+                  <User size={16} className="text-white" />
+                </div>
+              ) : (
+                <AgentIcon
+                  icon={agent?.agent.icon}
+                  emoji={agent?.agent.emoji}
+                  size="md"
+                  bgColor="bg-brutal-cyan"
+                />
+              )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-black text-xs">
