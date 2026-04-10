@@ -157,6 +157,15 @@ impl AgentRuntime for ClaudeCodeRuntime {
         args.push("--".to_string());
         args.push(params.message.clone());
 
+        log::info!(
+            "[ClaudeCodeRuntime] Spawning CLI with args: {:?}",
+            args.iter().take(8).collect::<Vec<_>>()
+        );
+        log::info!(
+            "[ClaudeCodeRuntime] session_id={:?}, workspace={:?}",
+            params.session_id, params.workspace
+        );
+
         // Spawn CLI process
         let mut cmd = Command::new("claude");
         if let Some(ref ws) = params.workspace {

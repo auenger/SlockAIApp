@@ -39,7 +39,22 @@ pub fn run() {
 
             // Initialize workspace root from app data dir
             let workspace_root = resolve_workspace_root(app.handle());
-            let agent_manager = AgentManager::new(&workspace_root);
+            let mut agent_manager = AgentManager::new(&workspace_root);
+
+            // Ensure workspace directory structure exists
+            if let Err(e) = agent_manager.initialize_workspace() {
+                log::warn!("[App] Workspace initialization warning: {}", e);
+            }
+
+            // Load existing agents from disk into memory
+            if let Err(e) = agent_manager.load() {
+                log::warn!("[App] Failed to load agents from disk: {}", e);
+            }
+
+            log::info!(
+                "[App] Loaded {} agents from workspace",
+                agent_manager.list_agents().len()
+            );
 
             // Initialize SQLite database
             let db_conn = storage::db::init_database(&workspace_root)

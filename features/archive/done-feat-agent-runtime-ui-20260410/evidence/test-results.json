@@ -1,0 +1,46 @@
+{
+  "feature_id": "feat-agent-runtime-ui",
+  "verification_date": "2026-04-10T19:15:00+08:00",
+  "status": "passed",
+  "tasks": {
+    "total": 17,
+    "completed": 17,
+    "incomplete": 0
+  },
+  "quality": {
+    "typescript_errors": 0,
+    "vite_build": "success",
+    "build_time_ms": 489
+  },
+  "gherkin_scenarios": {
+    "total": 4,
+    "passed": 4,
+    "failed": 0,
+    "scenarios": [
+      {
+        "name": "Create agent with Claude Code runtime",
+        "status": "passed",
+        "method": "code_analysis"
+      },
+      {
+        "name": "Show install hint for unavailable runtime",
+        "status": "passed",
+        "method": "code_analysis"
+      },
+      {
+        "name": "Default runtime is Claude Code",
+        "status": "passed",
+        "method": "code_analysis"
+      },
+      {
+        "name": "Runtime status auto-detects on modal open",
+        "status": "passed",
+        "method": "code_analysis"
+      }
+    ]
+  },
+  "tests": {
+    "run": false,
+    "reason": "no test framework configured in project"
+  }
+}

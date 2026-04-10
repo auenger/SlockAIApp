@@ -1,13 +1,17 @@
 meta:
-  last_updated: "2026-04-10T14:00:00+08:00"
-  version: 41
+  last_updated: "2026-04-10T21:00:00+08:00"
+  version: 55
 
-parents: []
+parents:
+  - id: feat-agent-runtime-select
+    name: "Agent Runtime 选择（泛化多 Runtime 支持）"
+    split: true
+    children:
+      - feat-agent-runtime-model
+      - feat-agent-runtime-ui
+      - feat-agent-runtime-exec
 active: []
-pending:
-  - id: feat-data-storage
-    name: "数据存储架构（SQLite + JSONL 混合方案）"
-    priority: 80
+pending: []
 blocked: []
 completed:
   - id: feat-project-init
@@ -86,3 +90,27 @@ completed:
     name: "Activity 日志后端集成"
     completed_at: "2026-04-10T12:10:00+08:00"
     tag: feat-activity-log-20260410
+  - id: feat-data-storage
+    name: "数据存储架构（SQLite + JSONL 混合方案）"
+    completed_at: "2026-04-10T16:47:00+08:00"
+    tag: feat-data-storage-20260410
+  - id: feat-svg-icon-system
+    name: "SVG Icon 系统"
+    completed_at: "2026-04-10T17:35:00+08:00"
+    tag: feat-svg-icon-system-20260410
+  - id: feat-agent-runtime-model
+    name: "Agent Runtime 数据模型 & 泛化 Runtime Trait"
+    completed_at: "2026-04-10T18:45:00+08:00"
+    tag: feat-agent-runtime-model-20260410
+  - id: feat-agent-runtime-ui
+    name: "Agent 创建 UI Runtime 选择"
+    completed_at: "2026-04-10T19:20:00+08:00"
+    tag: feat-agent-runtime-ui-20260410
+  - id: feat-agent-runtime-exec
+    name: "多 Runtime 对话执行"
+    completed_at: "2026-04-10T20:00:00+08:00"
+    tag: feat-agent-runtime-exec-20260410
+  - id: feat-agent-edit
+    name: "Agent 编辑能力"
+    completed_at: "2026-04-10T21:00:00+08:00"
+    tag: feat-agent-edit-20260410

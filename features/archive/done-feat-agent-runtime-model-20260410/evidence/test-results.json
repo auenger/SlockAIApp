@@ -1,0 +1,26 @@
+{
+  "feature_id": "feat-agent-runtime-model",
+  "verified_at": "2026-04-10T18:30:00+08:00",
+  "status": "passed",
+  "tests": {
+    "rust": {
+      "total": 63,
+      "passed": 63,
+      "failed": 0
+    }
+  },
+  "scenarios": [
+    {
+      "name": "Agent config stores runtime type",
+      "status": "passed"
+    },
+    {
+      "name": "Runtime detection scans all supported CLIs",
+      "status": "passed"
+    },
+    {
+      "name": "Agent config defaults to Claude Code runtime",
+      "status": "passed"
+    }
+  ]
+}

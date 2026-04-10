@@ -254,21 +254,42 @@ export function useThreadChat(): ThreadChatState {
       }
 
       // Real Tauri flow:
-      // 1. Call send_message which saves user msg and starts streaming
-      const updatedThread = await sendMessage(agentId, threadId, message);
-      setActiveThread(updatedThread);
+      // IMPORTANT: Register all listeners BEFORE calling sendMessage IPC.
+      // The Rust backend spawns a thread that emits events immediately —
+      // if we register listeners after the IPC call returns, we miss events.
 
-      // 2. Listen for streaming chunk events
       const { listen } = await import("@tauri-apps/api/event");
 
       let accumulatedText = "";
 
+      // 1. Listen for streaming chunk events (register BEFORE IPC call)
       const unlistenChunk = await listen<StreamEvent>("agent://chunk", (event) => {
         const payload = event.payload;
         if (payload.type === "assistant" && payload.text) {
           accumulatedText += payload.text;
           setStreamingText(accumulatedText);
           setIsThinking(false); // We received first text chunk
+
+          // Directly update activeThread messages so the agent response
+          // appears immediately in the chat (like the reference project).
+          setActiveThread((prev) => {
+            if (!prev || prev.id !== threadId) return prev;
+            const msgs = [...prev.messages];
+            const lastMsg = msgs[msgs.length - 1];
+            if (lastMsg && lastMsg.role === "agent") {
+              // Update existing agent streaming message
+              msgs[msgs.length - 1] = { ...lastMsg, content: accumulatedText };
+            } else {
+              // Add new agent message
+              msgs.push({
+                id: `stream-${Date.now()}`,
+                role: "agent" as const,
+                content: accumulatedText,
+                timestamp: new Date().toISOString(),
+              });
+            }
+            return { ...prev, messages: msgs };
+          });
         }
         if (payload.is_done) {
           setIsStreaming(false);
@@ -277,7 +298,7 @@ export function useThreadChat(): ThreadChatState {
       });
       unlistenChunkRef.current = unlistenChunk;
 
-      // 3. Listen for runtime unavailability events (rich error with install hint)
+      // 2. Listen for runtime unavailability events
       const unlistenRuntimeError = await listen<{
         agent_id: string;
         thread_id: string;
@@ -296,7 +317,7 @@ export function useThreadChat(): ThreadChatState {
       });
       unlistenRuntimeErrorRef.current = unlistenRuntimeError;
 
-      // 4. Listen for the thread-response event to save the agent response
+      // 3. Listen for the thread-response event to persist the agent response
       const unlistenResponse = await listen<{
         thread_id: string;
         agent_id: string;
@@ -305,7 +326,7 @@ export function useThreadChat(): ThreadChatState {
       }>("agent://thread-response", async (event) => {
         const { content, session_id } = event.payload;
 
-        // Save agent response to backend
+        // Save agent response to backend and reload thread with final state
         try {
           const finalThread = await saveAgentResponse(agentId, threadId, content, session_id);
           setActiveThread(finalThread);
@@ -324,6 +345,10 @@ export function useThreadChat(): ThreadChatState {
         unlistenRuntimeErrorRef.current = null;
       });
       unlistenResponseRef.current = unlistenResponse;
+
+      // 4. NOW call sendMessage IPC — listeners are already registered
+      const updatedThread = await sendMessage(agentId, threadId, message);
+      setActiveThread(updatedThread);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);

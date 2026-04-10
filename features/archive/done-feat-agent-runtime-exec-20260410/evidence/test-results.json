@@ -1,0 +1,40 @@
+{
+  "feature_id": "feat-agent-runtime-exec",
+  "verification_date": "2026-04-10T19:45:00+08:00",
+  "status": "passed",
+  "rust_tests": {
+    "total": 63,
+    "passed": 63,
+    "failed": 0
+  },
+  "typescript_check": "passed",
+  "rust_check": "passed",
+  "gherkin_scenarios": [
+    {
+      "name": "Thread message routes to agent's runtime",
+      "status": "passed"
+    },
+    {
+      "name": "Channel with multiple agents uses different runtimes",
+      "status": "passed"
+    },
+    {
+      "name": "Session persists within same thread",
+      "status": "passed"
+    },
+    {
+      "name": "Runtime unavailable shows clear error",
+      "status": "passed"
+    }
+  ],
+  "files_changed": [
+    "src-tauri/src/commands/thread.rs",
+    "src-tauri/src/commands/channel.rs",
+    "src/lib/useThreadChat.ts",
+    "src/lib/useChannel.ts"
+  ],
+  "deferred_items": [
+    "Session expiry cleanup (not needed for MVP)",
+    "Parallel channel execution via tokio::spawn (serial is safer for MVP)"
+  ]
+}

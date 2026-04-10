@@ -122,3 +122,12 @@ And 不允许保存不合法的数据
 - [ ] 编辑 Modal 组件完成
 - [ ] 编辑入口覆盖 Profile 和 Sidebar
 - [ ] 保存后 UI 状态全局同步更新
+
+## Merge Record
+- **Completed**: 2026-04-10T21:00:00+08:00
+- **Branch**: feature/feat-agent-edit
+- **Merge Commit**: 3223851
+- **Archive Tag**: feat-agent-edit-20260410
+- **Conflicts**: none
+- **Verification**: passed (5/5 Gherkin scenarios, 63/63 Rust tests)
+- **Stats**: started 2026-04-10T20:30:00+08:00, duration ~30min, 1 commit, 14 files changed

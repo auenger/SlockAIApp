@@ -1,8 +1,8 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-10T12:10:00+08:00"
-  version: 10
-  total_completed: 10
+  last_updated: "2026-04-10T21:00:00+08:00"
+  version: 16
+  total_completed: 16
 
 records:
   - id: feat-project-init
@@ -205,7 +205,7 @@ records:
       duration: "5min"
       commits: 1
       files_changed: 6
-    note: "Worktree is main repo, no separate worktree created"
+      note: "Worktree is main repo, no separate worktree created"
   - id: feat-workspace-browser
     name: "Workspace 文件浏览器"
     completed: "2026-04-09T21:30:00+08:00"
@@ -228,7 +228,7 @@ records:
       duration: "10min"
       commits: 1
       files_changed: 11
-    note: "Cherry-picked onto main, worktree is main repo"
+      note: "Cherry-picked onto main, worktree is main repo"
   - id: feat-activity-log
     name: "Activity 日志后端集成"
     completed: "2026-04-10T12:10:00+08:00"
@@ -257,3 +257,136 @@ records:
       duration: "1h10min"
       commits: 3
       files_changed: 17
+  - id: feat-data-storage
+    name: "数据存储架构（SQLite + JSONL 混合方案）"
+    completed: "2026-04-10T16:47:00+08:00"
+    tag: feat-data-storage-20260410
+    merge_commit: "bec6542"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-data-storage
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-data-storage
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 6
+      scenarios_passed: 5
+      notes: "Scenario 5 (Channel 消息体拆分) deferred by design"
+    stats:
+      started: "2026-04-10T17:05:00+08:00"
+      duration: "~1h"
+      commits: 1
+      files_changed: 14
+  - id: feat-svg-icon-system
+    name: "SVG Icon 系统"
+    completed: "2026-04-10T17:35:00+08:00"
+    tag: feat-svg-icon-system-20260410
+    merge_commit: "038b22c"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-svg-icon-system
+    worktree_deleted: true
+    worktree_path: ../SlockAI-feat-svg-icon-system
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-10T17:00:00+08:00"
+      duration: "35min"
+      commits: 1
+      files_changed: 8
+  - id: feat-agent-runtime-model
+    name: "Agent Runtime 数据模型 & 泛化 Runtime Trait"
+    completed: "2026-04-10T18:45:00+08:00"
+    tag: feat-agent-runtime-model-20260410
+    merge_commit: "a0d0ef4"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-agent-runtime-model
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-agent-runtime-model
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 3
+      scenarios_passed: 3
+    stats:
+      started: "2026-04-10T18:00:00+08:00"
+      duration: "~45min"
+      commits: 1
+      files_changed: 12
+  - id: feat-agent-runtime-ui
+    name: "Agent 创建 UI Runtime 选择"
+    completed: "2026-04-10T19:20:00+08:00"
+    tag: feat-agent-runtime-ui-20260410
+    merge_commit: "40f159a"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-agent-runtime-ui
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-agent-runtime-ui
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-10T19:00:00+08:00"
+      duration: "~20min"
+      commits: 1
+      files_changed: 6
+  - id: feat-agent-runtime-exec
+    name: "多 Runtime 对话执行"
+    completed: "2026-04-10T20:00:00+08:00"
+    tag: feat-agent-runtime-exec-20260410
+    merge_commit: "a061f6e"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-agent-runtime-exec
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-agent-runtime-exec
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-10T19:30:00+08:00"
+      duration: "~30min"
+      commits: 1
+      files_changed: 4
+  - id: feat-agent-edit
+    name: "Agent 编辑能力"
+    completed: "2026-04-10T21:00:00+08:00"
+    tag: feat-agent-edit-20260410
+    merge_commit: "3223851"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-agent-edit
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-agent-edit
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 5
+      scenarios_passed: 5
+    stats:
+      started: "2026-04-10T20:30:00+08:00"
+      duration: "~30min"
+      commits: 1
+      files_changed: 14

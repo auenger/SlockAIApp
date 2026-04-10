@@ -7,7 +7,7 @@ project:
   test_framework: vitest
 
 parallelism:
-  max_concurrent: 3
+  max_concurrent: 1
 
 git:
   remote: origin

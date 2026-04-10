@@ -102,14 +102,14 @@ export function useWorkspace(): WorkspaceState {
     try {
       if (!isTauri) {
         setEntries(MOCK_ENTRIES);
-        setWorkspacePath(`~/.slock/agents/${agentId}/`);
+        setWorkspacePath(`~/.agentszone/agents/${agentId}/`);
         setCurrentPath(subpath || "");
         return;
       }
 
       const result = await listWorkspaceDir(agentId, subpath);
       setEntries(result);
-      setWorkspacePath(`~/.slock/agents/${agentId}/`);
+      setWorkspacePath(`~/.agentszone/agents/${agentId}/`);
       setCurrentPath(subpath || "");
     } catch (err) {
       console.error("[useWorkspace] loadDir failed:", err);

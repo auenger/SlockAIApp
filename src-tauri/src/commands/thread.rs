@@ -71,14 +71,13 @@ pub fn create_thread(
         .ok_or_else(|| format!("workspace not found for agent: {agent_id}"))?;
 
     let thread_id = thread::generate_id();
-    let session_id = thread::generate_id();
     let now = thread::now_iso();
 
     let new_thread = Thread {
         id: thread_id.clone(),
         agent_id: agent_id.clone(),
         title: format!("Thread with {}", agent.identity.name),
-        session_id: Some(session_id),
+        session_id: None,
         messages: Vec::new(),
         created_at: now.clone(),
         updated_at: now.clone(),
@@ -336,6 +335,11 @@ pub async fn send_message(
         let store = ThreadStore::new(&conv_dir);
         let mut thread = store.load(&thread_id).map_err(|e| format!("load failed: {e}"))?;
 
+        // Track whether this is the first message BEFORE adding user message.
+        // First message: do NOT pass --resume to Claude CLI (no valid session yet).
+        // Subsequent messages: use the Claude CLI session_id returned from the first response.
+        let is_first_message = thread.messages.is_empty();
+
         // Add user message
         let user_msg = ThreadMessage {
             id: thread::generate_id(),
@@ -379,7 +383,25 @@ pub async fn send_message(
 
         // Get workspace path for runtime execution
         let workspace_path = workspace.base_path().to_string_lossy().to_string();
-        let session_id = thread.session_id.clone();
+
+        // Session ID logic:
+        // - First message: None (Claude CLI will create a new session)
+        // - Subsequent messages: use the session_id returned by Claude CLI
+        //   from the first response (stored via save_agent_response)
+        let session_id = if is_first_message {
+            log::info!(
+                "[send_message] First message in thread {}, starting new Claude session",
+                thread_id
+            );
+            None
+        } else {
+            log::info!(
+                "[send_message] Resuming session {} for thread {}",
+                thread.session_id.as_deref().unwrap_or("None"),
+                thread_id
+            );
+            thread.session_id.clone()
+        };
 
         // Resolve the agent's runtime_type for routing
         let runtime_id = manager.get_agent(&agent_id)
@@ -436,31 +458,62 @@ pub async fn send_message(
         std::thread::spawn(move || {
             let mut full_response = String::new();
             let mut result_session_id: Option<String> = None;
+            let mut event_count = 0u32;
+
+            log::info!(
+                "[forward_thread] Starting event forwarding for thread {}",
+                thread_id_clone
+            );
 
             while let Ok(event) = receiver.recv() {
+                event_count += 1;
+
                 // Capture session_id from result
                 if event.is_done {
                     result_session_id = event.session_id.clone();
+                    log::info!(
+                        "[forward_thread] Stream done, session_id={:?}, total_events={}",
+                        result_session_id, event_count
+                    );
                 }
                 // Accumulate assistant text
                 if event.msg_type.as_deref() == Some("assistant") && !event.text.is_empty() {
                     full_response.push_str(&event.text);
                 }
                 // Forward event to frontend
-                let _ = app_clone.emit("agent://chunk", &event);
+                if let Err(e) = app_clone.emit("agent://chunk", &event) {
+                    log::error!("[forward_thread] Failed to emit chunk event: {}", e);
+                }
                 if event.is_done {
                     break;
                 }
             }
 
+            log::info!(
+                "[forward_thread] Finished. response_len={}, events={}",
+                full_response.len(),
+                event_count
+            );
+
             // Emit a thread-response event so the frontend can save the agent response
             if !full_response.is_empty() {
-                let _ = app_clone.emit("agent://thread-response", serde_json::json!({
+                log::info!(
+                    "[forward_thread] Emitting thread-response, session_id={:?}",
+                    result_session_id
+                );
+                if let Err(e) = app_clone.emit("agent://thread-response", serde_json::json!({
                     "thread_id": thread_id_clone,
                     "agent_id": agent_id_clone,
                     "content": full_response,
                     "session_id": result_session_id,
-                }));
+                })) {
+                    log::error!("[forward_thread] Failed to emit thread-response: {}", e);
+                }
+            } else {
+                log::warn!(
+                    "[forward_thread] No assistant text accumulated after {} events",
+                    event_count
+                );
             }
         });
 

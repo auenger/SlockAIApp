@@ -5,7 +5,7 @@ export interface UserProfile {
   email: string;
 }
 
-const STORAGE_KEY = 'slockai_user_profile';
+const STORAGE_KEY = 'agentszone_user_profile';
 
 const DEFAULT_PROFILE: UserProfile = {
   name: 'User',
