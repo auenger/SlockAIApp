@@ -68,6 +68,7 @@ pub fn run() {
             commands::greet,
             runtime::commands::scan_agent_runtimes,
             runtime::commands::list_agent_runtimes,
+            runtime::commands::get_runtime_info,
             runtime::commands::runtime_execute,
             runtime::commands::runtime_session_start,
             runtime::commands::runtime_session_stop,

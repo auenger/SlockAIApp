@@ -108,6 +108,13 @@ export interface Message {
 // Agent Runtime types
 // ===========================================================================
 
+/** Agent runtime type enum */
+export type RuntimeType =
+  | "claude_code"
+  | "codex"
+  | "gemini"
+  | string; // custom runtime types
+
 /** Agent runtime status */
 export type AgentRuntimeStatusType =
   | "available"
@@ -126,12 +133,14 @@ export type AgentCapability =
 export interface AgentRuntimeInfo {
   id: string;
   name: string;
-  runtime_type: string;
+  runtime_category: string;
+  runtime_type: RuntimeType;
   status: AgentRuntimeStatusType;
   version?: string;
   install_path?: string;
   capabilities: AgentCapability[];
   install_hint: string;
+  binary_name?: string;
 }
 
 /** Streaming event from an agent runtime execution */
@@ -188,6 +197,8 @@ export interface AgentSummary {
   icon: string | null;
   enabled: boolean;
   session_count: number;
+  /** The runtime type this agent is bound to */
+  runtime_type: RuntimeType;
 }
 
 /** Agent identity metadata */
@@ -200,6 +211,8 @@ export interface IdentitySummary {
   icon: string | null;
   creature: string;
   vibe: string;
+  /** The runtime type this agent is bound to */
+  runtime_type: RuntimeType;
 }
 
 /** Request to create a new Agent */
@@ -211,6 +224,8 @@ export interface CreateAgentRequest {
   avatar?: string;
   /** SVG icon name from the icon registry */
   icon?: string;
+  /** Runtime type for the agent (defaults to "claude_code") */
+  runtime_type?: RuntimeType;
 }
 
 /** Workspace and Agent manager status */
@@ -254,6 +269,8 @@ export interface AgentWithRuntime {
   runtime_version?: string;
   /** Install hint (shown when runtime not installed) */
   runtime_install_hint?: string;
+  /** The runtime type this agent is configured to use */
+  runtime_type: RuntimeType;
 }
 
 // ===========================================================================

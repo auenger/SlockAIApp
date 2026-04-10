@@ -234,7 +234,7 @@ mod tests {
         let mut manager = AgentManager::new(dir.path());
         manager.initialize_workspace().unwrap();
         manager.load().unwrap();
-        manager.create_agent("Claude", "AI", "sharp", "sparkles", None).unwrap();
+        manager.create_agent("Claude", "AI", "sharp", "sparkles", None, crate::runtime::RuntimeType::ClaudeCode).unwrap();
 
         // Override agent SOUL.md
         let agent_soul = dir.path().join("agents/claude/SOUL.md");

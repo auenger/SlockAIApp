@@ -15,6 +15,7 @@ import type {
   AgentContextResult,
   AgentWithRuntime,
   AgentRuntimeInfo,
+  RuntimeType,
   Thread,
   ThreadInfo,
   ThreadMessageData,
@@ -51,6 +52,16 @@ export async function greet(name: string): Promise<string> {
 /** Scan for available agent runtimes. */
 export async function scanAgentRuntimes(): Promise<AgentRuntimeInfo[]> {
   return invoke<AgentRuntimeInfo[]>("scan_agent_runtimes");
+}
+
+/** List all registered runtimes using cached detection data. */
+export async function listAgentRuntimes(): Promise<AgentRuntimeInfo[]> {
+  return invoke<AgentRuntimeInfo[]>("list_agent_runtimes");
+}
+
+/** Get detailed info about a specific runtime by type. */
+export async function getRuntimeInfo(runtimeType: RuntimeType): Promise<AgentRuntimeInfo> {
+  return invoke<AgentRuntimeInfo>("get_runtime_info", { runtimeType });
 }
 
 // ---------------------------------------------------------------------------
