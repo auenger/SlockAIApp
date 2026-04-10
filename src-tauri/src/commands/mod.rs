@@ -506,3 +506,196 @@ pub fn read_workspace_file(
 pub fn greet(name: &str) -> String {
     format!("Hello, {}! Welcome to AgentsZone.", name)
 }
+
+// ---------------------------------------------------------------------------
+// Skill management commands
+// ---------------------------------------------------------------------------
+
+use crate::workspace::skill::{SkillStore, Skill, SkillType, SkillStatus, generate_skill_id};
+
+/// Skill info returned to the frontend.
+#[derive(Debug, Clone, Serialize)]
+pub struct SkillInfo {
+    pub id: String,
+    pub agent_id: String,
+    pub name: String,
+    pub skill_type: String,
+    pub config: serde_json::Value,
+    pub status: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+impl From<Skill> for SkillInfo {
+    fn from(skill: Skill) -> Self {
+        Self {
+            id: skill.id,
+            agent_id: skill.agent_id,
+            name: skill.name,
+            skill_type: skill.skill_type.to_string(),
+            config: skill.config,
+            status: skill.status.to_string(),
+            created_at: skill.created_at,
+            updated_at: skill.updated_at,
+        }
+    }
+}
+
+/// Request to add a new Skill.
+#[derive(Debug, Deserialize)]
+pub struct AddSkillRequest {
+    pub name: String,
+    pub skill_type: String,
+    pub config: serde_json::Value,
+}
+
+/// Request to update an existing Skill.
+#[derive(Debug, Deserialize)]
+pub struct UpdateSkillRequest {
+    pub name: Option<String>,
+    pub skill_type: Option<String>,
+    pub config: Option<serde_json::Value>,
+    pub status: Option<String>,
+}
+
+/// Helper: get the SkillStore for a given agent.
+fn get_skill_store(state: &tauri::State<'_, AppState>, agent_id: &str) -> Result<SkillStore, String> {
+    let manager = state
+        .agent_manager
+        .lock()
+        .map_err(|e| format!("lock error: {e}"))?;
+
+    let workspace = manager
+        .get_workspace(agent_id)
+        .ok_or_else(|| format!("agent not found: {agent_id}"))?;
+
+    Ok(SkillStore::new(workspace.skills_dir()))
+}
+
+/// List all Skills for a given Agent.
+#[tauri::command]
+pub fn list_skills(
+    state: tauri::State<'_, AppState>,
+    agent_id: String,
+) -> Result<Vec<SkillInfo>, String> {
+    let store = get_skill_store(&state, &agent_id)?;
+    let skills = store.load_all().map_err(|e| format!("load skills failed: {e}"))?;
+    Ok(skills.into_iter().map(SkillInfo::from).collect())
+}
+
+/// Add a new Skill to an Agent.
+#[tauri::command]
+pub fn add_skill(
+    state: tauri::State<'_, AppState>,
+    agent_id: String,
+    request: AddSkillRequest,
+) -> Result<SkillInfo, String> {
+    let store = get_skill_store(&state, &agent_id)?;
+
+    let skill_type = match request.skill_type.as_str() {
+        "MCP Server" | "mcp_server" => SkillType::McpServer,
+        "Tool" | "tool" => SkillType::Tool,
+        "Custom Command" | "custom_command" => SkillType::CustomCommand,
+        other => return Err(format!("unknown skill type: {other}")),
+    };
+
+    let now = {
+        let dur = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default();
+        let secs = dur.as_secs();
+        let days = secs / 86400;
+        let time_secs = secs % 86400;
+        let hours = time_secs / 3600;
+        let minutes = (time_secs % 3600) / 60;
+        let seconds = time_secs % 60;
+        let (y, m, d) = {
+            let mut dd = days;
+            let mut yr = 1970u64;
+            loop {
+                let diy = if (yr % 4 == 0 && yr % 100 != 0) || yr % 400 == 0 { 366 } else { 365 };
+                if dd < diy { break; }
+                dd -= diy;
+                yr += 1;
+            }
+            let leap = (yr % 4 == 0 && yr % 100 != 0) || yr % 400 == 0;
+            let md: [u64; 12] = if leap { [31,29,31,30,31,30,31,31,30,31,30,31] } else { [31,28,31,30,31,30,31,31,30,31,30,31] };
+            let mut mo = 1u64;
+            for &x in &md { if dd < x { break; } dd -= x; mo += 1; }
+            (yr, mo, dd + 1)
+        };
+        format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, m, d, hours, minutes, seconds)
+    };
+
+    let skill = Skill {
+        id: generate_skill_id(),
+        agent_id: agent_id.clone(),
+        name: request.name,
+        skill_type,
+        config: request.config,
+        status: SkillStatus::Active,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+
+    let added = store.add(skill).map_err(|e| format!("add skill failed: {e}"))?;
+    Ok(SkillInfo::from(added))
+}
+
+/// Update an existing Skill.
+#[tauri::command]
+pub fn update_skill(
+    state: tauri::State<'_, AppState>,
+    agent_id: String,
+    skill_id: String,
+    request: UpdateSkillRequest,
+) -> Result<SkillInfo, String> {
+    let store = get_skill_store(&state, &agent_id)?;
+
+    let skill_type = request.skill_type.and_then(|s| match s.as_str() {
+        "MCP Server" | "mcp_server" => Some(SkillType::McpServer),
+        "Tool" | "tool" => Some(SkillType::Tool),
+        "Custom Command" | "custom_command" => Some(SkillType::CustomCommand),
+        _ => None,
+    });
+
+    let status = request.status.and_then(|s| match s.as_str() {
+        "Active" | "active" => Some(SkillStatus::Active),
+        "Inactive" | "inactive" => Some(SkillStatus::Inactive),
+        "Error" | "error" => Some(SkillStatus::Error),
+        "Connecting" | "connecting" => Some(SkillStatus::Connecting),
+        _ => None,
+    });
+
+    let updated = store
+        .update(&skill_id, request.name, skill_type, request.config, status)
+        .map_err(|e| format!("update skill failed: {e}"))?;
+
+    Ok(SkillInfo::from(updated))
+}
+
+/// Delete a Skill.
+#[tauri::command]
+pub fn delete_skill(
+    state: tauri::State<'_, AppState>,
+    agent_id: String,
+    skill_id: String,
+) -> Result<(), String> {
+    let store = get_skill_store(&state, &agent_id)?;
+    store.delete(&skill_id).map_err(|e| format!("delete skill failed: {e}"))?;
+    Ok(())
+}
+
+/// Get the status of a single Skill.
+#[tauri::command]
+pub fn get_skill_status(
+    state: tauri::State<'_, AppState>,
+    agent_id: String,
+    skill_id: String,
+) -> Result<SkillInfo, String> {
+    let store = get_skill_store(&state, &agent_id)?;
+    let skill = store.get(&skill_id)
+        .map_err(|e| format!("get skill failed: {e}"))?
+        .ok_or_else(|| format!("skill not found: {skill_id}"))?;
+    Ok(SkillInfo::from(skill))
+}
