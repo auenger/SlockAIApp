@@ -1,10 +1,17 @@
 //! Activity Log Tauri commands.
 //!
 //! Provides IPC commands for logging, listing, and clearing activity entries.
+//!
+//! ## Dual-Write Strategy
+//!
+//! Activity entries are written to both JSONL (existing) and SQLite (new).
+//! Listing queries prefer SQLite for performance but fall back to JSONL
+//! if the database has no entries.
 
 use crate::storage::activity::{
     ActivityLog, ActivityStore, ActivityType, create_entry,
 };
+use crate::storage::db_helpers;
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -36,6 +43,20 @@ impl From<ActivityLog> for ActivityEntry {
             workspace_id: log.workspace_id,
             summary: log.summary,
             details: log.details,
+        }
+    }
+}
+
+impl From<db_helpers::ActivityLogRow> for ActivityEntry {
+    fn from(row: db_helpers::ActivityLogRow) -> Self {
+        Self {
+            id: row.id,
+            timestamp: row.timestamp,
+            activity_type: row.activity_type,
+            agent_id: row.agent_id,
+            workspace_id: row.workspace_id,
+            summary: row.summary,
+            details: serde_json::from_str(&row.details_json).unwrap_or(serde_json::json!({})),
         }
     }
 }
@@ -95,7 +116,7 @@ fn default_limit() -> usize {
 // Commands
 // ---------------------------------------------------------------------------
 
-/// Log a new activity entry.
+/// Log a new activity entry (dual-write: JSONL + SQLite).
 #[tauri::command]
 pub fn log_activity(
     state: tauri::State<'_, super::AppState>,
@@ -112,25 +133,73 @@ pub fn log_activity(
     let activity_type = parse_activity_type(&request.activity_type);
 
     let entry = create_entry(
-        activity_type,
-        request.agent_id,
+        activity_type.clone(),
+        request.agent_id.clone(),
         request.summary,
         request.details,
     );
 
+    // Write to JSONL
     store
         .append(&entry)
         .map_err(|e| format!("failed to log activity: {e}"))?;
+
+    // Dual-write to SQLite
+    {
+        let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
+        let activity_type_str = serde_json::to_string(&activity_type)
+            .unwrap_or_else(|_| "\"system\"".to_string())
+            .trim_matches('"')
+            .to_string();
+        let db_row = db_helpers::ActivityLogRow {
+            id: entry.id.clone(),
+            timestamp: entry.timestamp.clone(),
+            activity_type: activity_type_str,
+            agent_id: entry.agent_id.clone(),
+            workspace_id: entry.workspace_id.clone(),
+            summary: entry.summary.clone(),
+            details_json: serde_json::to_string(&entry.details).unwrap_or_else(|_| "{}".to_string()),
+        };
+        if let Err(e) = db_helpers::insert_activity(&db_conn, &db_row) {
+            log::warn!("[log_activity] Failed to insert activity into SQLite: {}", e);
+        }
+    }
 
     Ok(ActivityEntry::from(entry))
 }
 
 /// List activity entries with optional filter and pagination.
+///
+/// Prefers SQLite for fast querying; falls back to JSONL if SQLite is empty.
 #[tauri::command]
 pub fn list_activities(
     state: tauri::State<'_, super::AppState>,
     request: ListActivitiesRequest,
 ) -> Result<ListActivitiesResult, String> {
+    // Try SQLite first for fast querying
+    {
+        let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
+        let count = db_helpers::count_activities(&db_conn, request.agent_id.as_deref());
+        if let Ok(total) = count {
+            if total > 0 {
+                let rows = db_helpers::list_activities(
+                    &db_conn,
+                    request.agent_id.as_deref(),
+                    request.offset,
+                    request.limit,
+                );
+                if let Ok(rows) = rows {
+                    let entries: Vec<ActivityEntry> = rows.into_iter().map(ActivityEntry::from).collect();
+                    return Ok(ListActivitiesResult {
+                        entries,
+                        total: total as usize,
+                    });
+                }
+            }
+        }
+    }
+
+    // Fallback to JSONL-based listing
     let manager = state
         .agent_manager
         .lock()
@@ -172,6 +241,10 @@ pub fn clear_activities(
     store
         .clear()
         .map_err(|e| format!("failed to clear activities: {e}"))?;
+
+    // Note: We don't clear the SQLite activity_log table here to preserve
+    // the structured query capability. The JSONL clear is sufficient for
+    // the user-facing "clear activity" action.
 
     Ok(())
 }

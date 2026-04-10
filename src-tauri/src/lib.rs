@@ -41,10 +41,25 @@ pub fn run() {
             let workspace_root = resolve_workspace_root(app.handle());
             let agent_manager = AgentManager::new(&workspace_root);
 
+            // Initialize SQLite database
+            let db_conn = storage::db::init_database(&workspace_root)
+                .expect("Failed to initialize SQLite database");
+
+            log::info!(
+                "[App] SQLite database initialized at {}",
+                workspace_root.join("agentszone.db").display()
+            );
+
+            // Migrate existing JSON data into SQLite (idempotent, only runs once)
+            if let Err(e) = storage::db::migrate_from_files(&db_conn, &workspace_root) {
+                log::warn!("[App] Data migration from files failed: {}", e);
+            }
+
             app.manage(AppState {
                 agent_runtime_registry: Mutex::new(registry),
                 agent_session: Mutex::new(commands::AgentSessionState::default()),
                 agent_manager: Mutex::new(agent_manager),
+                db_conn: Mutex::new(db_conn),
             });
 
             Ok(())

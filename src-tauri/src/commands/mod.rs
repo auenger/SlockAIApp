@@ -16,6 +16,7 @@ use crate::runtime::registry::RuntimeRegistry;
 use crate::storage::activity::{ActivityStore, ActivityType, create_entry};
 use crate::workspace::manager::{AgentManager, AgentSummary, ManagerStatus};
 use crate::workspace::identity::IdentitySummary;
+use rusqlite::Connection;
 
 // ---------------------------------------------------------------------------
 // State
@@ -23,7 +24,8 @@ use crate::workspace::identity::IdentitySummary;
 
 /// Application state managed by Tauri.
 ///
-/// Combines runtime registry, session state, and agent workspace management.
+/// Combines runtime registry, session state, agent workspace management,
+/// and the SQLite database connection.
 pub struct AppState {
     /// Agent runtime registry for managing agent runtimes (Claude Code, etc.)
     pub agent_runtime_registry: Mutex<RuntimeRegistry>,
@@ -31,6 +33,8 @@ pub struct AppState {
     pub agent_session: Mutex<AgentSessionState>,
     /// Agent workspace manager for multi-Agent workspace isolation
     pub agent_manager: Mutex<AgentManager>,
+    /// SQLite database connection for structured metadata.
+    pub db_conn: Mutex<Connection>,
 }
 
 /// State tracking for an active agent session.
@@ -41,21 +45,44 @@ pub struct AgentSessionState {
 }
 
 // ---------------------------------------------------------------------------
-// Activity logging helper (best-effort, non-blocking)
+// Activity logging helper (dual-write: JSONL + SQLite, best-effort)
 // ---------------------------------------------------------------------------
 
-/// Log an activity entry. Best-effort: errors are logged but not propagated.
+/// Log an activity entry. Best-effort dual-write:
+/// 1. Append to JSONL file (existing behavior)
+/// 2. Insert into SQLite activity_log table (new)
+///
+/// Errors are logged but not propagated.
 fn try_log_activity(
     workspace_root: &std::path::Path,
+    db_conn: &Connection,
     activity_type: ActivityType,
     agent_id: Option<String>,
     summary: String,
     details: serde_json::Value,
 ) {
     let store = ActivityStore::new(workspace_root);
-    let entry = create_entry(activity_type, agent_id, summary, details);
+    let entry = create_entry(activity_type.clone(), agent_id.clone(), summary.clone(), details.clone());
     if let Err(e) = store.append(&entry) {
-        log::warn!("[ActivityLog] Failed to log activity: {}", e);
+        log::warn!("[ActivityLog] Failed to log activity to JSONL: {}", e);
+    }
+
+    // Dual-write to SQLite
+    let activity_type_str = serde_json::to_string(&activity_type)
+        .unwrap_or_else(|_| "\"system\"".to_string())
+        .trim_matches('"')
+        .to_string();
+    let db_row = crate::storage::db_helpers::ActivityLogRow {
+        id: entry.id.clone(),
+        timestamp: entry.timestamp.clone(),
+        activity_type: activity_type_str,
+        agent_id: entry.agent_id.clone(),
+        workspace_id: entry.workspace_id.clone(),
+        summary: entry.summary.clone(),
+        details_json: serde_json::to_string(&entry.details).unwrap_or_else(|_| "{}".to_string()),
+    };
+    if let Err(e) = crate::storage::db_helpers::insert_activity(db_conn, &db_row) {
+        log::warn!("[ActivityLog] Failed to log activity to SQLite: {}", e);
     }
 }
 
@@ -155,9 +182,11 @@ pub fn create_agent(
 
     let summary = agent.to_summary();
 
-    // Log activity
+    // Log activity (dual-write: JSONL + SQLite)
+    let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
     try_log_activity(
         manager.workspace_root(),
+        &db_conn,
         ActivityType::AgentCreated,
         Some(summary.agent_id.clone()),
         format!("Agent \"{}\" created", summary.name),
@@ -225,9 +254,11 @@ pub fn delete_agent(
         .delete_agent(&agent_id)
         .map_err(|e| format!("delete failed: {e}"))?;
 
-    // Log activity
+    // Log activity (dual-write: JSONL + SQLite)
+    let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
     try_log_activity(
         manager.workspace_root(),
+        &db_conn,
         ActivityType::AgentDeleted,
         Some(agent_id.clone()),
         format!("Agent \"{}\" deleted", agent_id),
