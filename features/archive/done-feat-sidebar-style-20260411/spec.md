@@ -40,7 +40,19 @@
 - feat-style-consistency (已完成) — 原型 MVP 移植
 
 ## Technical Solution
-<!-- To be filled during implementation -->
+
+### Approach
+1. **useResizable hook** — Reusable React hook (`src/lib/useResizable.ts`) that manages panel width state, mousedown/mousemove/mouseup listeners, min/max clamping, and cursor feedback. Supports `edge: 'right'` (Sidebar) and `edge: 'left'` (ThreadPanel) orientations.
+2. **Sidebar title rename** — Changed "Development" to "AgentsZone" with `tracking-tight` for better kerning.
+3. **Dynamic width** — Removed hardcoded `w-64` / `w-80` Tailwind classes; instead each panel receives `style` and `resizeHandleRef` props from App.tsx.
+4. **Layout integration** — App.tsx creates two `useResizable` instances (256px init for Sidebar, 320px init for ThreadPanel). The flex container with MainContent in the middle auto-fills remaining space.
+5. **Resize handle** — A 4px-wide absolute-positioned strip on the panel edge with `cursor-col-resize` and hover highlight via `hover:bg-black/20`.
+
+### Files Changed
+- `src/lib/useResizable.ts` (new) — Reusable resizable panel hook
+- `src/components/Sidebar.tsx` (modified) — Title rename, dynamic width props, resize handle
+- `src/components/ThreadPanel.tsx` (modified) — Dynamic width props, resize handle
+- `src/App.tsx` (modified) — useResizable hook instances, pass props to child panels
 
 ## Acceptance Criteria (Gherkin)
 
@@ -84,14 +96,28 @@ And 鼠标光标变为 col-resize
 ```
 
 ### UI/Interaction Checkpoints
-- [ ] Sidebar 顶部标题从 "Development" 变为 "AgentsZone"
-- [ ] 标题区域样式优化（字体、间距、图标等）
-- [ ] Sidebar 右侧出现拖拽手柄
-- [ ] ThreadPanel 左侧出现拖拽手柄
-- [ ] 拖拽时光标变为 col-resize
-- [ ] 拖拽中面板宽度实时响应
+- [x] Sidebar 顶部标题从 "Development" 变为 "AgentsZone"
+- [x] 标题区域样式优化（字体、间距、图标等）
+- [x] Sidebar 右侧出现拖拽手柄
+- [x] ThreadPanel 左侧出现拖拽手柄
+- [x] 拖拽时光标变为 col-resize
+- [x] 拖拽中面板宽度实时响应
 
 ### General Checklist
-- [ ] 不影响现有功能逻辑
-- [ ] 宽度调整后 MainContent 自适应
-- [ ] 拖拽操作流畅，无卡顿
+- [x] 不影响现有功能逻辑
+- [x] 宽度调整后 MainContent 自适应
+- [x] 拖拽操作流畅，无卡顿
+
+## Merge Record
+
+- **Completed**: 2026-04-11T15:00:00+08:00
+- **Merged Branch**: feature/feat-sidebar-style
+- **Merge Commit**: dc63dd6
+- **Archive Tag**: feat-sidebar-style-20260411
+- **Conflicts**: none
+- **Verification**: passed (4/4 Gherkin scenarios)
+- **Stats**:
+  - Started: 2026-04-11T14:00:00+08:00
+  - Duration: ~1 hour
+  - Commits: 1 (implementation)
+  - Files Changed: 4

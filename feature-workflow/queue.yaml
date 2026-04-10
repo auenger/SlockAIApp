@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-11T14:00:00+08:00"
-  version: 68
+  last_updated: "2026-04-11T15:00:00+08:00"
+  version: 69
 
 parents:
   - id: feat-agent-runtime-select
@@ -16,13 +16,7 @@ parents:
     children:
       - feat-channel-zone-protocol
       - feat-agent-a2a-trigger
-active:
-  - id: feat-sidebar-style
-    name: "Sidebar 标题更名与面板可调宽度"
-    priority: 70
-    branch: feature/feat-sidebar-style
-    worktree: ../SlockAI-feat-sidebar-style
-    started_at: "2026-04-11T14:00:00+08:00"
+active: []
 pending:
   - id: feat-md-rendering
     name: "Markdown 渲染优化 & Tool Call 结构化展示"
@@ -152,3 +146,7 @@ completed:
     name: "Agent Workspace 对话持久化"
     completed_at: "2026-04-11T13:00:00+08:00"
     tag: feat-agent-workspace-persist-20260411
+  - id: feat-sidebar-style
+    name: "Sidebar 标题更名与面板可调宽度"
+    completed_at: "2026-04-11T15:00:00+08:00"
+    tag: feat-sidebar-style-20260411

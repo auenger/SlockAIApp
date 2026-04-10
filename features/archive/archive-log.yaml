@@ -1,8 +1,8 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-11T13:00:00+08:00"
-  version: 19
-  total_completed: 19
+  last_updated: "2026-04-11T15:00:00+08:00"
+  version: 20
+  total_completed: 20
 
 records:
   - id: feat-project-init
@@ -456,3 +456,25 @@ records:
       duration: "~1h"
       commits: 3
       files_changed: 6
+  - id: feat-sidebar-style
+    name: "Sidebar 标题更名与面板可调宽度"
+    completed: "2026-04-11T15:00:00+08:00"
+    tag: feat-sidebar-style-20260411
+    merge_commit: "dc63dd6"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-sidebar-style
+    worktree_deleted: true
+    worktree_path: ../SlockAI-feat-sidebar-style
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-11T14:00:00+08:00"
+      duration: "~1h"
+      commits: 1
+      files_changed: 4
