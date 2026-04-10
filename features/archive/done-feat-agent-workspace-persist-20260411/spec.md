@@ -107,6 +107,16 @@ And 返回 active_agent_id
 ```
 
 ### General Checklist
-- [ ] workspace 创建流程可靠
-- [ ] 错误不会静默丢失
-- [ ] workspace 路径对用户可见
+- [x] workspace 创建流程可靠
+- [x] 错误不会静默丢失
+- [x] workspace 路径对用户可见
+
+## Merge Record
+
+- **Completed**: 2026-04-11T13:00:00+08:00
+- **Merged Branch**: feature/feat-agent-workspace-persist
+- **Merge Commit**: f7dd795
+- **Archive Tag**: feat-agent-workspace-persist-20260411
+- **Conflicts**: none
+- **Verification**: passed (63/63 tests, 3/3 Gherkin scenarios)
+- **Development Stats**: 3 commits, 6 files changed
