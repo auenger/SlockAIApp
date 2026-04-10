@@ -137,8 +137,6 @@ const AgentStreamBubble: React.FC<AgentStreamBubbleProps> = ({
 interface MainContentProps {
   activeTab: TabType;
   onTabChange: (tab: TabType) => void;
-  onOpenCreateTask?: () => void;
-  onOpenInviteHuman?: () => void;
   /** Currently selected agent (null = no agent selected) */
   selectedAgent?: AgentWithRuntime | null;
   /** Active thread ID from sidebar */
@@ -164,7 +162,6 @@ interface MainContentProps {
 export const MainContent: React.FC<MainContentProps> = ({
   activeTab,
   onTabChange,
-  onOpenCreateTask,
   selectedAgent,
   activeThreadId,
   onThreadCreated,
@@ -387,10 +384,7 @@ export const MainContent: React.FC<MainContentProps> = ({
     { id: 'PROFILE', label: 'PROFILE', icon: User },
   ];
 
-  const tasks: Task[] = [
-    { id: 2, title: 'test', status: 'TODO' },
-    { id: 1, title: '总结oauth2在kagent中的流程', status: 'IN PROGRESS', assignee: '克劳德' },
-  ];
+  const tasks: Task[] = [];
 
   // Get channel members as AgentWithRuntime[] for MentionAutocomplete
   const channelMembers = isChannelMode
@@ -508,7 +502,7 @@ export const MainContent: React.FC<MainContentProps> = ({
             {/* Task Filters */}
             <div className="flex items-center justify-between">
               <div className="flex gap-1">
-                {['All 2', 'Todo 1', 'In Progress 1', 'In Review', 'Done'].map(f => (
+                {['All', 'Todo', 'In Progress', 'In Review', 'Done'].map(f => (
                   <button
                     key={f}
                     onClick={() => setTaskFilter(f.split(' ')[0])}
@@ -522,7 +516,6 @@ export const MainContent: React.FC<MainContentProps> = ({
                 ))}
               </div>
               <button
-                onClick={onOpenCreateTask}
                 className="brutal-btn bg-brutal-pink text-white text-xs flex items-center gap-1"
               >
                 <Plus size={14} /> New Task

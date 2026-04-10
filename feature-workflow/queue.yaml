@@ -1,17 +1,13 @@
 meta:
-  last_updated: "2026-04-10T12:10:00+08:00"
-  version: 40
+  last_updated: "2026-04-10T14:00:00+08:00"
+  version: 41
 
 parents: []
-active:
-  - id: feat-skills-management
-    name: "Skills 管理 UI"
-    priority: 40
-    size: M
-    branch: feature/feat-skills-management
-    worktree: ../AgentsZone-feat-skills-management
-    started_at: "2026-04-10T11:10:00+08:00"
-pending: []
+active: []
+pending:
+  - id: feat-data-storage
+    name: "数据存储架构（SQLite + JSONL 混合方案）"
+    priority: 80
 blocked: []
 completed:
   - id: feat-project-init
@@ -82,6 +78,10 @@ completed:
     name: "API Key 管理 UI（低优先级，Runtime CLI 自管理认证）"
     completed_at: "2026-04-10T10:50:00+08:00"
     tag: feat-apikey-management-ui-20260410
+  - id: feat-skills-management
+    name: "Skills 管理 UI"
+    completed_at: "2026-04-10T12:05:00+08:00"
+    tag: feat-skills-management-20260410
   - id: feat-activity-log
     name: "Activity 日志后端集成"
     completed_at: "2026-04-10T12:10:00+08:00"

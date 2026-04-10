@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { MainContent } from './components/MainContent';
 import { ThreadPanel } from './components/ThreadPanel';
-import { CreateTaskModal, InviteHumanModal } from './components/Modals';
 import { TabType, AgentWithRuntime } from './types';
 import { useThreadChat } from './lib/useThreadChat';
 import { useChannel } from './lib/useChannel';
@@ -14,10 +13,6 @@ export default function App() {
   const [isThreadOpen, setIsThreadOpen] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<AgentWithRuntime | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-
-  // Modal states for demonstration
-  const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
   // Thread chat hook (shared between Sidebar and MainContent)
   const { threads, loadThreads, createNewThread, selectThread, activeThread, send: sendThreadMessage } = useThreadChat();
@@ -131,8 +126,6 @@ export default function App() {
       <MainContent
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        onOpenCreateTask={() => setIsCreateTaskModalOpen(true)}
-        onOpenInviteHuman={() => setIsInviteModalOpen(true)}
         selectedAgent={selectedAgent}
         activeThreadId={activeThreadId}
         onThreadCreated={handleThreadCreated}
@@ -154,37 +147,6 @@ export default function App() {
         onClose={() => setIsThreadOpen(false)}
       />
 
-      {/* Modals */}
-      <CreateTaskModal
-        isOpen={isCreateTaskModalOpen}
-        onClose={() => setIsCreateTaskModalOpen(false)}
-      />
-      <InviteHumanModal
-        isOpen={isInviteModalOpen}
-        onClose={() => setIsInviteModalOpen(false)}
-      />
-
-      {/* Floating Demo Controls */}
-      <div className="fixed bottom-4 right-4 flex flex-col gap-2 z-50">
-        <button
-          onClick={() => setIsThreadOpen(!isThreadOpen)}
-          className="brutal-btn bg-brutal-cyan text-[10px]"
-        >
-          Toggle Thread
-        </button>
-        <button
-          onClick={() => setIsCreateTaskModalOpen(true)}
-          className="brutal-btn bg-brutal-pink text-white text-[10px]"
-        >
-          Demo: Create Task Modal
-        </button>
-        <button
-          onClick={() => setIsInviteModalOpen(true)}
-          className="brutal-btn bg-purple-400 text-white text-[10px]"
-        >
-          Demo: Invite Modal
-        </button>
-      </div>
     </div>
   );
 }

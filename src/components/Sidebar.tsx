@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAgentStatus, getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
+import { useUserProfile } from '../lib/useUserProfile';
 import { CreateAgentModal } from './CreateAgentModal';
 import { ApiKeyManager } from './ApiKeyManager';
 import type { AgentWithRuntime, ThreadInfo, ChannelInfo } from '../types';
@@ -54,6 +55,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   agents: propAgents,
 }) => {
   const { agents: statusAgents, loading, scan } = useAgentStatus();
+  const { profile } = useUserProfile();
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showCreateAgent, setShowCreateAgent] = useState(false);
   const [showApiKeyManager, setShowApiKeyManager] = useState(false);
@@ -334,15 +336,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <h3 className="font-black text-xs uppercase tracking-wider flex items-center gap-1">
               <ChevronDown size={14} /> Humans <span className="text-gray-600">1</span>
             </h3>
-            <button className="brutal-border bg-white p-0.5 hover:bg-gray-100">
-              <Plus size={14} />
-            </button>
           </div>
           <button className="w-full text-left px-2 py-1.5 flex items-center gap-2 hover:bg-white/50 brutal-border border-transparent">
             <div className="w-6 h-6 brutal-border bg-purple-400 flex items-center justify-center shrink-0">
               <User size={14} />
             </div>
-            <div className="font-black text-sm">Lissa <span className="text-gray-600 font-normal">(you)</span></div>
+            <div className="font-black text-sm">{profile.name} <span className="text-gray-600 font-normal">(you)</span></div>
           </button>
         </section>
       </div>
@@ -354,8 +353,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <User size={18} />
           </div>
           <div>
-            <div className="font-black text-xs">Lissa</div>
-            <div className="text-[10px] text-gray-500">huimintai5@gmail...</div>
+            <div className="font-black text-xs">{profile.name}</div>
+            <div className="text-[10px] text-gray-500">{profile.email || 'No email set'}</div>
           </div>
         </div>
         <button className="p-1 brutal-border hover:bg-gray-100" onClick={() => setShowApiKeyManager(true)}>

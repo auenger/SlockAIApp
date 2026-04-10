@@ -51,7 +51,7 @@ export const CreateTaskModal: React.FC<{ isOpen: boolean; onClose: () => void }>
         <div className="flex gap-2">
           <input
             type="text"
-            defaultValue="总结oauth2在kagent中的流程"
+            defaultValue=""
             className="flex-1 brutal-border p-2 text-sm font-bold focus:outline-none focus:bg-brutal-bg"
           />
           <button className="p-2 brutal-border hover:bg-gray-100">

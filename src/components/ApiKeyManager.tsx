@@ -6,9 +6,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { X, Key, Plus, Trash2, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Key, Plus, Trash2, Check, AlertCircle, Loader2, User } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useApiKeys } from '../lib/useApiKeys';
+import { useUserProfile } from '../lib/useUserProfile';
 
 // ---------------------------------------------------------------------------
 // Provider definitions
@@ -41,6 +42,9 @@ interface ApiKeyManagerProps {
 
 export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ isOpen, onClose }) => {
   const { keys, loading, error, loadKeys, addKey, removeKey, clearError } = useApiKeys();
+  const { profile, updateProfile } = useUserProfile();
+  const [profileName, setProfileName] = useState(profile.name);
+  const [profileEmail, setProfileEmail] = useState(profile.email);
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<string>(PROVIDERS[0].id);
   const [newKeyValue, setNewKeyValue] = useState('');
@@ -58,8 +62,10 @@ export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ isOpen, onClose })
       setDeleteConfirm(null);
       setSuccessMsg(null);
       clearError();
+      setProfileName(profile.name);
+      setProfileEmail(profile.email);
     }
-  }, [isOpen, loadKeys, clearError]);
+  }, [isOpen, loadKeys, clearError, profile]);
 
   /** Handle adding a new key */
   const handleAdd = async () => {
@@ -130,6 +136,38 @@ export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ isOpen, onClose })
             {error}
           </div>
         )}
+
+        {/* User Profile Section */}
+        <div className="p-4 brutal-border-b bg-gray-50 space-y-3">
+          <div className="flex items-center gap-2">
+            <User size={16} />
+            <span className="text-xs font-black uppercase">Your Profile</span>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={profileName}
+              onChange={(e) => setProfileName(e.target.value)}
+              placeholder="Your name"
+              className="flex-1 brutal-border px-2 py-1.5 text-xs font-bold bg-white focus:outline-none focus:bg-brutal-bg"
+              onBlur={() => updateProfile({ name: profileName })}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') updateProfile({ name: profileName });
+              }}
+            />
+            <input
+              type="email"
+              value={profileEmail}
+              onChange={(e) => setProfileEmail(e.target.value)}
+              placeholder="Email"
+              className="flex-1 brutal-border px-2 py-1.5 text-xs font-bold bg-white focus:outline-none focus:bg-brutal-bg"
+              onBlur={() => updateProfile({ email: profileEmail })}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') updateProfile({ email: profileEmail });
+              }}
+            />
+          </div>
+        </div>
 
         {/* Key List */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
