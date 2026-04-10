@@ -1,9 +1,16 @@
 meta:
-  last_updated: "2026-04-10T11:00:00+08:00"
-  version: 38
+  last_updated: "2026-04-10T11:10:00+08:00"
+  version: 39
 
 parents: []
 active:
+  - id: feat-skills-management
+    name: "Skills 管理 UI"
+    priority: 40
+    size: M
+    branch: feature/feat-skills-management
+    worktree: ../AgentsZone-feat-skills-management
+    started_at: "2026-04-10T11:10:00+08:00"
   - id: feat-activity-log
     name: "Activity 日志后端集成"
     priority: 35
@@ -11,11 +18,7 @@ active:
     branch: feature/feat-activity-log
     worktree: ../SlockAI-feat-activity-log
     started_at: "2026-04-10T11:00:00+08:00"
-pending:
-  - id: feat-skills-management
-    name: "Skills 管理 UI"
-    priority: 40
-    size: M
+pending: []
 blocked: []
 completed:
   - id: feat-project-init
