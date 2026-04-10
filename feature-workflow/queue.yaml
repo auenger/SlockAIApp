@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-10T00:00:00+08:00"
-  version: 34
+  last_updated: "2026-04-10T11:00:00+08:00"
+  version: 38
 
 parents: []
 active:
@@ -10,16 +10,12 @@ active:
     size: S
     branch: feature/feat-activity-log
     worktree: ../SlockAI-feat-activity-log
-    started_at: "2026-04-10T00:00:00+08:00"
+    started_at: "2026-04-10T11:00:00+08:00"
 pending:
   - id: feat-skills-management
     name: "Skills 管理 UI"
     priority: 40
     size: M
-  - id: feat-apikey-management-ui
-    name: "API Key 管理 UI（低优先级，Runtime CLI 自管理认证）"
-    priority: 10
-    size: S
 blocked: []
 completed:
   - id: feat-project-init
@@ -86,3 +82,7 @@ completed:
     name: "Workspace 文件浏览器"
     completed_at: "2026-04-09T21:30:00+08:00"
     tag: feat-workspace-browser-20260409
+  - id: feat-apikey-management-ui
+    name: "API Key 管理 UI（低优先级，Runtime CLI 自管理认证）"
+    completed_at: "2026-04-10T10:50:00+08:00"
+    tag: feat-apikey-management-ui-20260410
