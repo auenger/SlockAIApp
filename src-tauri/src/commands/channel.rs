@@ -526,8 +526,23 @@ pub async fn send_channel_message(
             let store = ChannelStore::new(&channels_dir);
             let latest_channel = store.load(&channel_id).map_err(|e| format!("load failed: {e}"))?;
 
-            // Build agent context via ContextBuilder
-            let builder = crate::context::ContextBuilder::new(&workspace_root);
+            // Collect all agents that are members of this channel
+            let channel_agents: Vec<crate::workspace::manager::Agent> = latest_channel
+                .members
+                .iter()
+                .filter_map(|m| manager.get_agent(&m.agent_id))
+                .cloned()
+                .collect();
+
+            // Build Zone Agent Protocol (L2) from channel members
+            let zone_protocol = crate::context::zone_protocol::ChannelZoneProtocol::from_channel(
+                &latest_channel,
+                &channel_agents,
+            );
+
+            // Build agent context via ContextBuilder, with Zone Protocol injected
+            let builder = crate::context::ContextBuilder::new(&workspace_root)
+                .with_zone_protocol(zone_protocol);
             let mut context_prefix = builder
                 .build_context_prefix(&agent_id)
                 .unwrap_or_default();

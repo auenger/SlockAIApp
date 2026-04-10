@@ -3,17 +3,21 @@
 //! Responsible for assembling, compressing, and managing
 //! the conversation history that gets sent to Agent runtimes.
 //!
-//! ## Context Assembly
+//! ## Prompt 7-Layer Architecture
 //!
-//! When building context for an Agent, the engine loads:
-//! 1. **Global SOUL.md** -- default personality (from workspace root)
-//! 2. **Agent SOUL.md** -- overrides global if present
-//! 3. **IDENTITY.md** -- Agent metadata (name, emoji, vibe)
-//! 4. **USER.md** -- user preferences
-//! 5. **AGENTS.md** -- behavior instructions
-//! 6. **TOOLS.md** -- tool usage guide
-//! 7. **memory/MEMORY.md** -- long-term memory
-//! 8. **memory/HISTORY.md** -- conversation summaries
+//! When building context for an Agent, the engine assembles:
+//!
+//! | Layer | Name | Source |
+//! |-------|------|--------|
+//! | L1 | Runtime System Prompt | Agent Runtime (Claude Code / Codex / Gemini) |
+//! | L2 | **Zone Agent Protocol** | Channel members + collaboration rules |
+//! | L3 | Role Definition | IDENTITY.md + SOUL.md |
+//! | L4 | Environment Context | workspace metadata |
+//! | L5 | Persistent Memory | memory/MEMORY.md |
+//! | L6 | Conversation History | JSONL conversation records |
+//! | L7 | System Reminders | dynamic context (date, channel desc, etc.) |
+
+pub mod zone_protocol;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -40,11 +44,18 @@ pub struct AgentContext {
 }
 
 /// Context builder that assembles Agent context from workspace files.
+///
+/// Supports the Prompt 7-Layer Architecture:
+/// - L1 (Runtime System Prompt) is handled by the runtime itself.
+/// - L2 (Zone Agent Protocol) is optionally injected via `with_zone_protocol()`.
+/// - L3-L7 are assembled from workspace files and Channel data.
 pub struct ContextBuilder {
     /// Workspace root path (contains global templates).
     workspace_root: PathBuf,
     /// Agents directory path.
     agents_dir: PathBuf,
+    /// Optional Zone Agent Protocol (L2) -- only set for Channel conversations.
+    zone_protocol: Option<zone_protocol::ChannelZoneProtocol>,
 }
 
 impl ContextBuilder {
@@ -54,7 +65,17 @@ impl ContextBuilder {
         Self {
             agents_dir: root.join("agents"),
             workspace_root: root,
+            zone_protocol: None,
         }
+    }
+
+    /// Attach a Zone Agent Protocol (L2 layer) to this builder.
+    ///
+    /// Only meaningful for Channel conversations.  Thread conversations
+    /// should **not** call this method, leaving the field as `None`.
+    pub fn with_zone_protocol(mut self, zp: zone_protocol::ChannelZoneProtocol) -> Self {
+        self.zone_protocol = Some(zp);
+        self
     }
 
     /// Build the full context for a specific Agent.
@@ -154,14 +175,30 @@ impl ContextBuilder {
 
     /// Build a context prefix string suitable for prepending to conversations.
     ///
-    /// Returns a formatted string containing the essential context elements.
+    /// The assembly order follows the 7-Layer architecture:
+    ///   [L3] system_prompt  (IDENTITY.md + SOUL.md)
+    ///   [L2] zone_protocol  (Channel members + collaboration rules, if set)
+    ///   [L4] user profile   (USER.md)
+    ///   [L4] agent instructions (AGENTS.md)
+    ///   [L4] tool usage (TOOLS.md)
+    ///   [L5] memory (MEMORY.md)
+    ///
+    /// L1 is injected by the runtime itself.  L6 and L7 are appended by
+    /// the caller (e.g. `send_channel_message`) after this method returns.
     pub fn build_context_prefix(&self, agent_id: &str) -> Result<String, ContextError> {
         let ctx = self.build(agent_id)?;
 
         let mut prefix = String::new();
 
+        // [L3] Role Definition (IDENTITY.md + SOUL.md)
         prefix.push_str(&ctx.system_prompt);
         prefix.push_str("\n\n");
+
+        // [L2] Zone Agent Protocol -- injected ONLY for Channel conversations
+        if let Some(ref zp) = self.zone_protocol {
+            prefix.push_str(&zp.render());
+            prefix.push_str("\n---\n\n");
+        }
 
         if let Some(ref user) = ctx.user_context {
             prefix.push_str("# User Profile\n\n");
@@ -289,5 +326,56 @@ mod tests {
         let builder = ContextBuilder::new(dir.path());
         let result = builder.build("nonexistent");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_context_prefix_with_zone_protocol() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let mut manager = AgentManager::new(dir.path());
+        manager.initialize_workspace().unwrap();
+        manager.load().unwrap();
+        manager.create_agent("Claude", "AI", "sharp", "sparkles", None, crate::runtime::RuntimeType::ClaudeCode).unwrap();
+
+        // Build a Zone Protocol
+        let zp = zone_protocol::ChannelZoneProtocol {
+            channel_name: "Test Channel".to_string(),
+            channel_description: None,
+            members: vec![zone_protocol::AgentMemberInfo {
+                agent_id: "claude".to_string(),
+                display_name: "Claude".to_string(),
+                creature: "AI".to_string(),
+                vibe: "sharp".to_string(),
+                role_description: "Code Expert".to_string(),
+                runtime_type: "Claude Code".to_string(),
+            }],
+        };
+
+        let builder = ContextBuilder::new(dir.path()).with_zone_protocol(zp);
+        let prefix = builder.build_context_prefix("claude").unwrap();
+
+        // Should contain Zone Protocol content
+        assert!(prefix.contains("## Channel: Test Channel"));
+        assert!(prefix.contains("@Claude"));
+        assert!(prefix.contains("Collaboration Rules"));
+
+        // Should also contain the agent identity (L3)
+        assert!(prefix.contains("Your Identity"));
+    }
+
+    #[test]
+    fn test_context_prefix_without_zone_protocol() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let mut manager = AgentManager::new(dir.path());
+        manager.initialize_workspace().unwrap();
+        manager.load().unwrap();
+
+        let builder = ContextBuilder::new(dir.path());
+        let prefix = builder.build_context_prefix("default").unwrap();
+
+        // Should NOT contain any Zone Protocol content
+        assert!(!prefix.contains("## Channel:"));
+        assert!(!prefix.contains("Collaboration Rules"));
     }
 }
