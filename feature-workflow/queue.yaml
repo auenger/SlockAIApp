@@ -1,24 +1,14 @@
 meta:
-  last_updated: "2026-04-09T21:20:00+08:00"
-  version: 32
+  last_updated: "2026-04-09T21:30:00+08:00"
+  version: 33
 
 parents: []
-active:
-  - id: feat-workspace-browser
-    name: "Workspace 文件浏览器"
-    priority: 45
-    size: M
-    branch: feature/feat-workspace-browser
-    worktree: /Users/ryan/mycode/SlockAI
-    started: "2026-04-09T21:20:00+08:00"
+active: []
+pending:
   - id: feat-skills-management
     name: "Skills 管理 UI"
     priority: 40
     size: M
-    branch: feature/feat-skills-management
-    worktree: /Users/ryan/mycode/SlockAI-feat-skills-management
-    started: "2026-04-09T21:20:00+08:00"
-pending:
   - id: feat-activity-log
     name: "Activity 日志后端集成"
     priority: 35
@@ -89,3 +79,7 @@ completed:
     name: "ThreadPanel 真实数据接入"
     completed_at: "2026-04-09T21:20:00+08:00"
     tag: feat-thread-panel-live-20260409
+  - id: feat-workspace-browser
+    name: "Workspace 文件浏览器"
+    completed_at: "2026-04-09T21:30:00+08:00"
+    tag: feat-workspace-browser-20260409

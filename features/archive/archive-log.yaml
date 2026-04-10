@@ -206,3 +206,26 @@ records:
       commits: 1
       files_changed: 6
     note: "Worktree is main repo, no separate worktree created"
+  - id: feat-workspace-browser
+    name: "Workspace 文件浏览器"
+    completed: "2026-04-09T21:30:00+08:00"
+    tag: feat-workspace-browser-20260409
+    merge_commit: "bba0929"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-workspace-browser
+    worktree_deleted: true
+    worktree_path: /Users/ryan/mycode/SlockAI
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 3
+      scenarios_passed: 3
+    stats:
+      started: "2026-04-09T21:20:00+08:00"
+      duration: "10min"
+      commits: 1
+      files_changed: 11
+    note: "Cherry-picked onto main, worktree is main repo"
