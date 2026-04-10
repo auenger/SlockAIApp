@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-11T16:00:00+08:00"
-  version: 70
+  last_updated: "2026-04-11T17:00:00+08:00"
+  version: 71
 
 parents:
   - id: feat-agent-runtime-select
@@ -16,14 +16,7 @@ parents:
     children:
       - feat-channel-zone-protocol
       - feat-agent-a2a-trigger
-active:
-  - id: feat-md-rendering
-    name: "Markdown 渲染优化 & Tool Call 结构化展示"
-    priority: 60
-    created_at: "2026-04-10T22:30:00+08:00"
-    branch: feature/feat-md-rendering
-    worktree: ../SlockAI-feat-md-rendering
-    started_at: "2026-04-11T16:00:00+08:00"
+active: []
 pending:
   - id: feat-channel-zone-protocol
     name: "Channel Zone Protocol（Prompt 7层架构 + Zone Agent Protocol）"
@@ -153,3 +146,7 @@ completed:
     name: "Sidebar 标题更名与面板可调宽度"
     completed_at: "2026-04-11T15:00:00+08:00"
     tag: feat-sidebar-style-20260411
+  - id: feat-md-rendering
+    name: "Markdown 渲染优化 & Tool Call 结构化展示"
+    completed_at: "2026-04-11T17:00:00+08:00"
+    tag: feat-md-rendering-20260411

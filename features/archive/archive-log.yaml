@@ -1,8 +1,8 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-11T15:00:00+08:00"
-  version: 20
-  total_completed: 20
+  last_updated: "2026-04-11T17:00:00+08:00"
+  version: 21
+  total_completed: 21
 
 records:
   - id: feat-project-init
@@ -478,3 +478,25 @@ records:
       duration: "~1h"
       commits: 1
       files_changed: 4
+  - id: feat-md-rendering
+    name: "Markdown 渲染优化 & Tool Call 结构化展示"
+    completed: "2026-04-11T17:00:00+08:00"
+    tag: feat-md-rendering-20260411
+    merge_commit: "5ce31d3"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-md-rendering
+    worktree_deleted: true
+    worktree_path: ../SlockAI-feat-md-rendering
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 9
+      scenarios_passed: 9
+    stats:
+      started: "2026-04-11T16:00:00+08:00"
+      duration: "~1h"
+      commits: 1
+      files_changed: 22

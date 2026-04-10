@@ -169,6 +169,15 @@ When tool call 开始执行
 Then 应立即显示"运行中"状态指示器
 When tool call 执行完成
 Then 状态指示器应更新为"完成"并显示结果
+
+## Merge Record
+- **Completed**: 2026-04-11T17:00:00+08:00
+- **Merged Branch**: feature/feat-md-rendering
+- **Merge Commit**: 5ce31d3
+- **Archive Tag**: feat-md-rendering-20260411
+- **Conflicts**: None
+- **Verification**: passed (9/9 Gherkin scenarios via code analysis)
+- **Stats**: 22 files changed, 3201 insertions, 123 deletions, 1 commit
 ```
 
 ### UI/Interaction Checkpoints
