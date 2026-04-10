@@ -6,6 +6,7 @@ import { TabType, AgentWithRuntime } from './types';
 import { useThreadChat } from './lib/useThreadChat';
 import { useChannel } from './lib/useChannel';
 import { useAgentStatus } from './lib/useAgentStatus';
+import { useResizable } from './lib/useResizable';
 import { deleteAgent } from './lib/ipc';
 
 export default function App() {
@@ -36,6 +37,10 @@ export default function App() {
 
   // Agent status for channel member selection
   const { agents: allAgents, scan } = useAgentStatus();
+
+  // Resizable panels
+  const sidebarResize = useResizable({ initialWidth: 256, minWidth: 180, maxWidth: 400, edge: 'right' });
+  const threadResize = useResizable({ initialWidth: 320, minWidth: 240, maxWidth: 560, edge: 'left' });
 
   // Keep selectedAgent in sync with the latest allAgents data
   // This ensures edits to agent properties (name, icon, etc.) are reflected everywhere
@@ -188,6 +193,8 @@ export default function App() {
         onDeleteChannel={handleDeleteChannel}
         onDeleteThread={handleDeleteThread}
         onDeleteAgent={handleDeleteAgent}
+        style={sidebarResize.style}
+        resizeHandleRef={sidebarResize.handleRef}
       />
 
       {/* Main Content Area */}
@@ -213,6 +220,8 @@ export default function App() {
         agent={selectedAgent}
         onSend={handleSendThreadMessage}
         onClose={() => setIsThreadOpen(false)}
+        style={threadResize.style}
+        resizeHandleRef={threadResize.handleRef}
       />
 
     </div>

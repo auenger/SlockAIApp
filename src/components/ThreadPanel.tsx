@@ -9,6 +9,10 @@ interface ThreadPanelProps {
   agent: AgentWithRuntime | null;
   onSend: (message: string) => void;
   onClose: () => void;
+  /** Resizable width style from parent */
+  style?: React.CSSProperties;
+  /** Resize handle ref from parent */
+  resizeHandleRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 export const ThreadPanel: React.FC<ThreadPanelProps> = ({
@@ -17,6 +21,8 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
   agent,
   onSend,
   onClose,
+  style,
+  resizeHandleRef,
 }) => {
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -53,7 +59,12 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
   // Empty state: no thread selected
   if (!thread) {
     return (
-      <div className="w-80 h-full bg-white brutal-border-l flex flex-col">
+      <div className="h-full bg-white brutal-border-l flex flex-col relative" style={style}>
+        {/* Resize Handle — left edge */}
+        <div
+          ref={resizeHandleRef}
+          className="absolute top-0 left-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 active:bg-black/30 transition-colors z-10"
+        />
         <div className="p-3 brutal-border-b flex items-center justify-between bg-gray-50">
           <div className="font-black text-sm truncate">Thread</div>
           <button onClick={onClose} className="p-1 brutal-border hover:bg-gray-200">
@@ -69,7 +80,12 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
   }
 
   return (
-    <div className="w-80 h-full bg-white brutal-border-l flex flex-col">
+    <div className="h-full bg-white brutal-border-l flex flex-col relative" style={style}>
+      {/* Resize Handle — left edge */}
+      <div
+        ref={resizeHandleRef}
+        className="absolute top-0 left-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 active:bg-black/30 transition-colors z-10"
+      />
       {/* Header */}
       <div className="p-3 brutal-border-b flex items-center justify-between bg-gray-50">
         <div className="font-black text-sm truncate flex-1 mr-2">

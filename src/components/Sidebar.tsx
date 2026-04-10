@@ -49,6 +49,10 @@ interface SidebarProps {
   onDeleteThread?: (threadId: string) => void;
   /** Callback when user wants to delete an agent */
   onDeleteAgent?: (agentId: string) => void;
+  /** Resizable width style from parent */
+  style?: React.CSSProperties;
+  /** Resize handle ref from parent */
+  resizeHandleRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -66,6 +70,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onDeleteChannel,
   onDeleteThread,
   onDeleteAgent,
+  style,
+  resizeHandleRef,
 }) => {
   const { agents: statusAgents, loading, scan } = useAgentStatus();
   const { profile } = useUserProfile();
@@ -112,11 +118,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <div className="w-64 h-full bg-brutal-yellow brutal-border flex flex-col overflow-hidden">
+    <div className="h-full bg-brutal-yellow brutal-border flex flex-col overflow-hidden relative" style={style}>
       {/* Header */}
       <div className="p-4 brutal-border-b bg-black text-white flex items-center justify-between">
-        <div className="flex items-center gap-2 font-black italic text-lg">
-          Development
+        <div className="flex items-center gap-2 font-black italic text-lg tracking-tight">
+          AgentsZone
           <ChevronDown size={18} />
         </div>
       </div>
@@ -492,6 +498,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
       )}
+
+      {/* Resize Handle — right edge */}
+      <div
+        ref={resizeHandleRef}
+        className="absolute top-0 right-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 active:bg-black/30 transition-colors z-10"
+      />
     </div>
   );
 };
