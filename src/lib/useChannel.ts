@@ -105,6 +105,7 @@ export function useChannel(): ChannelState {
   const unlistenChunkRef = useRef<(() => void) | null>(null);
   const unlistenResponseRef = useRef<(() => void) | null>(null);
   const unlistenAgentStartRef = useRef<(() => void) | null>(null);
+  const unlistenRuntimeErrorRef = useRef<(() => void) | null>(null);
 
   // Clean up listeners on unmount
   useEffect(() => {
@@ -112,6 +113,7 @@ export function useChannel(): ChannelState {
       if (unlistenChunkRef.current) unlistenChunkRef.current();
       if (unlistenResponseRef.current) unlistenResponseRef.current();
       if (unlistenAgentStartRef.current) unlistenAgentStartRef.current();
+      if (unlistenRuntimeErrorRef.current) unlistenRuntimeErrorRef.current();
     };
   }, []);
 
@@ -295,6 +297,10 @@ export function useChannel(): ChannelState {
         unlistenAgentStartRef.current();
         unlistenAgentStartRef.current = null;
       }
+      if (unlistenRuntimeErrorRef.current) {
+        unlistenRuntimeErrorRef.current();
+        unlistenRuntimeErrorRef.current = null;
+      }
 
       if (!isTauri) {
         // Dev fallback: simulate streaming
@@ -376,6 +382,27 @@ export function useChannel(): ChannelState {
       );
       unlistenAgentStartRef.current = unlistenAgentStart;
 
+      // Listen for runtime unavailability events (rich error with install hint)
+      const unlistenRuntimeError = await listen<{
+        channel_id: string;
+        agent_id: string;
+        runtime_id: string;
+        runtime_name: string;
+        install_hint: string;
+        error: string;
+      }>("runtime://unavailable", async (event) => {
+        const { channel_id: evtChannelId, runtime_name, install_hint, error: runtimeError } = event.payload;
+        if (evtChannelId !== channelId) return;
+
+        setError(`${runtime_name}: ${runtimeError}${install_hint ? `\nInstall: ${install_hint}` : ""}`);
+        setIsStreaming(false);
+        setIsThinking(false);
+
+        unlistenRuntimeError();
+        unlistenRuntimeErrorRef.current = null;
+      });
+      unlistenRuntimeErrorRef.current = unlistenRuntimeError;
+
       // Per-agent accumulated text
       const agentTexts = new Map<string, string>();
 
@@ -448,9 +475,11 @@ export function useChannel(): ChannelState {
               unlistenAgentStart();
               unlistenChunk();
               unlistenResponse();
+              unlistenRuntimeError();
               unlistenChunkRef.current = null;
               unlistenResponseRef.current = null;
               unlistenAgentStartRef.current = null;
+              unlistenRuntimeErrorRef.current = null;
 
               // Refresh channel list
               loadChannels();

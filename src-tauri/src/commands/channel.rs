@@ -512,7 +512,7 @@ pub async fn send_channel_message(
         let workspace_root = workspace_root.clone();
 
         // Build context for this agent
-        let (system_prompt, workspace_path, recent_count) = {
+        let (system_prompt, workspace_path, recent_count, runtime_id, runtime_name) = {
             let manager = state
                 .agent_manager
                 .lock()
@@ -566,14 +566,22 @@ pub async fn send_channel_message(
                 .ok_or_else(|| format!("workspace not found for agent: {agent_id}"))?;
             let ws_path = workspace.base_path().to_string_lossy().to_string();
 
-            (Some(context_prefix), ws_path, recent.len())
+            // Resolve the agent's runtime type
+            let agent = manager
+                .get_agent(&agent_id)
+                .ok_or_else(|| format!("agent not found: {agent_id}"))?;
+            let rt_id = agent.identity.runtime_type.runtime_id().to_string();
+            let rt_name = agent.identity.runtime_type.display_name().to_string();
+
+            (Some(context_prefix), ws_path, recent.len(), rt_id, rt_name)
         };
 
         log::info!(
-            "[send_channel_message] executing agent {}/{}, agent_id={}, context: {} recent messages",
+            "[send_channel_message] executing agent {}/{}, agent_id={}, runtime={}, context: {} recent messages",
             agent_idx + 1,
             total_agents,
             agent_id,
+            runtime_id,
             recent_count
         );
 
@@ -585,16 +593,43 @@ pub async fn send_channel_message(
                 "agent_id": agent_id,
                 "agent_index": agent_idx,
                 "total_agents": total_agents,
+                "runtime_id": runtime_id,
+                "runtime_name": runtime_name,
             }),
         );
 
-        // Start runtime execution for this agent
+        // Start runtime execution for this agent -- route by agent's runtime_type
         let receiver = {
             let registry = state
                 .agent_runtime_registry
                 .lock()
                 .map_err(|e| e.to_string())?;
-            let runtime = registry.get_runtime_instance("claude-code")?;
+
+            let runtime = registry.get_runtime_instance(&runtime_id)?;
+
+            // Health check: verify the runtime is available before executing
+            if !runtime.is_ready() {
+                let info = registry.get_runtime(&runtime_id);
+                let install_hint = info
+                    .map(|i| i.install_hint.clone())
+                    .unwrap_or_default();
+                let error_msg = format!(
+                    "{} runtime is not available for agent {}. Please install: {}",
+                    runtime.name(),
+                    agent_id,
+                    install_hint,
+                );
+                // Emit runtime unavailable event for frontend UX
+                let _ = app.emit("runtime://unavailable", serde_json::json!({
+                    "channel_id": channel_id,
+                    "agent_id": agent_id,
+                    "runtime_id": runtime_id,
+                    "runtime_name": runtime.name(),
+                    "install_hint": install_hint,
+                    "error": error_msg,
+                }));
+                return Err(error_msg);
+            }
 
             let params = crate::runtime::ExecuteParams {
                 message: message.clone(),
