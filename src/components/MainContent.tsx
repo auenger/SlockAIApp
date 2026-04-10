@@ -19,14 +19,14 @@ import {
   Send,
   Image as ImageIcon,
   Terminal,
-  Search,
   Code,
   Globe,
-  Database,
   Hash,
   AtSign,
   FileText,
   Loader2,
+  Settings,
+  AlertCircle,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { TabType, Task, Message, AgentWithRuntime, Channel, ChannelMessage } from '../types';
@@ -34,6 +34,9 @@ import { getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentSta
 import { useAgentProfile } from '../lib/useAgentProfile';
 import { useThreadChat } from '../lib/useThreadChat';
 import { useWorkspace } from '../lib/useWorkspace';
+import { useSkills } from '../lib/useSkills';
+import { SkillFormModal } from './SkillsPanel';
+import type { SkillInfo } from '../types';
 import { MentionAutocomplete, renderMentionText } from './MentionAutocomplete';
 import type { AgentStreamState } from '../lib/useChannel';
 
@@ -180,6 +183,22 @@ export const MainContent: React.FC<MainContentProps> = ({
   ]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Skills management state
+  const {
+    skills,
+    loading: skillsLoading,
+    error: skillsError,
+    loadSkills,
+    add: addSkillAction,
+    update: updateSkillAction,
+    remove: removeSkillAction,
+    clearError: clearSkillsError,
+  } = useSkills();
+  const [skillModalOpen, setSkillModalOpen] = useState(false);
+  const [editingSkill, setEditingSkill] = useState<SkillInfo | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [skillSubmitting, setSkillSubmitting] = useState(false);
+
   // Whether we're in channel mode (vs agent/thread mode)
   const isChannelMode = !!activeChannel;
 
@@ -255,6 +274,13 @@ export const MainContent: React.FC<MainContentProps> = ({
       loadDir(selectedAgent.agent.agent_id);
     }
   }, [selectedAgent?.agent.agent_id, activeTab, loadDir]);
+
+  // Load skills when selectedAgent changes or tab becomes SKILLS
+  useEffect(() => {
+    if (selectedAgent?.agent.agent_id && activeTab === 'SKILLS') {
+      loadSkills(selectedAgent.agent.agent_id);
+    }
+  }, [selectedAgent?.agent.agent_id, activeTab, loadSkills]);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || !selectedAgent) return;
@@ -881,34 +907,171 @@ export const MainContent: React.FC<MainContentProps> = ({
 
         {activeTab === 'SKILLS' && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { name: 'Terminal Access', icon: Terminal, desc: 'Execute commands in the workspace environment.', status: 'Active', color: 'bg-brutal-green' },
-                { name: 'Web Search', icon: Globe, desc: 'Browse the web for real-time information.', status: 'Active', color: 'bg-brutal-cyan' },
-                { name: 'Code Analysis', icon: Code, desc: 'Deep understanding of codebase and dependencies.', status: 'Active', color: 'bg-brutal-pink' },
-                { name: 'Database Query', icon: Database, desc: 'Interact with connected databases.', status: 'Inactive', color: 'bg-gray-300' },
-                { name: 'Knowledge Base', icon: Search, desc: 'Search through internal documentation.', status: 'Active', color: 'bg-brutal-yellow' },
-              ].map((skill, i) => (
-                <div key={i} className="brutal-card group hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className={cn("p-2 brutal-border", skill.color)}>
-                      <skill.icon size={24} />
-                    </div>
-                    <span className={cn(
-                      "text-[8px] font-black px-1.5 py-0.5 brutal-border uppercase",
-                      skill.status === 'Active' ? "bg-brutal-green" : "bg-gray-200"
-                    )}>
-                      {skill.status}
-                    </span>
+            {/* Error display */}
+            {skillsError && (
+              <div className="flex items-center gap-2 p-3 brutal-border bg-red-50 text-red-600 text-xs font-bold">
+                <AlertCircle size={14} />
+                {skillsError}
+                <button onClick={clearSkillsError} className="ml-auto underline">Dismiss</button>
+              </div>
+            )}
+
+            {/* No agent selected */}
+            {!selectedAgent ? (
+              <div className="flex flex-col items-center justify-center py-16 brutal-border bg-white">
+                <Zap size={48} className="text-gray-300 mb-4" />
+                <p className="text-gray-500 text-sm">Select an agent to manage skills</p>
+              </div>
+            ) : (
+              <>
+                {/* Header with add button */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-black text-sm uppercase tracking-widest text-gray-500">
+                      Skills ({skills.length})
+                    </h3>
                   </div>
-                  <h4 className="font-black text-sm mb-1">{skill.name}</h4>
-                  <p className="text-xs text-gray-600 leading-tight">{skill.desc}</p>
-                  <div className="mt-4 flex justify-end">
-                    <button className="text-[10px] font-black uppercase underline hover:text-brutal-pink">Configure</button>
-                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingSkill(null);
+                      setSkillModalOpen(true);
+                    }}
+                    className="brutal-btn bg-brutal-pink text-white text-xs flex items-center gap-1"
+                  >
+                    <Plus size={14} /> Add Skill
+                  </button>
                 </div>
-              ))}
-            </div>
+
+                {/* Loading */}
+                {skillsLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 size={32} className="animate-spin text-gray-400" />
+                  </div>
+                ) : skills.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 brutal-border bg-white">
+                    <Zap size={48} strokeWidth={1} className="text-gray-300 mb-4" />
+                    <p className="text-gray-500 text-sm italic">No skills configured</p>
+                    <p className="text-gray-400 text-[10px] mt-1">Click "Add Skill" to get started</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {skills.map((skill) => {
+                      // Icon mapping by skill type
+                      const typeIcon = skill.skill_type === 'MCP Server' ? Globe
+                        : skill.skill_type === 'Tool' ? Terminal
+                        : Code;
+                      const typeColor = skill.skill_type === 'MCP Server' ? 'bg-brutal-cyan'
+                        : skill.skill_type === 'Tool' ? 'bg-brutal-green'
+                        : 'bg-brutal-pink';
+                      const statusColor = skill.status === 'Active' ? 'bg-brutal-green'
+                        : skill.status === 'Connecting' ? 'bg-brutal-yellow'
+                        : skill.status === 'Error' ? 'bg-red-200'
+                        : 'bg-gray-200';
+
+                      return (
+                        <div key={skill.id} className="brutal-card group hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className={cn("p-2 brutal-border", typeColor)}>
+                              {React.createElement(typeIcon, { size: 24 })}
+                            </div>
+                            <span className={cn(
+                              "text-[8px] font-black px-1.5 py-0.5 brutal-border uppercase",
+                              statusColor
+                            )}>
+                              {skill.status}
+                            </span>
+                          </div>
+                          <h4 className="font-black text-sm mb-1">{skill.name}</h4>
+                          <span className="text-[10px] text-gray-400 font-mono">{skill.skill_type}</span>
+                          <div className="mt-3 flex items-center justify-between">
+                            <span className="text-[8px] text-gray-400">
+                              {new Date(skill.updated_at).toLocaleDateString()}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  setEditingSkill(skill);
+                                  setSkillModalOpen(true);
+                                }}
+                                className="p-1 brutal-border hover:bg-gray-100 text-gray-500"
+                                title="Configure"
+                              >
+                                <Settings size={12} />
+                              </button>
+                              {deleteConfirmId === skill.id ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={async () => {
+                                      setSkillSubmitting(true);
+                                      try {
+                                        await removeSkillAction(selectedAgent.agent.agent_id, skill.id);
+                                        setDeleteConfirmId(null);
+                                      } finally {
+                                        setSkillSubmitting(false);
+                                      }
+                                    }}
+                                    disabled={skillSubmitting}
+                                    className="px-1.5 py-0.5 brutal-border bg-brutal-pink text-white text-[8px] font-black"
+                                  >
+                                    Confirm
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleteConfirmId(null)}
+                                    className="px-1.5 py-0.5 brutal-border bg-gray-200 text-[8px] font-black"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setDeleteConfirmId(skill.id)}
+                                  className="p-1 brutal-border hover:bg-red-50 text-gray-500"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Skill form modal */}
+            <SkillFormModal
+              open={skillModalOpen}
+              onClose={() => {
+                setSkillModalOpen(false);
+                setEditingSkill(null);
+              }}
+              skill={editingSkill}
+              submitting={skillSubmitting}
+              onSubmit={async (data) => {
+                if (!selectedAgent) return;
+                setSkillSubmitting(true);
+                try {
+                  if (editingSkill) {
+                    await updateSkillAction(selectedAgent.agent.agent_id, editingSkill.id, {
+                      name: data.name,
+                      skill_type: data.skill_type,
+                      config: data.config,
+                    });
+                  } else {
+                    await addSkillAction(selectedAgent.agent.agent_id, data.name, data.skill_type, data.config);
+                  }
+                  setSkillModalOpen(false);
+                  setEditingSkill(null);
+                } catch {
+                  // Error is handled by the hook
+                } finally {
+                  setSkillSubmitting(false);
+                }
+              }}
+            />
           </div>
         )}
 

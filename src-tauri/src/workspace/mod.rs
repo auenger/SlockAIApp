@@ -32,6 +32,7 @@ pub mod channel;
 pub mod identity;
 pub mod manager;
 pub mod mention;
+pub mod skill;
 pub mod templates;
 pub mod thread;
 
@@ -40,5 +41,6 @@ pub use channel::{Channel, ChannelInfo, ChannelMember, ChannelMessage, ChannelSt
 pub use identity::AgentIdentity;
 pub use manager::AgentManager;
 pub use mention::{Mention, MentionResult, parse_mentions, resolve_agents};
+pub use skill::{Skill, SkillStore, SkillType, SkillStatus};
 pub use templates::WorkspaceTemplates;
 pub use thread::{Thread, ThreadInfo, ThreadMessage, ThreadStore};

@@ -48,11 +48,34 @@
 - 无
 
 ## Technical Solution
-待实现时细化。初步方向：
-1. 定义 Skill 数据模型（id, name, type, config, status, agent_id）
-2. Rust 后端实现 Skill CRUD commands
-3. 前端新增 Skills 管理组件，集成到 Agent Profile 页面或独立 tab
-4. Skill 状态通过运行时轮询或事件机制反馈
+
+### 1. Skill 数据模型
+- Rust: `Skill` struct in `src-tauri/src/workspace/skill.rs`
+  - Fields: id, agent_id, name, skill_type (McpServer/Tool/CustomCommand), config (serde_json::Value), status (Active/Inactive/Error/Connecting), created_at, updated_at
+- TypeScript: `SkillInfo`, `SkillType`, `SkillStatus` in `src/types.ts`
+- 前后端类型一一对应
+
+### 2. 存储方案
+- 每个Agent的skills存储在 `agents/{agent_id}/skills/skills.json`
+- SkillStore 提供完整的 CRUD 操作
+- JSON格式，易于调试和手动编辑
+
+### 3. Rust 后端 Commands (5个)
+- `list_skills(agent_id)` — 列出指定Agent的所有Skills
+- `add_skill(agent_id, request)` — 添加新Skill
+- `update_skill(agent_id, skill_id, request)` — 更新Skill配置
+- `delete_skill(agent_id, skill_id)` — 删除Skill
+- `get_skill_status(agent_id, skill_id)` — 获取单个Skill状态
+- 注册在 `lib.rs` invoke_handler 中
+
+### 4. 前端实现
+- IPC层: `src/lib/ipc.ts` 新增5个skill命令
+- Hook: `src/lib/useSkills.ts` 封装状态管理和CRUD操作，含mock数据fallback
+- UI组件:
+  - MainContent.tsx SKILLS tab 使用真实数据替换硬编码
+  - SkillsPanel.tsx SkillFormModal 组件（添加/编辑表单）
+  - 支持添加、编辑、删除（内联确认）操作
+  - Skill状态指示器显示不同颜色标签
 
 ## Acceptance Criteria (Gherkin)
 

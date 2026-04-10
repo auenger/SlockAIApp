@@ -23,6 +23,7 @@ import type {
   DirectoryEntry,
   FileContent,
   ApiKeyInfo,
+  SkillInfo,
 } from "../types";
 
 /**
@@ -289,4 +290,56 @@ export async function deleteApiKey(runtimeId: string): Promise<void> {
 /** Verify an API key and return its masked info. */
 export async function verifyApiKey(runtimeId: string): Promise<ApiKeyInfo> {
   return invoke<ApiKeyInfo>("verify_api_key", { runtimeId });
+}
+
+// ---------------------------------------------------------------------------
+// Skill management commands
+// ---------------------------------------------------------------------------
+
+/** List all Skills for a given Agent. */
+export async function listSkills(agentId: string): Promise<SkillInfo[]> {
+  return invoke<SkillInfo[]>("list_skills", { agentId });
+}
+
+/** Add a new Skill to an Agent. */
+export async function addSkill(
+  agentId: string,
+  name: string,
+  skillType: string,
+  config: Record<string, unknown>
+): Promise<SkillInfo> {
+  return invoke<SkillInfo>("add_skill", {
+    agentId,
+    request: { name, skill_type: skillType, config },
+  });
+}
+
+/** Update an existing Skill. */
+export async function updateSkill(
+  agentId: string,
+  skillId: string,
+  request: {
+    name?: string;
+    skill_type?: string;
+    config?: Record<string, unknown>;
+    status?: string;
+  }
+): Promise<SkillInfo> {
+  return invoke<SkillInfo>("update_skill", { agentId, skillId, request });
+}
+
+/** Delete a Skill. */
+export async function deleteSkill(
+  agentId: string,
+  skillId: string
+): Promise<void> {
+  return invoke<void>("delete_skill", { agentId, skillId });
+}
+
+/** Get the status of a single Skill. */
+export async function getSkillStatus(
+  agentId: string,
+  skillId: string
+): Promise<SkillInfo> {
+  return invoke<SkillInfo>("get_skill_status", { agentId, skillId });
 }

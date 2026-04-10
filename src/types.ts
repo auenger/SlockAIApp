@@ -286,3 +286,33 @@ export interface ApiKeyInfo {
   /** Whether a key is currently stored */
   has_key: boolean;
 }
+
+// ===========================================================================
+// Skill Management types
+// ===========================================================================
+
+/** Skill type classification */
+export type SkillType = 'MCP Server' | 'Tool' | 'Custom Command';
+
+/** Skill running status */
+export type SkillStatus = 'Active' | 'Inactive' | 'Error' | 'Connecting';
+
+/** A single Skill configuration */
+export interface SkillInfo {
+  /** Unique skill identifier */
+  id: string;
+  /** Agent this skill belongs to */
+  agent_id: string;
+  /** Human-readable skill name */
+  name: string;
+  /** Skill type */
+  skill_type: SkillType;
+  /** Skill configuration (flexible JSON) */
+  config: Record<string, unknown>;
+  /** Running status */
+  status: SkillStatus;
+  /** Creation timestamp (ISO 8601) */
+  created_at: string;
+  /** Last updated timestamp (ISO 8601) */
+  updated_at: string;
+}
