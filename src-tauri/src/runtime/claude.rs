@@ -246,7 +246,7 @@ impl AgentRuntime for ClaudeCodeRuntime {
                                 }
 
                                 // Extract text content based on message type
-                                fn extract_content_blocks(val: &serde_json::Value) -> String {
+                                fn extract_text_content(val: &serde_json::Value) -> String {
                                     if let Some(s) = val.as_str() {
                                         s.to_string()
                                     } else if let Some(arr) = val.as_array() {
@@ -269,25 +269,49 @@ impl AgentRuntime for ClaudeCodeRuntime {
                                     }
                                 }
 
-                                let text = if msg_type == "assistant" {
+                                // Extract structured content blocks (including tool_use, tool_result)
+                                fn extract_structured_blocks(val: &serde_json::Value) -> Option<serde_json::Value> {
+                                    if val.is_array() {
+                                        let blocks: Vec<serde_json::Value> = val.as_array().unwrap().iter()
+                                            .filter(|item| {
+                                                let btype = item.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                                                btype == "tool_use" || btype == "tool_result"
+                                            })
+                                            .cloned()
+                                            .collect();
+                                        if blocks.is_empty() {
+                                            None
+                                        } else {
+                                            Some(serde_json::Value::Array(blocks))
+                                        }
+                                    } else {
+                                        None
+                                    }
+                                }
+
+                                let content_val = if msg_type == "assistant" {
                                     // --verbose: content is nested under "message" key
                                     if let Some(msg_obj) = json_obj.get("message") {
-                                        msg_obj
-                                            .get("content")
-                                            .map(extract_content_blocks)
-                                            .unwrap_or_default()
+                                        msg_obj.get("content")
                                     } else {
-                                        // non-verbose: content at top level
-                                        json_obj
-                                            .get("content")
-                                            .map(extract_content_blocks)
-                                            .unwrap_or_default()
+                                        json_obj.get("content")
                                     }
-                                } else if is_result || msg_type == "system" {
-                                    String::new()
                                 } else {
-                                    trimmed.to_string()
+                                    None
                                 };
+
+                                let text = content_val
+                                    .map(extract_text_content)
+                                    .unwrap_or_else(|| {
+                                        if is_result || msg_type == "system" {
+                                            String::new()
+                                        } else {
+                                            trimmed.to_string()
+                                        }
+                                    });
+
+                                // Extract structured content blocks (tool_use, tool_result)
+                                let content_blocks = content_val.and_then(extract_structured_blocks);
 
                                 // Check for error in result messages
                                 let error = if is_result {
@@ -313,6 +337,7 @@ impl AgentRuntime for ClaudeCodeRuntime {
                                     error,
                                     msg_type: Some(msg_type),
                                     session_id: response_session_id,
+                                    content_blocks,
                                 };
 
                                 if tx_stdout.send(event).is_err() {
@@ -325,6 +350,7 @@ impl AgentRuntime for ClaudeCodeRuntime {
                                     text: trimmed.to_string(),
                                     is_done: false,
                                     error: None,
+                                    content_blocks: None,
                                     msg_type: Some("raw".to_string()),
                                     session_id: None,
                                 };
@@ -347,6 +373,7 @@ impl AgentRuntime for ClaudeCodeRuntime {
                     text: String::new(),
                     is_done: true,
                     error: None,
+                    content_blocks: None,
                     msg_type: Some("process_exit".to_string()),
                     session_id: None,
                 });
@@ -376,6 +403,7 @@ impl AgentRuntime for ClaudeCodeRuntime {
                                 text: String::new(),
                                 is_done: false,
                                 error: Some(format!("CLI stderr: {}", trimmed)),
+                                content_blocks: None,
                                 msg_type: Some("stderr".to_string()),
                                 session_id: None,
                             };
@@ -415,6 +443,7 @@ impl AgentRuntime for ClaudeCodeRuntime {
                         )),
                         msg_type: Some("timeout".to_string()),
                         session_id: None,
+                        content_blocks: None,
                     });
                     break;
                 }

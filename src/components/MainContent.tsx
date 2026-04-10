@@ -43,6 +43,7 @@ import { useActivityLog, getActivityTypeConfig } from '../lib/useActivityLog';
 import { MentionAutocomplete, renderMentionText } from './MentionAutocomplete';
 import { AgentIcon } from './AgentIcon';
 import { EditAgentModal } from './EditAgentModal';
+import { MarkdownRenderer } from './markdown';
 import type { AgentStreamState } from '../lib/useChannel';
 
 // ---------------------------------------------------------------------------
@@ -120,8 +121,8 @@ const AgentStreamBubble: React.FC<AgentStreamBubbleProps> = ({
         {stream.thinking && !stream.text ? (
           <div className="h-4 bg-gray-200 w-2/3 brutal-border-b animate-pulse" />
         ) : (
-          <div className="text-sm leading-relaxed whitespace-pre-wrap">
-            {stream.text}
+          <div className="text-sm leading-relaxed">
+            <MarkdownRenderer content={stream.text || ''} />
             {stream.streaming && (
               <span className="inline-block w-1.5 h-4 bg-brutal-cyan ml-0.5 animate-pulse" />
             )}
@@ -730,12 +731,15 @@ export const MainContent: React.FC<MainContentProps> = ({
                         </span>
                         <span className="text-[8px] text-gray-500 uppercase">{msg.timestamp}</span>
                       </div>
-                      <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                        {/* Highlight @mentions in channel messages */}
-                        {isChannelMode
-                          ? renderMentionText(msg.content, allAgents, undefined, agentColorMap)
-                          : msg.content
-                        }
+                      <div className="text-sm leading-relaxed">
+                        {/* Render with MarkdownRenderer for agent messages, plain text for user */}
+                        {msg.sender.isAgent ? (
+                          <MarkdownRenderer content={msg.content} />
+                        ) : isChannelMode ? (
+                          <span className="whitespace-pre-wrap">{renderMentionText(msg.content, allAgents, undefined, agentColorMap)}</span>
+                        ) : (
+                          <span className="whitespace-pre-wrap">{msg.content}</span>
+                        )}
                       </div>
                       {/* Context info badge for agent messages in channels */}
                       {isChannelMode && msg.sender.isAgent && (
@@ -778,8 +782,8 @@ export const MainContent: React.FC<MainContentProps> = ({
                         <span className="font-black text-xs">Agent</span>
                         <span className="text-[8px] text-gray-500 uppercase italic">Streaming...</span>
                       </div>
-                      <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                        {channelStreamingText}
+                      <div className="text-sm leading-relaxed">
+                        <MarkdownRenderer content={channelStreamingText || ''} />
                         <span className="inline-block w-1.5 h-4 bg-brutal-cyan ml-0.5 animate-pulse" />
                       </div>
                     </div>
@@ -800,8 +804,8 @@ export const MainContent: React.FC<MainContentProps> = ({
                         <span className="font-black text-xs">{agentName}</span>
                         <span className="text-[8px] text-gray-500 uppercase italic">Streaming...</span>
                       </div>
-                      <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                        {streamingText}
+                      <div className="text-sm leading-relaxed">
+                        <MarkdownRenderer content={streamingText || ''} />
                         <span className="inline-block w-1.5 h-4 bg-brutal-cyan ml-0.5 animate-pulse" />
                       </div>
                     </div>

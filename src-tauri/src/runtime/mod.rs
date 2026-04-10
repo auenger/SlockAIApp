@@ -178,6 +178,10 @@ pub struct StreamEvent {
     /// Session ID from the CLI
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
+    /// Structured content blocks (tool_use, tool_result) from verbose JSON output.
+    /// When present, the frontend can render tool calls as structured cards.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_blocks: Option<serde_json::Value>,
 }
 
 // ===========================================================================
