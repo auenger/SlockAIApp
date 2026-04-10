@@ -1,18 +1,21 @@
 meta:
-  last_updated: "2026-04-09T21:30:00+08:00"
-  version: 33
+  last_updated: "2026-04-10T00:00:00+08:00"
+  version: 34
 
 parents: []
-active: []
+active:
+  - id: feat-activity-log
+    name: "Activity 日志后端集成"
+    priority: 35
+    size: S
+    branch: feature/feat-activity-log
+    worktree: ../SlockAI-feat-activity-log
+    started_at: "2026-04-10T00:00:00+08:00"
 pending:
   - id: feat-skills-management
     name: "Skills 管理 UI"
     priority: 40
     size: M
-  - id: feat-activity-log
-    name: "Activity 日志后端集成"
-    priority: 35
-    size: S
   - id: feat-apikey-management-ui
     name: "API Key 管理 UI（低优先级，Runtime CLI 自管理认证）"
     priority: 10
