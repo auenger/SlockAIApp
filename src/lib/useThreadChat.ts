@@ -75,12 +75,14 @@ export function useThreadChat(): ThreadChatState {
 
   const unlistenChunkRef = useRef<(() => void) | null>(null);
   const unlistenResponseRef = useRef<(() => void) | null>(null);
+  const unlistenRuntimeErrorRef = useRef<(() => void) | null>(null);
 
   // Clean up listeners on unmount
   useEffect(() => {
     return () => {
       if (unlistenChunkRef.current) unlistenChunkRef.current();
       if (unlistenResponseRef.current) unlistenResponseRef.current();
+      if (unlistenRuntimeErrorRef.current) unlistenRuntimeErrorRef.current();
     };
   }, []);
 
@@ -197,6 +199,10 @@ export function useThreadChat(): ThreadChatState {
         unlistenResponseRef.current();
         unlistenResponseRef.current = null;
       }
+      if (unlistenRuntimeErrorRef.current) {
+        unlistenRuntimeErrorRef.current();
+        unlistenRuntimeErrorRef.current = null;
+      }
 
       if (!isTauri) {
         // Dev fallback: simulate streaming
@@ -271,7 +277,26 @@ export function useThreadChat(): ThreadChatState {
       });
       unlistenChunkRef.current = unlistenChunk;
 
-      // 3. Listen for the thread-response event to save the agent response
+      // 3. Listen for runtime unavailability events (rich error with install hint)
+      const unlistenRuntimeError = await listen<{
+        agent_id: string;
+        thread_id: string;
+        runtime_id: string;
+        runtime_name: string;
+        install_hint: string;
+        error: string;
+      }>("runtime://unavailable", async (event) => {
+        const { error: runtimeError, runtime_name, install_hint } = event.payload;
+        setError(`${runtime_name}: ${runtimeError}${install_hint ? `\nInstall: ${install_hint}` : ""}`);
+        setIsStreaming(false);
+        setIsThinking(false);
+
+        unlistenRuntimeError();
+        unlistenRuntimeErrorRef.current = null;
+      });
+      unlistenRuntimeErrorRef.current = unlistenRuntimeError;
+
+      // 4. Listen for the thread-response event to save the agent response
       const unlistenResponse = await listen<{
         thread_id: string;
         agent_id: string;
@@ -293,8 +318,10 @@ export function useThreadChat(): ThreadChatState {
         // Clean up listeners
         unlistenChunk();
         unlistenResponse();
+        unlistenRuntimeError();
         unlistenChunkRef.current = null;
         unlistenResponseRef.current = null;
+        unlistenRuntimeErrorRef.current = null;
       });
       unlistenResponseRef.current = unlistenResponse;
     } catch (err) {

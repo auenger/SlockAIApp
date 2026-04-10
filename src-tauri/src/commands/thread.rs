@@ -1,7 +1,9 @@
 //! Tauri IPC commands for Thread (1-on-1 chat) operations.
 //!
 //! Provides CRUD operations for Threads, plus the `send_message` command
-//! that integrates with the Claude Code Runtime for streaming responses.
+//! that integrates with the Agent Runtime system for streaming responses.
+//! Runtime routing is based on each agent's `runtime_type` field --
+//! the system automatically uses the correct backend (Claude Code, Codex, etc.).
 //!
 //! ## Persistence Strategy
 //!
@@ -379,13 +381,42 @@ pub async fn send_message(
         let workspace_path = workspace.base_path().to_string_lossy().to_string();
         let session_id = thread.session_id.clone();
 
-        // Get runtime for execution
+        // Resolve the agent's runtime_type for routing
+        let runtime_id = manager.get_agent(&agent_id)
+            .ok_or_else(|| format!("agent not found: {agent_id}"))?
+            .identity.runtime_type.runtime_id().to_string();
+
+        // Get runtime for execution -- route based on agent's runtime_type
         let receiver = {
             let registry = state
                 .agent_runtime_registry
                 .lock()
                 .map_err(|e| e.to_string())?;
-            let runtime = registry.get_runtime_instance("claude-code")?;
+
+            let runtime = registry.get_runtime_instance(&runtime_id)?;
+
+            // Health check: verify the runtime is available before executing
+            if !runtime.is_ready() {
+                let info = registry.get_runtime(&runtime_id);
+                let install_hint = info
+                    .map(|i| i.install_hint.clone())
+                    .unwrap_or_default();
+                let error_msg = format!(
+                    "{} runtime is not available. Please install: {}",
+                    runtime.name(),
+                    install_hint,
+                );
+                // Emit runtime unavailable event for frontend UX
+                let _ = app.emit("runtime://unavailable", serde_json::json!({
+                    "agent_id": agent_id,
+                    "thread_id": thread_id,
+                    "runtime_id": runtime_id,
+                    "runtime_name": runtime.name(),
+                    "install_hint": install_hint,
+                    "error": error_msg,
+                }));
+                return Err(error_msg);
+            }
 
             let params = ExecuteParams {
                 message,
