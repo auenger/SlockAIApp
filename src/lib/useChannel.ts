@@ -493,7 +493,7 @@ export function useChannel(): ChannelState {
               // Refresh channel list
               loadChannels();
             }
-            return prev;
+            return allDone ? [] : prev;
           });
         }
       );

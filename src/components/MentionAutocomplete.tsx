@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { cn } from '../lib/utils';
 import type { AgentWithRuntime } from '../types';
+import { AgentIcon } from './AgentIcon';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -197,12 +198,12 @@ export const MentionAutocomplete: React.FC<MentionAutocompleteProps> = ({
               )}
               onMouseEnter={() => setSelectedIndex(idx)}
             >
-              <div className={cn(
-                "w-6 h-6 brutal-border flex items-center justify-center shrink-0 text-sm",
-                idx === selectedIndex ? "bg-white/20" : "bg-brutal-cyan"
-              )}>
-                {awr.agent.emoji}
-              </div>
+              <AgentIcon
+                icon={awr.agent.icon}
+                emoji={awr.agent.emoji}
+                size="sm"
+                bgColor={idx === selectedIndex ? "bg-white/20" : "bg-brutal-cyan"}
+              />
               <div className="flex-1 min-w-0">
                 <div className={cn(
                   "font-black truncate flex items-center gap-1.5",
