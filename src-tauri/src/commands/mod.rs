@@ -15,7 +15,7 @@ use crate::context::ContextBuilder;
 use crate::runtime::registry::RuntimeRegistry;
 use crate::runtime::RuntimeType;
 use crate::storage::activity::{ActivityStore, ActivityType, create_entry};
-use crate::workspace::manager::{AgentManager, AgentSummary, ManagerStatus};
+use crate::workspace::manager::{AgentManager, AgentSummary, ManagerStatus, AgentHealthInfo};
 use crate::workspace::identity::IdentitySummary;
 use rusqlite::Connection;
 
@@ -132,6 +132,74 @@ pub fn get_workspace_status(state: tauri::State<'_, AppState>) -> Result<Manager
         .map_err(|e| format!("lock error: {e}"))?;
 
     Ok(manager.get_status())
+}
+
+/// Health check result for the workspace.
+#[derive(Debug, Serialize)]
+pub struct HealthCheckResult {
+    /// Per-agent health info.
+    pub agents: Vec<AgentHealthInfo>,
+    /// Number of agents that were repaired.
+    pub repaired: usize,
+    /// Number of agents that are still unhealthy after repair attempt.
+    pub still_unhealthy: usize,
+}
+
+/// Perform a workspace health check and optionally repair missing files/directories.
+///
+/// Scans all agent workspaces, reports missing items, and attempts to
+/// recreate any missing directories. Does NOT recreate missing identity
+/// or soul files (those require agent-specific content).
+#[tauri::command]
+pub fn health_check_workspace(
+    state: tauri::State<'_, AppState>,
+) -> Result<HealthCheckResult, String> {
+    let manager = state
+        .agent_manager
+        .lock()
+        .map_err(|e| format!("lock error: {e}"))?;
+
+    let status = manager.get_status();
+    let mut repaired = 0usize;
+
+    for health in &status.agents_health {
+        if health.is_healthy {
+            continue;
+        }
+
+        // Attempt repair: recreate workspace directories
+        let workspace = manager
+            .get_workspace(&health.agent_id)
+            .ok_or_else(|| format!("agent not found: {}", health.agent_id))?;
+
+        if let Err(e) = workspace.initialize() {
+            log::warn!(
+                "[HealthCheck] Failed to repair workspace for '{}': {}",
+                health.agent_id,
+                e
+            );
+        } else {
+            log::info!(
+                "[HealthCheck] Repaired workspace directories for '{}'",
+                health.agent_id
+            );
+            repaired += 1;
+        }
+    }
+
+    // Re-check status after repair
+    let updated_status = manager.get_status();
+    let unhealthy_after = updated_status
+        .agents_health
+        .iter()
+        .filter(|h| !h.is_healthy)
+        .count();
+
+    Ok(HealthCheckResult {
+        agents: updated_status.agents_health,
+        repaired,
+        still_unhealthy: unhealthy_after,
+    })
 }
 
 // ---------------------------------------------------------------------------

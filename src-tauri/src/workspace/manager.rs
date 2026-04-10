@@ -180,10 +180,17 @@ impl AgentManager {
     ///
     /// Scans the `agents/` directory and loads each Agent's identity.
     /// The first agent found becomes the active agent (or "default" if present).
+    ///
+    /// For each agent directory found, also performs a lightweight health check
+    /// to ensure the workspace subdirectories exist (self-healing).
     pub fn load(&mut self) -> Result<(), ManagerError> {
         self.agents.clear();
 
         if !self.agents_dir.is_dir() {
+            log::warn!(
+                "[AgentManager] agents directory does not exist: {}",
+                self.agents_dir.display()
+            );
             return Ok(());
         }
 
@@ -205,6 +212,22 @@ impl AgentManager {
 
             let agent_id = entry.file_name().to_string_lossy().to_string();
             let identity = self.load_identity(&agent_id)?;
+
+            // Self-heal: ensure workspace subdirectories exist for loaded agent
+            let workspace = AgentWorkspace::new(&path);
+            if !workspace.conversations_dir().exists() || !workspace.context_dir().exists() {
+                log::info!(
+                    "[AgentManager] Self-healing workspace directories for agent '{}'",
+                    agent_id
+                );
+                if let Err(e) = workspace.initialize() {
+                    log::warn!(
+                        "[AgentManager] Failed to heal workspace for '{}': {}",
+                        agent_id,
+                        e
+                    );
+                }
+            }
 
             let agent = Agent {
                 agent_id: agent_id.clone(),
@@ -394,12 +417,59 @@ impl AgentManager {
 
     /// Get manager status summary.
     pub fn get_status(&self) -> ManagerStatus {
+        let agents_health: Vec<AgentHealthInfo> = self
+            .agents
+            .keys()
+            .map(|agent_id| {
+                let workspace = AgentWorkspace::new(self.agents_dir.join(agent_id));
+                let health = Self::check_agent_health(&workspace);
+                AgentHealthInfo {
+                    agent_id: agent_id.clone(),
+                    workspace_exists: workspace.exists(),
+                    identity_file_exists: workspace.identity_file().exists(),
+                    soul_file_exists: workspace.soul_file().exists(),
+                    conversations_dir_exists: workspace.conversations_dir().exists(),
+                    context_dir_exists: workspace.context_dir().exists(),
+                    is_healthy: health.is_empty(),
+                    missing_items: health,
+                }
+            })
+            .collect();
+
         ManagerStatus {
             total_agents: self.agents.len(),
             enabled_agents: self.agents.values().filter(|a| a.enabled).count(),
             active_agent_id: self.active_agent_id.clone(),
             workspace_root: self.workspace_root.to_string_lossy().to_string(),
+            agents_health,
         }
+    }
+
+    /// Check the health of a single agent workspace.
+    ///
+    /// Returns a list of missing items (empty = healthy).
+    fn check_agent_health(workspace: &AgentWorkspace) -> Vec<String> {
+        let mut missing = Vec::new();
+
+        if !workspace.exists() {
+            missing.push("workspace directory".to_string());
+            return missing; // If base dir is gone, nothing else matters
+        }
+
+        if !workspace.identity_file().exists() {
+            missing.push("IDENTITY.md".to_string());
+        }
+        if !workspace.soul_file().exists() {
+            missing.push("SOUL.md".to_string());
+        }
+        if !workspace.conversations_dir().exists() {
+            missing.push("conversations/".to_string());
+        }
+        if !workspace.context_dir().exists() {
+            missing.push("context/".to_string());
+        }
+
+        missing
     }
 
     /// Load identity for an agent from disk.
@@ -505,6 +575,30 @@ pub struct ManagerStatus {
     pub enabled_agents: usize,
     pub active_agent_id: Option<String>,
     pub workspace_root: String,
+    /// Per-agent health information.
+    #[serde(default)]
+    pub agents_health: Vec<AgentHealthInfo>,
+}
+
+/// Health information for a single agent workspace.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentHealthInfo {
+    /// Agent ID.
+    pub agent_id: String,
+    /// Whether the workspace base directory exists.
+    pub workspace_exists: bool,
+    /// Whether IDENTITY.md exists.
+    pub identity_file_exists: bool,
+    /// Whether SOUL.md exists.
+    pub soul_file_exists: bool,
+    /// Whether conversations/ directory exists.
+    pub conversations_dir_exists: bool,
+    /// Whether context/ directory exists.
+    pub context_dir_exists: bool,
+    /// Whether the workspace is fully healthy (no missing items).
+    pub is_healthy: bool,
+    /// List of missing items (empty if healthy).
+    pub missing_items: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------

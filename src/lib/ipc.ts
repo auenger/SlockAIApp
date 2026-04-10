@@ -79,6 +79,18 @@ export async function getWorkspaceStatus(): Promise<ManagerStatus> {
   return invoke<ManagerStatus>("get_workspace_status");
 }
 
+/** Health check result for the workspace. */
+export interface HealthCheckResult {
+  agents: import("../types").AgentHealthInfo[];
+  repaired: number;
+  still_unhealthy: number;
+}
+
+/** Perform a workspace health check and repair. */
+export async function healthCheckWorkspace(): Promise<HealthCheckResult> {
+  return invoke<HealthCheckResult>("health_check_workspace");
+}
+
 // ---------------------------------------------------------------------------
 // Agent CRUD commands
 // ---------------------------------------------------------------------------
