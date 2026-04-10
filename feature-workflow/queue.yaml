@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-10T23:30:00+08:00"
-  version: 59
+  last_updated: "2026-04-10T23:55:00+08:00"
+  version: 61
 
 parents:
   - id: feat-agent-runtime-select
@@ -10,24 +10,44 @@ parents:
       - feat-agent-runtime-model
       - feat-agent-runtime-ui
       - feat-agent-runtime-exec
+  - id: feat-channel-agent-prompt-arch
+    name: "Channel Agent 对话 Prompt 架构（7层 + Zone Protocol + A2A 触发）"
+    split: true
+    children:
+      - feat-channel-zone-protocol
+      - feat-agent-a2a-trigger
 active: []
 pending:
+  - id: fix-channel-ui-bugs
+    name: "Channel @Agent UI 修复（thinking 状态 + icon 渲染）"
+    priority: 85
+    created_at: "2026-04-10T23:45:00+08:00"
   - id: fix-delete-and-render
     name: "修复删除功能与渲染状态逻辑"
     priority: 80
     created_at: "2026-04-10T22:00:00+08:00"
-  - id: feat-sidebar-style
-    name: "Sidebar 标题更名与面板可调宽度"
-    priority: 70
-    created_at: "2026-04-10T23:00:00+08:00"
   - id: feat-agent-workspace-persist
     name: "Agent Workspace 对话持久化"
     priority: 75
     created_at: "2026-04-10T23:30:00+08:00"
+  - id: feat-sidebar-style
+    name: "Sidebar 标题更名与面板可调宽度"
+    priority: 70
+    created_at: "2026-04-10T23:00:00+08:00"
   - id: feat-md-rendering
     name: "Markdown 渲染优化 & Tool Call 结构化展示"
     priority: 60
     created_at: "2026-04-10T22:30:00+08:00"
+  - id: feat-channel-zone-protocol
+    name: "Channel Zone Protocol（Prompt 7层架构 + Zone Agent Protocol）"
+    priority: 60
+    created_at: "2026-04-10T23:55:00+08:00"
+  - id: feat-agent-a2a-trigger
+    name: "Agent-to-Agent @{agent} 触发机制"
+    priority: 60
+    dependencies:
+      - feat-channel-zone-protocol
+    created_at: "2026-04-10T23:55:00+08:00"
 blocked: []
 completed:
   - id: feat-project-init
