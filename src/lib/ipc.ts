@@ -9,6 +9,7 @@ import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import type {
   AgentSummary,
   CreateAgentRequest,
+  UpdateAgentRequest,
   ManagerStatus,
   InitWorkspaceResult,
   IdentitySummary,
@@ -105,6 +106,14 @@ export async function getActiveAgent(): Promise<AgentSummary | null> {
 /** Delete an Agent by ID. */
 export async function deleteAgent(agentId: string): Promise<void> {
   return invoke<void>("delete_agent", { agentId });
+}
+
+/** Update an existing Agent's mutable properties. */
+export async function updateAgent(
+  agentId: string,
+  request: UpdateAgentRequest
+): Promise<AgentSummary> {
+  return invoke<AgentSummary>("update_agent", { agentId, request });
 }
 
 // ---------------------------------------------------------------------------

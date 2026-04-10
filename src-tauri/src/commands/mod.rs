@@ -274,6 +274,67 @@ pub fn delete_agent(
 }
 
 // ---------------------------------------------------------------------------
+// Update Agent command
+// ---------------------------------------------------------------------------
+
+/// Request to update an existing Agent's mutable properties.
+#[derive(Debug, Deserialize)]
+pub struct UpdateAgentRequest {
+    /// New display name (optional).
+    pub name: Option<String>,
+    /// New creature type (optional).
+    pub creature: Option<String>,
+    /// New vibe/personality (optional).
+    pub vibe: Option<String>,
+    /// New emoji (optional).
+    pub emoji: Option<String>,
+    /// New SVG icon name (optional, empty string clears it).
+    pub icon: Option<String>,
+}
+
+/// Update an existing Agent's properties.
+#[tauri::command]
+pub fn update_agent(
+    state: tauri::State<'_, AppState>,
+    agent_id: String,
+    request: UpdateAgentRequest,
+) -> Result<AgentSummary, String> {
+    let mut manager = state
+        .agent_manager
+        .lock()
+        .map_err(|e| format!("lock error: {e}"))?;
+
+    let agent = manager
+        .update_agent(
+            &agent_id,
+            request.name.as_deref(),
+            request.creature.as_deref(),
+            request.vibe.as_deref(),
+            request.emoji.as_deref(),
+            request.icon.as_deref(),
+        )
+        .map_err(|e| format!("update failed: {e}"))?;
+
+    let summary = agent.to_summary();
+
+    // Log activity (dual-write: JSONL + SQLite)
+    let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
+    try_log_activity(
+        manager.workspace_root(),
+        &db_conn,
+        ActivityType::System,
+        Some(agent_id.clone()),
+        format!("Agent \"{}\" updated", summary.name),
+        serde_json::json!({
+            "name": summary.name,
+            "emoji": summary.emoji,
+        }),
+    );
+
+    Ok(summary)
+}
+
+// ---------------------------------------------------------------------------
 // Identity commands
 // ---------------------------------------------------------------------------
 

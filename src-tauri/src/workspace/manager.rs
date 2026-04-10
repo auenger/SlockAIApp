@@ -39,6 +39,7 @@ impl Agent {
             name: self.identity.name.clone(),
             emoji: self.identity.emoji.clone(),
             avatar: self.identity.avatar.clone(),
+            icon: self.identity.icon.clone(),
             enabled: self.enabled,
             session_count: self.session_count,
             runtime_type: self.identity.runtime_type.clone(),
@@ -53,6 +54,9 @@ pub struct AgentSummary {
     pub name: String,
     pub emoji: String,
     pub avatar: Option<String>,
+    /// SVG icon name from the icon registry (e.g. "Bot", "Rocket").
+    #[serde(default)]
+    pub icon: Option<String>,
     pub enabled: bool,
     pub session_count: u32,
     /// The runtime type this agent is bound to.
@@ -425,6 +429,61 @@ impl AgentManager {
                 agent_id: agent_id.to_string(),
             })
         }
+    }
+
+    /// Update an existing Agent's mutable properties.
+    ///
+    /// Updates the identity fields on disk and in memory.
+    /// Only the fields present in the update request are changed.
+    /// Returns the updated Agent.
+    pub fn update_agent(
+        &mut self,
+        agent_id: &str,
+        name: Option<&str>,
+        creature: Option<&str>,
+        vibe: Option<&str>,
+        emoji: Option<&str>,
+        icon: Option<&str>,
+    ) -> Result<&Agent, ManagerError> {
+        let agent = self
+            .agents
+            .get_mut(agent_id)
+            .ok_or_else(|| ManagerError::NotFound {
+                agent_id: agent_id.to_string(),
+            })?;
+
+        // Update identity fields
+        if let Some(n) = name {
+            agent.identity.name = n.to_string();
+        }
+        if let Some(c) = creature {
+            agent.identity.creature = c.to_string();
+        }
+        if let Some(v) = vibe {
+            agent.identity.vibe = v.to_string();
+        }
+        if let Some(e) = emoji {
+            agent.identity.emoji = e.to_string();
+        }
+        if let Some(i) = icon {
+            agent.identity.icon = if i.is_empty() {
+                None
+            } else {
+                Some(i.to_string())
+            };
+        }
+
+        // Write updated identity to disk
+        let workspace = AgentWorkspace::new(self.agents_dir.join(agent_id));
+        agent
+            .identity
+            .write_to_file(&workspace.identity_file())
+            .map_err(|e| ManagerError::IdentityError {
+                agent_id: agent_id.to_string(),
+                source: e,
+            })?;
+
+        Ok(self.agents.get(agent_id).unwrap())
     }
 }
 

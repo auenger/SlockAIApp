@@ -35,6 +35,17 @@ export default function App() {
   // Agent status for channel member selection
   const { agents: allAgents } = useAgentStatus();
 
+  // Keep selectedAgent in sync with the latest allAgents data
+  // This ensures edits to agent properties (name, icon, etc.) are reflected everywhere
+  useEffect(() => {
+    if (selectedAgent) {
+      const updated = allAgents.find(a => a.agent.agent_id === selectedAgent.agent.agent_id);
+      if (updated && updated !== selectedAgent) {
+        setSelectedAgent(updated);
+      }
+    }
+  }, [allAgents]);
+
   // Load channels on mount
   useEffect(() => {
     loadChannels();

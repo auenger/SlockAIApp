@@ -10,11 +10,13 @@ import {
   Circle,
   Clock,
   X,
+  Pencil,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAgentStatus, getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
 import { useUserProfile } from '../lib/useUserProfile';
 import { CreateAgentModal } from './CreateAgentModal';
+import { EditAgentModal } from './EditAgentModal';
 import { ApiKeyManager } from './ApiKeyManager';
 import { AgentIcon } from './AgentIcon';
 import type { AgentWithRuntime, ThreadInfo, ChannelInfo } from '../types';
@@ -59,6 +61,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { profile } = useUserProfile();
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showCreateAgent, setShowCreateAgent] = useState(false);
+  const [showEditAgent, setShowEditAgent] = useState(false);
+  const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
   const [showApiKeyManager, setShowApiKeyManager] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
@@ -294,36 +298,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const statusLabel = getRuntimeStatusLabel(runtime_status);
 
               return (
-                <button
+                <div
                   key={agent.agent_id}
-                  onClick={() => onAgentSelect(agentWithRuntime)}
-                  title={
-                    runtime_status === 'not-installed' && runtime_install_hint
-                      ? `${statusLabel}\nInstall: ${runtime_install_hint}`
-                      : statusLabel
-                  }
-                  className={cn(
-                    "w-full text-left px-2 py-1.5 flex items-center gap-2 brutal-border transition-all",
-                    isSelected
-                      ? "bg-brutal-pink text-white brutal-shadow-sm translate-x-[-2px] translate-y-[-2px]"
-                      : "hover:bg-white/50 border-transparent"
-                  )}
+                  className="group relative"
                 >
-                  <AgentIcon
-                    icon={agent.icon}
-                    emoji={agent.emoji}
-                    size="sm"
-                    bgColor="bg-brutal-cyan"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-black text-sm truncate">{agent.name}</div>
-                  </div>
-                  <Circle
-                    size={8}
-                    fill={statusColor}
-                    className="shrink-0"
-                  />
-                </button>
+                  <button
+                    onClick={() => onAgentSelect(agentWithRuntime)}
+                    title={
+                      runtime_status === 'not-installed' && runtime_install_hint
+                        ? `${statusLabel}\nInstall: ${runtime_install_hint}`
+                        : statusLabel
+                    }
+                    className={cn(
+                      "w-full text-left px-2 py-1.5 flex items-center gap-2 brutal-border transition-all",
+                      isSelected
+                        ? "bg-brutal-pink text-white brutal-shadow-sm translate-x-[-2px] translate-y-[-2px]"
+                        : "hover:bg-white/50 border-transparent"
+                    )}
+                  >
+                    <AgentIcon
+                      icon={agent.icon}
+                      emoji={agent.emoji}
+                      size="sm"
+                      bgColor="bg-brutal-cyan"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-black text-sm truncate">{agent.name}</div>
+                    </div>
+                    <Circle
+                      size={8}
+                      fill={statusColor}
+                      className="shrink-0"
+                    />
+                  </button>
+                  {/* Edit button - visible on hover */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingAgentId(agent.agent_id);
+                      setShowEditAgent(true);
+                    }}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 brutal-border bg-white hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Edit Agent"
+                  >
+                    <Pencil size={10} />
+                  </button>
+                </div>
               );
             })}
             {agents.length === 0 && !loading && (
@@ -371,6 +391,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         isOpen={showCreateAgent}
         onClose={() => setShowCreateAgent(false)}
         onSuccess={scan}
+      />
+
+      {/* Edit Agent Modal */}
+      <EditAgentModal
+        isOpen={showEditAgent}
+        onClose={() => {
+          setShowEditAgent(false);
+          setEditingAgentId(null);
+        }}
+        onSuccess={scan}
+        agentId={editingAgentId}
       />
 
       {/* API Key Manager Modal */}
