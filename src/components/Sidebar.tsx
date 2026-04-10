@@ -14,6 +14,7 @@ import {
 import { cn } from '../lib/utils';
 import { useAgentStatus, getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
 import { CreateAgentModal } from './CreateAgentModal';
+import { ApiKeyManager } from './ApiKeyManager';
 import type { AgentWithRuntime, ThreadInfo, ChannelInfo } from '../types';
 
 interface SidebarProps {
@@ -55,6 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { agents: statusAgents, loading, scan } = useAgentStatus();
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showCreateAgent, setShowCreateAgent] = useState(false);
+  const [showApiKeyManager, setShowApiKeyManager] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
 
@@ -356,7 +358,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="text-[10px] text-gray-500">huimintai5@gmail...</div>
           </div>
         </div>
-        <button className="p-1 brutal-border hover:bg-gray-100">
+        <button className="p-1 brutal-border hover:bg-gray-100" onClick={() => setShowApiKeyManager(true)}>
           <Settings size={16} />
         </button>
       </div>
@@ -366,6 +368,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         isOpen={showCreateAgent}
         onClose={() => setShowCreateAgent(false)}
         onSuccess={scan}
+      />
+
+      {/* API Key Manager Modal */}
+      <ApiKeyManager
+        isOpen={showApiKeyManager}
+        onClose={() => setShowApiKeyManager(false)}
       />
     </div>
   );

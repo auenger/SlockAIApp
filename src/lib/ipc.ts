@@ -22,6 +22,7 @@ import type {
   ChannelInfo,
   DirectoryEntry,
   FileContent,
+  ApiKeyInfo,
 } from "../types";
 
 /**
@@ -259,4 +260,33 @@ export async function saveChannelResponse(
   content: string
 ): Promise<Channel> {
   return invoke<Channel>("save_channel_response", { channelId, agentId, content });
+}
+
+// ---------------------------------------------------------------------------
+// API Key management commands
+// ---------------------------------------------------------------------------
+
+/** List all API keys (masked) for known providers. */
+export async function listApiKeys(): Promise<ApiKeyInfo[]> {
+  return invoke<ApiKeyInfo[]>("list_api_keys");
+}
+
+/** Store a new API key for a provider. */
+export async function storeApiKey(runtimeId: string, apiKey: string): Promise<void> {
+  return invoke<void>("store_api_key", { runtimeId, apiKey });
+}
+
+/** Check if an API key exists for a provider. */
+export async function hasApiKey(runtimeId: string): Promise<boolean> {
+  return invoke<boolean>("has_api_key", { runtimeId });
+}
+
+/** Delete an API key for a provider. */
+export async function deleteApiKey(runtimeId: string): Promise<void> {
+  return invoke<void>("delete_api_key", { runtimeId });
+}
+
+/** Verify an API key and return its masked info. */
+export async function verifyApiKey(runtimeId: string): Promise<ApiKeyInfo> {
+  return invoke<ApiKeyInfo>("verify_api_key", { runtimeId });
 }

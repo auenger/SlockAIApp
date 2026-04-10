@@ -270,3 +270,19 @@ export interface FileContent {
   mime_type: string;
   content: string;
 }
+
+// ===========================================================================
+// API Key Management types
+// ===========================================================================
+
+/** Masked API key info returned from the backend */
+export interface ApiKeyInfo {
+  /** Provider/runtime identifier (e.g. "claude-code") */
+  id: string;
+  /** Human-readable provider name */
+  name: string;
+  /** Masked key for display (e.g. "sk-***...xyz") */
+  masked_key: string;
+  /** Whether a key is currently stored */
+  has_key: boolean;
+}
