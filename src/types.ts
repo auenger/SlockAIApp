@@ -185,6 +185,23 @@ export interface ChannelResponseEvent {
   session_id: string | null;
 }
 
+/** A2A trigger start event (when an Agent triggers another Agent via @{agent}) */
+export interface ChannelA2aStartEvent {
+  channel_id: string;
+  agent_id: string;
+  triggered_by: string;
+  depth: number;
+}
+
+/** A2A depth exceeded event (when trigger chain reaches max depth) */
+export interface ChannelA2aDepthExceededEvent {
+  channel_id: string;
+  agent_id: string;
+  triggered_by: string;
+  depth: number;
+  max_depth: number;
+}
+
 /** Parsed @mention from a message */
 export interface ParsedMention {
   raw: string;

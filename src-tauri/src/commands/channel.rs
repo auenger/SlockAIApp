@@ -13,6 +13,7 @@ use crate::workspace::channel::{
     self, Channel, ChannelInfo, ChannelMember, ChannelMessage, ChannelStore,
 };
 use crate::workspace::mention;
+use crate::context::a2a_trigger::{self, TriggerContext};
 use crate::storage::activity::{ActivityStore, ActivityType, create_entry};
 use crate::storage::db_helpers;
 use tauri::{AppHandle, Emitter};
@@ -443,6 +444,322 @@ pub fn remove_channel_member(
 /// Maximum number of recent messages to include as Channel context.
 const CHANNEL_CONTEXT_HISTORY_LIMIT: usize = 20;
 
+// ---------------------------------------------------------------------------
+// Single-agent execution helper
+// ---------------------------------------------------------------------------
+
+/// Execute a single agent in a channel context, streaming events to the frontend.
+///
+/// Returns the full response text on success, or an error string on failure.
+async fn execute_single_agent(
+    app: &AppHandle,
+    state: &tauri::State<'_, crate::AppState>,
+    channel_id: &str,
+    agent_id: &str,
+    message: &str,
+    agent_idx: usize,
+    total_agents: usize,
+    workspace_root: &std::path::Path,
+    is_a2a: bool,
+    triggered_by: Option<&str>,
+    a2a_depth: u32,
+) -> Result<String, String> {
+    let channel_id = channel_id.to_string();
+    let agent_id = agent_id.to_string();
+    let message = message.to_string();
+    let workspace_root = workspace_root.to_path_buf();
+
+    // Build context for this agent
+    let (system_prompt, workspace_path, recent_count, runtime_id, runtime_name) = {
+        let manager = state
+            .agent_manager
+            .lock()
+            .map_err(|e| format!("lock error: {e}"))?;
+
+        // Load latest channel state for context
+        let channels_dir = manager.channels_dir();
+        let store = ChannelStore::new(&channels_dir);
+        let latest_channel = store.load(&channel_id).map_err(|e| format!("load failed: {e}"))?;
+
+        // Collect all agents that are members of this channel
+        let channel_agents: Vec<crate::workspace::manager::Agent> = latest_channel
+            .members
+            .iter()
+            .filter_map(|m| manager.get_agent(&m.agent_id))
+            .cloned()
+            .collect();
+
+        // Build Zone Agent Protocol (L2) from channel members
+        let zone_protocol = crate::context::zone_protocol::ChannelZoneProtocol::from_channel(
+            &latest_channel,
+            &channel_agents,
+        );
+
+        // Build agent context via ContextBuilder, with Zone Protocol injected
+        let builder = crate::context::ContextBuilder::new(&workspace_root)
+            .with_zone_protocol(zone_protocol);
+        let mut context_prefix = builder
+            .build_context_prefix(&agent_id)
+            .unwrap_or_default();
+
+        // --- Sliding window + summary context ---
+        let summary_up_to_idx = match &latest_channel.summary_up_to {
+            Some(sid) => latest_channel
+                .messages
+                .iter()
+                .position(|m| m.id == *sid)
+                .map(|i| i + 1)
+                .unwrap_or(0),
+            None => 0,
+        };
+
+        let recent_start = if summary_up_to_idx > 0 {
+            summary_up_to_idx
+        } else {
+            latest_channel
+                .messages
+                .len()
+                .saturating_sub(CHANNEL_CONTEXT_HISTORY_LIMIT)
+        };
+
+        let recent: Vec<&ChannelMessage> = latest_channel
+            .messages
+            .iter()
+            .skip(recent_start)
+            .collect();
+
+        // Include summary if available
+        if let Some(ref summary) = latest_channel.summary {
+            context_prefix.push_str("\n\n# Earlier Conversation Summary\n\n");
+            context_prefix.push_str(summary);
+            context_prefix.push_str("\n\n");
+        }
+
+        // Append recent conversation history
+        if !recent.is_empty() {
+            context_prefix.push_str("# Channel Recent Messages\n\n");
+            context_prefix.push_str(&format!(
+                "You are in a channel named \"{}\". Here are the recent messages:\n\n",
+                latest_channel.name
+            ));
+            for msg in &recent {
+                let sender = if msg.sender_type == "user" {
+                    "User".to_string()
+                } else {
+                    manager
+                        .get_agent(&msg.sender_id)
+                        .map(|a| a.identity.name.clone())
+                        .unwrap_or_else(|| msg.sender_id.clone())
+                };
+                context_prefix.push_str(&format!("[{}]: {}\n", sender, msg.content));
+            }
+            context_prefix.push_str("\n---\n\n");
+        }
+
+        // Get workspace path for this agent
+        let workspace = manager
+            .get_workspace(&agent_id)
+            .ok_or_else(|| format!("workspace not found for agent: {agent_id}"))?;
+        let ws_path = workspace.base_path().to_string_lossy().to_string();
+
+        // Resolve the agent's runtime type
+        let agent = manager
+            .get_agent(&agent_id)
+            .ok_or_else(|| format!("agent not found: {agent_id}"))?;
+        let rt_id = agent.identity.runtime_type.runtime_id().to_string();
+        let rt_name = agent.identity.runtime_type.display_name().to_string();
+
+        (Some(context_prefix), ws_path, recent.len(), rt_id, rt_name)
+    };
+
+    log::info!(
+        "[execute_single_agent] agent {}/{}, agent_id={}, runtime={}, context: {} recent messages, a2a={}",
+        agent_idx + 1,
+        total_agents,
+        agent_id,
+        runtime_id,
+        recent_count,
+        is_a2a,
+    );
+
+    // Emit agent-start event so frontend knows which agent is responding
+    let _ = app.emit(
+        "agent://channel-agent-start",
+        serde_json::json!({
+            "channel_id": channel_id,
+            "agent_id": agent_id,
+            "agent_index": agent_idx,
+            "total_agents": total_agents,
+            "runtime_id": runtime_id,
+            "runtime_name": runtime_name,
+            "is_a2a": is_a2a,
+            "triggered_by": triggered_by,
+            "a2a_depth": a2a_depth,
+        }),
+    );
+
+    // If this is an A2A trigger, emit the A2A-specific event too
+    if is_a2a {
+        let _ = app.emit(
+            "agent://channel-a2a-start",
+            serde_json::json!({
+                "channel_id": channel_id,
+                "agent_id": agent_id,
+                "triggered_by": triggered_by.unwrap_or("unknown"),
+                "depth": a2a_depth,
+            }),
+        );
+    }
+
+    // Start runtime execution for this agent
+    let receiver = {
+        let registry = state
+            .agent_runtime_registry
+            .lock()
+            .map_err(|e| e.to_string())?;
+
+        let runtime = registry.get_runtime_instance(&runtime_id)?;
+
+        // Health check: verify the runtime is available before executing
+        if !runtime.is_ready() {
+            let info = registry.get_runtime(&runtime_id);
+            let install_hint = info
+                .map(|i| i.install_hint.clone())
+                .unwrap_or_default();
+            let error_msg = format!(
+                "{} runtime is not available for agent {}. Please install: {}",
+                runtime.name(),
+                agent_id,
+                install_hint,
+            );
+            let _ = app.emit("runtime://unavailable", serde_json::json!({
+                "channel_id": channel_id,
+                "agent_id": agent_id,
+                "runtime_id": runtime_id,
+                "runtime_name": runtime.name(),
+                "install_hint": install_hint,
+                "error": error_msg,
+            }));
+            return Err(error_msg);
+        }
+
+        let params = crate::runtime::ExecuteParams {
+            message: message.clone(),
+            session_id: None,
+            workspace: Some(workspace_path),
+            system_prompt,
+            timeout_secs: 120,
+        };
+
+        runtime.execute(params)?
+    };
+
+    // Spawn thread to forward streaming events and collect response
+    let app_clone = app.clone();
+    let channel_id_clone = channel_id.clone();
+    let agent_id_clone = agent_id.clone();
+    let agent_manager_ptr = {
+        state
+            .agent_manager
+            .lock()
+            .map_err(|e| format!("lock error: {e}"))?
+            .workspace_root()
+            .to_path_buf()
+    };
+
+    let (tx_done, rx_done) = std::sync::mpsc::channel::<Result<String, String>>();
+
+    std::thread::spawn(move || {
+        let mut full_response = String::new();
+        let mut result_session_id: Option<String> = None;
+        let mut had_error = false;
+
+        while let Ok(event) = receiver.recv() {
+            if event.is_done {
+                result_session_id = event.session_id.clone();
+            }
+            if event.msg_type.as_deref() == Some("assistant") && !event.text.is_empty() {
+                full_response.push_str(&event.text);
+            }
+
+            // Forward event to frontend with agent_id context
+            let _ = app_clone.emit(
+                "agent://channel-chunk",
+                serde_json::json!({
+                    "channel_id": channel_id_clone,
+                    "agent_id": agent_id_clone,
+                    "agent_index": agent_idx,
+                    "total_agents": total_agents,
+                    "event": event,
+                }),
+            );
+
+            if event.is_done {
+                if event.error.is_some() {
+                    had_error = true;
+                    log::warn!(
+                        "[execute_single_agent] agent {} had error: {:?}",
+                        agent_id_clone,
+                        event.error
+                    );
+                }
+                break;
+            }
+        }
+
+        // Save agent response to channel
+        if !full_response.is_empty() && !had_error {
+            let channels_dir = agent_manager_ptr.join("channels");
+            let store = ChannelStore::new(&channels_dir);
+            if let Ok(mut ch) = store.load(&channel_id_clone) {
+                let agent_msg = ChannelMessage {
+                    id: crate::workspace::thread::generate_id(),
+                    channel_id: channel_id_clone.clone(),
+                    sender_type: "agent".to_string(),
+                    sender_id: agent_id_clone.clone(),
+                    content: full_response.clone(),
+                    timestamp: channel::now_iso(),
+                };
+                ch.messages.push(agent_msg);
+                ch.updated_at = channel::now_iso();
+                let _ = store.save(&ch);
+            }
+
+            // Emit response event for frontend
+            let _ = app_clone.emit(
+                "agent://channel-response",
+                serde_json::json!({
+                    "channel_id": channel_id_clone,
+                    "agent_id": agent_id_clone,
+                    "content": full_response.clone(),
+                    "session_id": result_session_id,
+                }),
+            );
+        }
+
+        // Signal completion with the response text
+        let result = if had_error {
+            Err("agent execution had error".to_string())
+        } else {
+            Ok(full_response)
+        };
+        let _ = tx_done.send(result);
+    });
+
+    // Wait for the agent to complete
+    match rx_done.recv_timeout(std::time::Duration::from_secs(300)) {
+        Ok(Ok(response)) => Ok(response),
+        Ok(Err(e)) => {
+            log::warn!("[execute_single_agent] agent {} failed: {}", agent_id, e);
+            Err(e)
+        }
+        Err(_) => {
+            log::warn!("[execute_single_agent] agent {} timed out", agent_id);
+            Err("agent execution timed out".to_string())
+        }
+    }
+}
+
 /// Send a message in a channel, parse @mentions, and trigger multi-Agent responses.
 ///
 /// Flow:
@@ -453,7 +770,10 @@ const CHANNEL_CONTEXT_HISTORY_LIMIT: usize = 20;
 ///    b. Build channel context (recent N messages as conversation history)
 ///    c. Execute via runtime with assembled system prompt
 ///    d. Stream events to frontend with agent_id identifier
-/// 4. Each agent's response is saved independently
+/// 4. After each agent responds, check for A2A triggers (@{agent} mentions
+///    in the response) and recursively execute those agents (with depth
+///    limit and deduplication to prevent runaway chains).
+/// 5. Each agent's response is saved independently
 #[tauri::command]
 pub async fn send_channel_message(
     app: AppHandle,
@@ -462,7 +782,7 @@ pub async fn send_channel_message(
     message: String,
 ) -> Result<Channel, String> {
     // ---- Phase 1: Load channel, add user message, parse mentions ----
-    let (_channel, target_agents, workspace_root) = {
+    let (_channel, target_agents, workspace_root, channel_members) = {
         let manager = state
             .agent_manager
             .lock()
@@ -503,293 +823,126 @@ pub async fn send_channel_message(
         store.save(&channel).map_err(|e| format!("save failed: {e}"))?;
 
         let workspace_root = manager.workspace_root().to_path_buf();
+        let channel_members = channel.members.clone();
 
-        (channel, target_agents, workspace_root)
+        (channel, target_agents, workspace_root, channel_members)
     };
 
-    // ---- Phase 2: Execute each mentioned agent serially ----
+    // ---- Phase 2: Execute each mentioned agent serially, with A2A chain support ----
+    //
+    // We use an iterative queue-based approach to avoid async recursion issues.
+    // Each entry in the queue represents an agent execution task. After an agent
+    // completes, its response is scanned for @{agent} mentions, and any valid
+    // A2A triggers are appended to the queue.
+
+    /// A pending agent execution task.
+    struct PendingAgentTask {
+        agent_id: String,
+        message: String,
+        is_a2a: bool,
+        triggered_by: Option<String>,
+        depth: u32,
+    }
+
     let total_agents = target_agents.len();
-    for (agent_idx, agent_id) in target_agents.iter().enumerate() {
-        let agent_id = agent_id.clone();
-        let channel_id = channel_id.clone();
-        let workspace_root = workspace_root.clone();
+    let max_depth = a2a_trigger::DEFAULT_MAX_DEPTH;
+    let mut triggered_set: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-        // Build context for this agent
-        let (system_prompt, workspace_path, recent_count, runtime_id, runtime_name) = {
-            let manager = state
-                .agent_manager
-                .lock()
-                .map_err(|e| format!("lock error: {e}"))?;
-
-            // Load latest channel state for context
-            let channels_dir = manager.channels_dir();
-            let store = ChannelStore::new(&channels_dir);
-            let latest_channel = store.load(&channel_id).map_err(|e| format!("load failed: {e}"))?;
-
-            // Collect all agents that are members of this channel
-            let channel_agents: Vec<crate::workspace::manager::Agent> = latest_channel
-                .members
-                .iter()
-                .filter_map(|m| manager.get_agent(&m.agent_id))
-                .cloned()
-                .collect();
-
-            // Build Zone Agent Protocol (L2) from channel members
-            let zone_protocol = crate::context::zone_protocol::ChannelZoneProtocol::from_channel(
-                &latest_channel,
-                &channel_agents,
-            );
-
-            // Build agent context via ContextBuilder, with Zone Protocol injected
-            let builder = crate::context::ContextBuilder::new(&workspace_root)
-                .with_zone_protocol(zone_protocol);
-            let mut context_prefix = builder
-                .build_context_prefix(&agent_id)
-                .unwrap_or_default();
-
-            // --- Sliding window + summary context ---
-            // If a summary exists, include it as the "older context" prefix,
-            // then only include recent messages that are NOT already summarized.
-            let summary_up_to_idx = match &latest_channel.summary_up_to {
-                Some(sid) => latest_channel
-                    .messages
-                    .iter()
-                    .position(|m| m.id == *sid)
-                    .map(|i| i + 1)
-                    .unwrap_or(0),
-                None => 0,
-            };
-
-            // Recent messages = those after the summary cutoff
-            let recent_start = if summary_up_to_idx > 0 {
-                summary_up_to_idx
-            } else {
-                // No summary: use the last N messages (legacy behavior)
-                latest_channel
-                    .messages
-                    .len()
-                    .saturating_sub(CHANNEL_CONTEXT_HISTORY_LIMIT)
-            };
-
-            let recent: Vec<&ChannelMessage> = latest_channel
-                .messages
-                .iter()
-                .skip(recent_start)
-                .collect();
-
-            // Include summary if available
-            if let Some(ref summary) = latest_channel.summary {
-                context_prefix.push_str("\n\n# Earlier Conversation Summary\n\n");
-                context_prefix.push_str(summary);
-                context_prefix.push_str("\n\n");
-            }
-
-            // Append recent conversation history
-            if !recent.is_empty() {
-                context_prefix.push_str("# Channel Recent Messages\n\n");
-                context_prefix.push_str(&format!(
-                    "You are in a channel named \"{}\". Here are the recent messages:\n\n",
-                    latest_channel.name
-                ));
-                for msg in &recent {
-                    let sender = if msg.sender_type == "user" {
-                        "User".to_string()
-                    } else {
-                        manager
-                            .get_agent(&msg.sender_id)
-                            .map(|a| a.identity.name.clone())
-                            .unwrap_or_else(|| msg.sender_id.clone())
-                    };
-                    context_prefix.push_str(&format!("[{}]: {}\n", sender, msg.content));
-                }
-                context_prefix.push_str("\n---\n\n");
-            }
-
-            // Get workspace path for this agent
-            let workspace = manager
-                .get_workspace(&agent_id)
-                .ok_or_else(|| format!("workspace not found for agent: {agent_id}"))?;
-            let ws_path = workspace.base_path().to_string_lossy().to_string();
-
-            // Resolve the agent's runtime type
-            let agent = manager
-                .get_agent(&agent_id)
-                .ok_or_else(|| format!("agent not found: {agent_id}"))?;
-            let rt_id = agent.identity.runtime_type.runtime_id().to_string();
-            let rt_name = agent.identity.runtime_type.display_name().to_string();
-
-            (Some(context_prefix), ws_path, recent.len(), rt_id, rt_name)
-        };
-
-        log::info!(
-            "[send_channel_message] executing agent {}/{}, agent_id={}, runtime={}, context: {} recent messages",
-            agent_idx + 1,
-            total_agents,
-            agent_id,
-            runtime_id,
-            recent_count
-        );
-
-        // Emit agent-start event so frontend knows which agent is responding
-        let _ = app.emit(
-            "agent://channel-agent-start",
-            serde_json::json!({
-                "channel_id": channel_id,
-                "agent_id": agent_id,
-                "agent_index": agent_idx,
-                "total_agents": total_agents,
-                "runtime_id": runtime_id,
-                "runtime_name": runtime_name,
-            }),
-        );
-
-        // Start runtime execution for this agent -- route by agent's runtime_type
-        let receiver = {
-            let registry = state
-                .agent_runtime_registry
-                .lock()
-                .map_err(|e| e.to_string())?;
-
-            let runtime = registry.get_runtime_instance(&runtime_id)?;
-
-            // Health check: verify the runtime is available before executing
-            if !runtime.is_ready() {
-                let info = registry.get_runtime(&runtime_id);
-                let install_hint = info
-                    .map(|i| i.install_hint.clone())
-                    .unwrap_or_default();
-                let error_msg = format!(
-                    "{} runtime is not available for agent {}. Please install: {}",
-                    runtime.name(),
-                    agent_id,
-                    install_hint,
-                );
-                // Emit runtime unavailable event for frontend UX
-                let _ = app.emit("runtime://unavailable", serde_json::json!({
-                    "channel_id": channel_id,
-                    "agent_id": agent_id,
-                    "runtime_id": runtime_id,
-                    "runtime_name": runtime.name(),
-                    "install_hint": install_hint,
-                    "error": error_msg,
-                }));
-                return Err(error_msg);
-            }
-
-            let params = crate::runtime::ExecuteParams {
-                message: message.clone(),
-                session_id: None,
-                workspace: Some(workspace_path),
-                system_prompt,
-                timeout_secs: 120,
-            };
-
-            runtime.execute(params)?
-        };
-
-        // Spawn thread to forward streaming events to frontend and collect response
-        let app_clone = app.clone();
-        let channel_id_clone = channel_id.clone();
-        let agent_id_clone = agent_id.clone();
-        let agent_manager_ptr = {
-            state
-                .agent_manager
-                .lock()
-                .map_err(|e| format!("lock error: {e}"))?
-                .workspace_root()
-                .to_path_buf()
-        };
-
-        // Channel to signal completion
-        let (tx_done, rx_done) = std::sync::mpsc::channel::<Result<(), String>>();
-
-        std::thread::spawn(move || {
-            let mut full_response = String::new();
-            let mut result_session_id: Option<String> = None;
-            let mut had_error = false;
-
-            while let Ok(event) = receiver.recv() {
-                if event.is_done {
-                    result_session_id = event.session_id.clone();
-                }
-                if event.msg_type.as_deref() == Some("assistant") && !event.text.is_empty() {
-                    full_response.push_str(&event.text);
-                }
-
-                // Forward event to frontend with agent_id context
-                let _ = app_clone.emit(
-                    "agent://channel-chunk",
-                    serde_json::json!({
-                        "channel_id": channel_id_clone,
-                        "agent_id": agent_id_clone,
-                        "agent_index": agent_idx,
-                        "total_agents": total_agents,
-                        "event": event,
-                    }),
-                );
-
-                if event.is_done {
-                    if event.error.is_some() {
-                        had_error = true;
-                        log::warn!(
-                            "[send_channel_message] agent {} had error: {:?}",
-                            agent_id_clone,
-                            event.error
-                        );
-                    }
-                    break;
-                }
-            }
-
-            // Save agent response to channel
-            if !full_response.is_empty() && !had_error {
-                let channels_dir = agent_manager_ptr.join("channels");
-                let store = ChannelStore::new(&channels_dir);
-                if let Ok(mut ch) = store.load(&channel_id_clone) {
-                    let agent_msg = ChannelMessage {
-                        id: crate::workspace::thread::generate_id(),
-                        channel_id: channel_id_clone.clone(),
-                        sender_type: "agent".to_string(),
-                        sender_id: agent_id_clone.clone(),
-                        content: full_response.clone(),
-                        timestamp: channel::now_iso(),
-                    };
-                    ch.messages.push(agent_msg);
-                    ch.updated_at = channel::now_iso();
-                    let _ = store.save(&ch);
-                }
-
-                // Emit response event for frontend
-                let _ = app_clone.emit(
-                    "agent://channel-response",
-                    serde_json::json!({
-                        "channel_id": channel_id_clone,
-                        "agent_id": agent_id_clone,
-                        "content": full_response,
-                        "session_id": result_session_id,
-                    }),
-                );
-            }
-
-            // Signal completion
-            let result = if had_error {
-                Err("agent execution had error".to_string())
-            } else {
-                Ok(())
-            };
-            let _ = tx_done.send(result);
+    // Initialize the queue with user-targeted agents
+    let mut task_queue: std::collections::VecDeque<PendingAgentTask> = std::collections::VecDeque::new();
+    for agent_id in &target_agents {
+        triggered_set.insert(agent_id.clone());
+        task_queue.push_back(PendingAgentTask {
+            agent_id: agent_id.clone(),
+            message: message.clone(),
+            is_a2a: false,
+            triggered_by: None,
+            depth: 0,
         });
+    }
 
-        // Wait for this agent to complete before starting the next one
-        match rx_done.recv_timeout(std::time::Duration::from_secs(300)) {
-            Ok(Ok(())) => {} // Success, continue to next agent
-            Ok(Err(e)) => {
-                log::warn!("[send_channel_message] agent {} failed: {}, continuing", agent_id, e);
-                // Continue to next agent even on failure
-            }
-            Err(_) => {
-                log::warn!("[send_channel_message] agent {} timed out, continuing", agent_id);
-                // Continue to next agent even on timeout
+    let mut agent_idx = 0;
+    while let Some(task) = task_queue.pop_front() {
+        let response_result = execute_single_agent(
+            &app,
+            &state,
+            &channel_id,
+            &task.agent_id,
+            &task.message,
+            agent_idx,
+            total_agents + task_queue.len(),
+            &workspace_root,
+            task.is_a2a,
+            task.triggered_by.as_deref(),
+            task.depth,
+        ).await;
+
+        agent_idx += 1;
+
+        // If the agent responded successfully, check for A2A triggers
+        if let Ok(response) = response_result {
+            let current_depth = task.depth;
+
+            // Only process A2A triggers if we haven't exceeded max depth
+            if current_depth < max_depth {
+                let next_triggers = a2a_trigger::extract_valid_triggers(
+                    &response,
+                    &channel_members,
+                    &TriggerContext {
+                        depth: current_depth,
+                        max_depth,
+                        triggered_agents: triggered_set.clone(),
+                    },
+                );
+
+                for triggered_agent_id in next_triggers {
+                    let triggered_by = task.agent_id.clone();
+                    log::info!(
+                        "[send_channel_message] A2A trigger: {} → {} (depth={})",
+                        triggered_by,
+                        triggered_agent_id,
+                        current_depth + 1,
+                    );
+
+                    triggered_set.insert(triggered_agent_id.clone());
+
+                    let a2a_message = format!(
+                        "[A2A Trigger] {} mentioned you in their response. Here is what they said:\n\n{}\n\nPlease respond to the relevant request above.",
+                        triggered_by, response
+                    );
+
+                    task_queue.push_back(PendingAgentTask {
+                        agent_id: triggered_agent_id,
+                        message: a2a_message,
+                        is_a2a: true,
+                        triggered_by: Some(triggered_by),
+                        depth: current_depth + 1,
+                    });
+                }
+            } else {
+                // Depth exceeded: check if there would have been triggers
+                let mentioned = mention::extract_agent_triggers(&response, &channel_members);
+                let would_trigger: Vec<String> = mentioned
+                    .into_iter()
+                    .filter(|id| !triggered_set.contains(id))
+                    .collect();
+
+                if !would_trigger.is_empty() {
+                    log::info!(
+                        "[send_channel_message] A2A depth limit reached, skipping: {:?}",
+                        would_trigger
+                    );
+                    let _ = app.emit(
+                        "agent://channel-a2a-depth-exceeded",
+                        serde_json::json!({
+                            "channel_id": channel_id,
+                            "agents": would_trigger,
+                            "triggered_by": task.agent_id,
+                            "depth": current_depth,
+                            "max_depth": max_depth,
+                        }),
+                    );
+                }
             }
         }
     }
