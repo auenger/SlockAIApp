@@ -59,6 +59,8 @@ pub fn run() {
             storage::keyring::store_api_key,
             storage::keyring::has_api_key,
             storage::keyring::delete_api_key,
+            storage::keyring::list_api_keys,
+            storage::keyring::verify_api_key,
             commands::init_workspace,
             commands::get_workspace_status,
             commands::create_agent,
