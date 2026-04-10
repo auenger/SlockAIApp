@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-11T00:45:00+08:00"
-  version: 63
+  last_updated: "2026-04-11T10:00:00+08:00"
+  version: 64
 
 parents:
   - id: feat-agent-runtime-select
@@ -16,12 +16,14 @@ parents:
     children:
       - feat-channel-zone-protocol
       - feat-agent-a2a-trigger
-active: []
-pending:
+active:
   - id: fix-delete-and-render
     name: "修复删除功能与渲染状态逻辑"
     priority: 80
-    created_at: "2026-04-10T22:00:00+08:00"
+    branch: feature/fix-delete-and-render
+    worktree: ../AgentsZone-fix-delete-and-render
+    started_at: "2026-04-11T10:00:00+08:00"
+pending:
   - id: feat-agent-workspace-persist
     name: "Agent Workspace 对话持久化"
     priority: 75
