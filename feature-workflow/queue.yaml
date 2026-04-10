@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-11T10:00:00+08:00"
-  version: 64
+  last_updated: "2026-04-11T11:00:00+08:00"
+  version: 65
 
 parents:
   - id: feat-agent-runtime-select
@@ -16,13 +16,7 @@ parents:
     children:
       - feat-channel-zone-protocol
       - feat-agent-a2a-trigger
-active:
-  - id: fix-delete-and-render
-    name: "修复删除功能与渲染状态逻辑"
-    priority: 80
-    branch: feature/fix-delete-and-render
-    worktree: ../AgentsZone-fix-delete-and-render
-    started_at: "2026-04-11T10:00:00+08:00"
+active: []
 pending:
   - id: feat-agent-workspace-persist
     name: "Agent Workspace 对话持久化"
@@ -152,3 +146,7 @@ completed:
     name: "Channel @Agent UI 修复（thinking 状态 + icon 渲染）"
     completed_at: "2026-04-11T00:45:00+08:00"
     tag: fix-channel-ui-bugs-20260411
+  - id: fix-delete-and-render
+    name: "修复删除功能与渲染状态逻辑"
+    completed_at: "2026-04-11T11:00:00+08:00"
+    tag: fix-delete-and-render-20260411

@@ -1,8 +1,8 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-11T00:45:00+08:00"
-  version: 17
-  total_completed: 17
+  last_updated: "2026-04-11T11:00:00+08:00"
+  version: 18
+  total_completed: 18
 
 records:
   - id: feat-project-init
@@ -412,3 +412,25 @@ records:
       duration: "~35min"
       commits: 1
       files_changed: 3
+  - id: fix-delete-and-render
+    name: "修复删除功能与渲染状态逻辑"
+    completed: "2026-04-11T11:00:00+08:00"
+    tag: fix-delete-and-render-20260411
+    merge_commit: "8a8f15d"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/fix-delete-and-render
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-fix-delete-and-render
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 6
+      scenarios_passed: 6
+    stats:
+      started: "2026-04-11T10:00:00+08:00"
+      duration: "~1h"
+      commits: 4
+      files_changed: 2
