@@ -11,6 +11,7 @@ import {
   Clock,
   X,
   Pencil,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAgentStatus, getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
@@ -42,6 +43,12 @@ interface SidebarProps {
   onCreateChannel?: (name: string, memberAgentIds: string[]) => void;
   /** Available agents for channel member selection */
   agents?: AgentWithRuntime[];
+  /** Callback when user wants to delete a channel */
+  onDeleteChannel?: (channelId: string) => void;
+  /** Callback when user wants to delete a thread */
+  onDeleteThread?: (threadId: string) => void;
+  /** Callback when user wants to delete an agent */
+  onDeleteAgent?: (agentId: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -56,6 +63,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   channels = [],
   onCreateChannel,
   agents: propAgents,
+  onDeleteChannel,
+  onDeleteThread,
+  onDeleteAgent,
 }) => {
   const { agents: statusAgents, loading, scan } = useAgentStatus();
   const { profile } = useUserProfile();
@@ -66,6 +76,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [showApiKeyManager, setShowApiKeyManager] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+
+  // Delete confirmation state: { type, id, name } or null
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'channel' | 'thread' | 'agent'; id: string; name: string } | null>(null);
 
   // Use prop agents if provided (they have runtime status), otherwise use status agents
   const agents = propAgents ?? statusAgents;
@@ -86,6 +99,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ? prev.filter((id) => id !== agentId)
         : [...prev, agentId]
     );
+  };
+
+  /** Confirm and execute deletion */
+  const confirmDelete = () => {
+    if (!deleteConfirm) return;
+    const { type, id } = deleteConfirm;
+    if (type === 'channel') onDeleteChannel?.(id);
+    else if (type === 'thread') onDeleteThread?.(id);
+    else if (type === 'agent') onDeleteAgent?.(id);
+    setDeleteConfirm(null);
   };
 
   return (
@@ -126,21 +149,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <div className="space-y-1">
             {channels.map((ch) => (
-              <button
-                key={ch.id}
-                onClick={() => onChannelSelect(ch.id)}
-                className={cn(
-                  "w-full text-left px-3 py-1.5 font-bold text-sm flex items-center gap-2 brutal-border transition-all",
-                  activeChannel === ch.id ? "bg-brutal-pink text-white brutal-shadow-sm translate-x-[-2px] translate-y-[-2px]" : "hover:bg-white/50 border-transparent"
-                )}
-              >
-                <Hash size={14} /> {ch.name}
-                {ch.unread_count > 0 && (
-                  <span className="ml-auto text-[9px] bg-brutal-pink text-white px-1 brutal-border">
-                    {ch.unread_count}
-                  </span>
-                )}
-              </button>
+              <div key={ch.id} className="group relative">
+                <button
+                  onClick={() => onChannelSelect(ch.id)}
+                  className={cn(
+                    "w-full text-left px-3 py-1.5 font-bold text-sm flex items-center gap-2 brutal-border transition-all",
+                    activeChannel === ch.id ? "bg-brutal-pink text-white brutal-shadow-sm translate-x-[-2px] translate-y-[-2px]" : "hover:bg-white/50 border-transparent"
+                  )}
+                >
+                  <Hash size={14} /> {ch.name}
+                  {ch.unread_count > 0 && (
+                    <span className="ml-auto text-[9px] bg-brutal-pink text-white px-1 brutal-border">
+                      {ch.unread_count}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteConfirm({ type: 'channel', id: ch.id, name: ch.name });
+                  }}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 brutal-border bg-white hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Delete Channel"
+                >
+                  <Trash2 size={10} />
+                </button>
+              </div>
             ))}
             {channels.length === 0 && (
               <div className="text-[10px] text-gray-500 italic px-2 py-1">
@@ -226,47 +260,58 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="space-y-2">
             {threads.length > 0 ? (
               threads.map((thread) => (
-                <button
-                  key={thread.id}
-                  onClick={() => onThreadSelect?.(thread.id)}
-                  className={cn(
-                    "w-full text-left px-3 py-1.5 text-xs font-medium flex items-start gap-2 transition-all",
-                    activeThreadId === thread.id
-                      ? "bg-brutal-pink text-white brutal-shadow-sm translate-x-[-2px] translate-y-[-2px]"
-                      : "hover:bg-white/50"
-                  )}
-                >
-                  <MessageSquare size={12} className="mt-0.5 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className={cn(
-                      "font-bold text-[11px] truncate",
-                      activeThreadId === thread.id ? "text-white" : "text-gray-800"
-                    )}>
-                      {thread.title}
-                    </div>
-                    {thread.preview && (
-                      <div className={cn(
-                        "truncate text-[10px]",
-                        activeThreadId === thread.id ? "text-white/80" : "text-gray-500"
-                      )}>
-                        {thread.preview}
-                      </div>
+                <div key={thread.id} className="group relative">
+                  <button
+                    onClick={() => onThreadSelect?.(thread.id)}
+                    className={cn(
+                      "w-full text-left px-3 py-1.5 text-xs font-medium flex items-start gap-2 transition-all",
+                      activeThreadId === thread.id
+                        ? "bg-brutal-pink text-white brutal-shadow-sm translate-x-[-2px] translate-y-[-2px]"
+                        : "hover:bg-white/50"
                     )}
-                    <div className={cn(
-                      "text-[9px] mt-0.5 flex items-center gap-1",
-                      activeThreadId === thread.id ? "text-white/60" : "text-gray-400"
-                    )}>
-                      <Clock size={8} />
-                      {thread.updated_at && new Date(thread.updated_at).toLocaleDateString(undefined, {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                      <span className="ml-1">{thread.message_count} msg{thread.message_count !== 1 ? 's' : ''}</span>
+                  >
+                    <MessageSquare size={12} className="mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className={cn(
+                        "font-bold text-[11px] truncate",
+                        activeThreadId === thread.id ? "text-white" : "text-gray-800"
+                      )}>
+                        {thread.title}
+                      </div>
+                      {thread.preview && (
+                        <div className={cn(
+                          "truncate text-[10px]",
+                          activeThreadId === thread.id ? "text-white/80" : "text-gray-500"
+                        )}>
+                          {thread.preview}
+                        </div>
+                      )}
+                      <div className={cn(
+                        "text-[9px] mt-0.5 flex items-center gap-1",
+                        activeThreadId === thread.id ? "text-white/60" : "text-gray-400"
+                      )}>
+                        <Clock size={8} />
+                        {thread.updated_at && new Date(thread.updated_at).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                        <span className="ml-1">{thread.message_count} msg{thread.message_count !== 1 ? 's' : ''}</span>
+                      </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteConfirm({ type: 'thread', id: thread.id, name: thread.title });
+                    }}
+                    className="absolute right-1 top-1.5 p-0.5 brutal-border bg-white hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Delete Thread"
+                  >
+                    <Trash2 size={10} />
+                  </button>
+                </div>
               ))
             ) : (
               <div className="text-[10px] text-gray-500 italic px-2 py-1">
@@ -338,10 +383,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       setEditingAgentId(agent.agent_id);
                       setShowEditAgent(true);
                     }}
-                    className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 brutal-border bg-white hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute right-7 top-1/2 -translate-y-1/2 p-0.5 brutal-border bg-white hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Edit Agent"
                   >
                     <Pencil size={10} />
+                  </button>
+                  {/* Delete button - visible on hover */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteConfirm({ type: 'agent', id: agent.agent_id, name: agent.name });
+                    }}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 brutal-border bg-white hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Delete Agent"
+                  >
+                    <Trash2 size={10} />
                   </button>
                 </div>
               );
@@ -409,6 +465,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
         isOpen={showApiKeyManager}
         onClose={() => setShowApiKeyManager(false)}
       />
+
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setDeleteConfirm(null)}>
+          <div className="bg-white brutal-border brutal-shadow p-4 w-72 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="font-black text-sm uppercase">Confirm Delete</div>
+            <div className="text-xs text-gray-600">
+              Are you sure you want to delete <span className="font-bold">{deleteConfirm.name}</span>?
+              This action cannot be undone.
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="px-3 py-1 brutal-border bg-gray-200 text-xs font-black hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-3 py-1 brutal-border bg-brutal-pink text-white text-xs font-black hover:bg-red-500"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
