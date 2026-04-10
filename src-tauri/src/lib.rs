@@ -43,12 +43,27 @@ pub fn run() {
 
             // Ensure workspace directory structure exists
             if let Err(e) = agent_manager.initialize_workspace() {
-                log::warn!("[App] Workspace initialization warning: {}", e);
+                log::error!("[App] CRITICAL: Workspace initialization failed: {}", e);
+                log::info!("[App] Attempting workspace self-heal...");
+                // Attempt self-heal: re-create the workspace from scratch
+                if let Err(heal_err) = agent_manager.initialize_workspace() {
+                    log::error!("[App] Workspace self-heal also failed: {}", heal_err);
+                } else {
+                    log::info!("[App] Workspace self-heal succeeded");
+                }
             }
 
             // Load existing agents from disk into memory
             if let Err(e) = agent_manager.load() {
-                log::warn!("[App] Failed to load agents from disk: {}", e);
+                log::error!("[App] CRITICAL: Failed to load agents from disk: {}", e);
+                log::info!("[App] Attempting workspace re-initialization...");
+                // Re-initialize and try loading again
+                if let Err(heal_err) = agent_manager.initialize_workspace() {
+                    log::error!("[App] Re-initialization failed: {}", heal_err);
+                }
+                if let Err(reload_err) = agent_manager.load() {
+                    log::error!("[App] Re-load after re-init also failed: {}", reload_err);
+                }
             }
 
             log::info!(
@@ -94,6 +109,7 @@ pub fn run() {
             storage::keyring::verify_api_key,
             commands::init_workspace,
             commands::get_workspace_status,
+            commands::health_check_workspace,
             commands::create_agent,
             commands::list_agents,
             commands::switch_agent,

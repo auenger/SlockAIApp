@@ -244,12 +244,25 @@ export interface UpdateAgentRequest {
   icon?: string;
 }
 
+/** Health information for a single agent workspace */
+export interface AgentHealthInfo {
+  agent_id: string;
+  workspace_exists: boolean;
+  identity_file_exists: boolean;
+  soul_file_exists: boolean;
+  conversations_dir_exists: boolean;
+  context_dir_exists: boolean;
+  is_healthy: boolean;
+  missing_items: string[];
+}
+
 /** Workspace and Agent manager status */
 export interface ManagerStatus {
   total_agents: number;
   enabled_agents: number;
   active_agent_id: string | null;
   workspace_root: string;
+  agents_health: AgentHealthInfo[];
 }
 
 /** Result of workspace initialization */
