@@ -58,6 +58,22 @@ pub fn parse_mentions(message: &str, members: &[ChannelMember]) -> MentionResult
     }
 }
 
+/// Extract agent IDs that are @mentioned in an Agent's response text.
+///
+/// This is used for Agent-to-Agent (A2A) triggering: after an Agent produces
+/// a response, we parse its output for @{agent} mentions and return the
+/// corresponding agent IDs (only those that are Channel members).
+///
+/// Returns an empty Vec if no valid member mentions are found.
+pub fn extract_agent_triggers(response: &str, members: &[ChannelMember]) -> Vec<String> {
+    let result = parse_mentions(response, members);
+    result
+        .mentions
+        .into_iter()
+        .map(|m| m.agent_id)
+        .collect()
+}
+
 /// Resolve agent IDs from mentions.
 ///
 /// Returns the list of agent IDs for matched mentions, in order.
@@ -385,5 +401,77 @@ mod tests {
         assert_eq!(id_to_display_name("claude"), "Claude");
         assert_eq!(id_to_display_name("my_agent"), "My Agent");
         assert_eq!(id_to_display_name("default"), "Default");
+    }
+
+    // ---- A2A trigger extraction tests ----
+
+    #[test]
+    fn test_extract_agent_triggers_single() {
+        let members = make_members(&["claude", "codex"]);
+        let triggers = extract_agent_triggers(
+            "I found a bug. @Codex please fix it.",
+            &members,
+        );
+        assert_eq!(triggers, vec!["codex"]);
+    }
+
+    #[test]
+    fn test_extract_agent_triggers_multiple() {
+        let members = make_members(&["claude", "codex", "gemini"]);
+        let triggers = extract_agent_triggers(
+            "Let me ask @Codex and @Gemini about this.",
+            &members,
+        );
+        assert_eq!(triggers, vec!["codex", "gemini"]);
+    }
+
+    #[test]
+    fn test_extract_agent_triggers_ignores_non_member() {
+        let members = make_members(&["claude", "codex"]);
+        let triggers = extract_agent_triggers(
+            "I'm not sure. @GPT-4 might know.",
+            &members,
+        );
+        assert!(triggers.is_empty());
+    }
+
+    #[test]
+    fn test_extract_agent_triggers_no_mentions() {
+        let members = make_members(&["claude", "codex"]);
+        let triggers = extract_agent_triggers(
+            "This is a straightforward answer.",
+            &members,
+        );
+        assert!(triggers.is_empty());
+    }
+
+    #[test]
+    fn test_extract_agent_triggers_braced_format() {
+        let members = make_members(&["claude", "codex"]);
+        let triggers = extract_agent_triggers(
+            "Let me delegate to @{Codex}.",
+            &members,
+        );
+        assert_eq!(triggers, vec!["codex"]);
+    }
+
+    #[test]
+    fn test_extract_agent_triggers_case_insensitive() {
+        let members = make_members(&["claude", "codex"]);
+        let triggers = extract_agent_triggers(
+            "@CODEX should handle this.",
+            &members,
+        );
+        assert_eq!(triggers, vec!["codex"]);
+    }
+
+    #[test]
+    fn test_extract_agent_triggers_dedup() {
+        let members = make_members(&["claude", "codex"]);
+        let triggers = extract_agent_triggers(
+            "@Codex please help. Also @Codex review this.",
+            &members,
+        );
+        assert_eq!(triggers, vec!["codex"]);
     }
 }

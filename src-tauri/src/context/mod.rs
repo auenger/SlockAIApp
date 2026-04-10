@@ -17,6 +17,7 @@
 //! | L6 | Conversation History | JSONL conversation records |
 //! | L7 | System Reminders | dynamic context (date, channel desc, etc.) |
 
+pub mod a2a_trigger;
 pub mod zone_protocol;
 
 use std::fs;

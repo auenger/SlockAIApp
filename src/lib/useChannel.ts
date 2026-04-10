@@ -10,7 +10,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { Channel, ChannelInfo, AgentWithRuntime, ChannelChunkEvent, ChannelResponseEvent } from "../types";
+import type { Channel, ChannelInfo, AgentWithRuntime, ChannelChunkEvent, ChannelResponseEvent, ChannelA2aStartEvent, ChannelA2aDepthExceededEvent } from "../types";
 import {
   createChannel,
   listChannels,
@@ -44,6 +44,12 @@ export interface AgentStreamState {
   text: string;
   done: boolean;
   error?: string;
+  /** Whether this agent was triggered by another agent (A2A) rather than directly by the user */
+  is_a2a?: boolean;
+  /** The agent that triggered this agent via @{agent} mention (only set for A2A) */
+  triggered_by?: string;
+  /** Depth in the A2A trigger chain (0 = user-triggered, 1+ = A2A) */
+  a2a_depth?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +115,8 @@ export function useChannel(): ChannelState {
   const unlistenResponseRef = useRef<(() => void) | null>(null);
   const unlistenAgentStartRef = useRef<(() => void) | null>(null);
   const unlistenRuntimeErrorRef = useRef<(() => void) | null>(null);
+  const unlistenA2aStartRef = useRef<(() => void) | null>(null);
+  const unlistenA2aDepthRef = useRef<(() => void) | null>(null);
 
   // Clean up listeners on unmount
   useEffect(() => {
@@ -117,6 +125,8 @@ export function useChannel(): ChannelState {
       if (unlistenResponseRef.current) unlistenResponseRef.current();
       if (unlistenAgentStartRef.current) unlistenAgentStartRef.current();
       if (unlistenRuntimeErrorRef.current) unlistenRuntimeErrorRef.current();
+      if (unlistenA2aStartRef.current) unlistenA2aStartRef.current();
+      if (unlistenA2aDepthRef.current) unlistenA2aDepthRef.current();
     };
   }, []);
 
@@ -310,6 +320,14 @@ export function useChannel(): ChannelState {
         unlistenRuntimeErrorRef.current();
         unlistenRuntimeErrorRef.current = null;
       }
+      if (unlistenA2aStartRef.current) {
+        unlistenA2aStartRef.current();
+        unlistenA2aStartRef.current = null;
+      }
+      if (unlistenA2aDepthRef.current) {
+        unlistenA2aDepthRef.current();
+        unlistenA2aDepthRef.current = null;
+      }
 
       if (!isTauri) {
         // Dev fallback: simulate streaming
@@ -412,6 +430,48 @@ export function useChannel(): ChannelState {
       });
       unlistenRuntimeErrorRef.current = unlistenRuntimeError;
 
+      // Listen for A2A trigger start events (Agent triggers another Agent)
+      const unlistenA2aStart = await listen(
+        "agent://channel-a2a-start",
+        (event: { payload: ChannelA2aStartEvent }) => {
+          const payload = event.payload;
+          if (payload.channel_id !== channelId) return;
+
+          // Add a new agent stream entry marked as A2A-triggered
+          setAgentStreams((prev) => [
+            ...prev,
+            {
+              agent_id: payload.agent_id,
+              agent_index: prev.length,
+              total_agents: prev.length + 1,
+              streaming: true,
+              thinking: true,
+              text: "",
+              done: false,
+              is_a2a: true,
+              triggered_by: payload.triggered_by,
+              a2a_depth: payload.depth,
+            },
+          ]);
+        }
+      );
+      unlistenA2aStartRef.current = unlistenA2aStart;
+
+      // Listen for A2A depth exceeded events
+      const unlistenA2aDepth = await listen(
+        "agent://channel-a2a-depth-exceeded",
+        (event: { payload: ChannelA2aDepthExceededEvent }) => {
+          const payload = event.payload;
+          if (payload.channel_id !== channelId) return;
+
+          // Log a warning -- the UI can optionally show a system message
+          console.warn(
+            `[useChannel] A2A trigger chain depth exceeded: ${payload.triggered_by} -> @${payload.agent_id} at depth ${payload.depth}/${payload.max_depth}`
+          );
+        }
+      );
+      unlistenA2aDepthRef.current = unlistenA2aDepth;
+
       // Per-agent accumulated text
       const agentTexts = new Map<string, string>();
 
@@ -485,10 +545,14 @@ export function useChannel(): ChannelState {
               unlistenChunk();
               unlistenResponse();
               unlistenRuntimeError();
+              unlistenA2aStart();
+              unlistenA2aDepth();
               unlistenChunkRef.current = null;
               unlistenResponseRef.current = null;
               unlistenAgentStartRef.current = null;
               unlistenRuntimeErrorRef.current = null;
+              unlistenA2aStartRef.current = null;
+              unlistenA2aDepthRef.current = null;
 
               // Refresh channel list
               loadChannels();
