@@ -1,8 +1,8 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-10T21:00:00+08:00"
-  version: 16
-  total_completed: 16
+  last_updated: "2026-04-11T00:45:00+08:00"
+  version: 17
+  total_completed: 17
 
 records:
   - id: feat-project-init
@@ -390,3 +390,25 @@ records:
       duration: "~30min"
       commits: 1
       files_changed: 14
+  - id: fix-channel-ui-bugs
+    name: "Channel @Agent UI 修复（thinking 状态 + icon 渲染）"
+    completed: "2026-04-11T00:45:00+08:00"
+    tag: fix-channel-ui-bugs-20260411
+    merge_commit: "010b785"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/fix-channel-ui-bugs
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-fix-channel-ui-bugs
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-11T00:10:00+08:00"
+      duration: "~35min"
+      commits: 1
+      files_changed: 3
