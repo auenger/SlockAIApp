@@ -26,6 +26,9 @@ pub struct AgentIdentity {
     pub emoji: String,
     /// Avatar path (workspace-relative, URL, or data URI).
     pub avatar: Option<String>,
+    /// SVG icon name from the icon registry (e.g. "Bot", "Rocket").
+    #[serde(default)]
+    pub icon: Option<String>,
     /// The runtime backend this agent is bound to (defaults to ClaudeCode).
     #[serde(default)]
     pub runtime_type: RuntimeType,
@@ -47,6 +50,7 @@ impl AgentIdentity {
             vibe: vibe.into(),
             emoji: emoji.into(),
             avatar: None,
+            icon: None,
             runtime_type: RuntimeType::ClaudeCode,
         }
     }
@@ -67,6 +71,7 @@ impl AgentIdentity {
             vibe: vibe.into(),
             emoji: emoji.into(),
             avatar: None,
+            icon: None,
             runtime_type,
         }
     }
@@ -83,6 +88,7 @@ impl AgentIdentity {
             vibe: "helpful".to_string(),
             emoji: "robot".to_string(),
             avatar: None,
+            icon: None,
             runtime_type: RuntimeType::ClaudeCode,
         }
     }
@@ -113,6 +119,7 @@ impl AgentIdentity {
         let mut vibe = "helpful".to_string();
         let mut emoji = "robot".to_string();
         let mut avatar: Option<String> = None;
+        let mut icon: Option<String> = None;
         let mut runtime_type: Option<RuntimeType> = None;
 
         for line in content.lines() {
@@ -148,6 +155,13 @@ impl AgentIdentity {
                                 avatar = Some(value);
                             }
                         }
+                        "icon" => {
+                            if !value.is_empty()
+                                && !value.starts_with("_(")
+                            {
+                                icon = Some(value);
+                            }
+                        }
                         "runtime type" | "runtime_type" => {
                             runtime_type = Some(parse_runtime_type(&value));
                         }
@@ -169,6 +183,11 @@ impl AgentIdentity {
                         "vibe" if vibe == "helpful" => vibe = value,
                         "emoji" if emoji == "robot" => emoji = value,
                         "avatar" if avatar.is_none() => avatar = Some(value),
+                        "icon" if icon.is_none() => {
+                            if !value.is_empty() && !value.starts_with("_(") {
+                                icon = Some(value);
+                            }
+                        }
                         "runtime type" | "runtime_type" if runtime_type.is_none() => {
                             runtime_type = Some(parse_runtime_type(&value));
                         }
@@ -196,6 +215,7 @@ impl AgentIdentity {
             vibe,
             emoji,
             avatar,
+            icon,
             runtime_type: runtime_type.unwrap_or_default(),
         })
     }
@@ -206,6 +226,11 @@ impl AgentIdentity {
         let avatar_line = match &self.avatar {
             Some(a) if !a.is_empty() => a.as_str(),
             _ => "_(workspace-relative path, http(s) URL, or data URI)_",
+        };
+
+        let icon_line = match &self.icon {
+            Some(i) if !i.is_empty() => i.as_str(),
+            _ => "_(SVG icon name from the icon registry, e.g. Bot, Rocket)_",
         };
 
         let agent_id = &self.agent_id;
@@ -225,6 +250,7 @@ _Fill this in during your first conversation. Make it yours._
 - **Creature**: {creature}
 - **Vibe**: {vibe}
 - **Emoji**: {emoji}
+- **Icon**: {icon}
 - **Avatar**: {avatar}
 - **Runtime Type**: {runtime_type}
 
@@ -238,6 +264,7 @@ Notes:
 - The Avatar path is relative to the agent workspace, not the root workspace.
 - You can use online avatars with http(s) URLs.
 - You can embed avatars with data URIs.
+- Icon is an SVG icon name from the Lucide icon registry (e.g. Bot, Rocket, Sparkles).
 - Runtime Type determines which CLI/API backend this agent uses (default: claude_code).
 
 ---
@@ -248,6 +275,7 @@ _This file is yours to evolve. As you learn who you are, update it._
             creature = self.creature,
             vibe = self.vibe,
             emoji = self.emoji,
+            icon = icon_line,
             avatar = avatar_line,
         )
     }
@@ -275,6 +303,7 @@ _This file is yours to evolve. As you learn who you are, update it._
             name: self.name.clone(),
             emoji: self.emoji.clone(),
             avatar: self.avatar.clone(),
+            icon: self.icon.clone(),
             creature: self.creature.clone(),
             vibe: self.vibe.clone(),
             runtime_type: self.runtime_type.clone(),
@@ -289,6 +318,9 @@ pub struct IdentitySummary {
     pub name: String,
     pub emoji: String,
     pub avatar: Option<String>,
+    /// SVG icon name from the icon registry (e.g. "Bot", "Rocket").
+    #[serde(default)]
+    pub icon: Option<String>,
     pub creature: String,
     pub vibe: String,
     /// The runtime backend type this agent is bound to.

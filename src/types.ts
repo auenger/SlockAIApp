@@ -228,6 +228,16 @@ export interface CreateAgentRequest {
   runtime_type?: RuntimeType;
 }
 
+/** Request to update an existing Agent's mutable properties */
+export interface UpdateAgentRequest {
+  name?: string;
+  creature?: string;
+  vibe?: string;
+  emoji?: string;
+  /** SVG icon name from the icon registry (empty string clears it) */
+  icon?: string;
+}
+
 /** Workspace and Agent manager status */
 export interface ManagerStatus {
   total_agents: number;

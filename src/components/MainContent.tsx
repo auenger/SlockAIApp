@@ -28,6 +28,7 @@ import {
   Settings,
   AlertCircle,
   Filter,
+  Pencil,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { TabType, Task, Message, AgentWithRuntime, Channel, ChannelMessage } from '../types';
@@ -41,6 +42,7 @@ import type { SkillInfo } from '../types';
 import { useActivityLog, getActivityTypeConfig } from '../lib/useActivityLog';
 import { MentionAutocomplete, renderMentionText } from './MentionAutocomplete';
 import { AgentIcon } from './AgentIcon';
+import { EditAgentModal } from './EditAgentModal';
 import type { AgentStreamState } from '../lib/useChannel';
 
 // ---------------------------------------------------------------------------
@@ -192,6 +194,9 @@ export const MainContent: React.FC<MainContentProps> = ({
   const [editingSkill, setEditingSkill] = useState<SkillInfo | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [skillSubmitting, setSkillSubmitting] = useState(false);
+
+  // Edit agent modal state
+  const [showEditAgent, setShowEditAgent] = useState(false);
 
   // Whether we're in channel mode (vs agent/thread mode)
   const isChannelMode = !!activeChannel;
@@ -1189,7 +1194,15 @@ export const MainContent: React.FC<MainContentProps> = ({
               // Profile content
               <>
                 {/* Agent Header */}
-                <div className="flex flex-col items-center py-8 brutal-border bg-white brutal-shadow-sm">
+                <div className="flex flex-col items-center py-8 brutal-border bg-white brutal-shadow-sm relative">
+                  {/* Edit button */}
+                  <button
+                    onClick={() => setShowEditAgent(true)}
+                    className="absolute top-3 right-3 p-1.5 brutal-border bg-white hover:bg-gray-100 transition-colors"
+                    title="Edit Agent"
+                  >
+                    <Pencil size={14} />
+                  </button>
                   <AgentIcon
                     icon={profileData.identity.icon}
                     emoji={profileData.identity.emoji}
@@ -1269,6 +1282,19 @@ export const MainContent: React.FC<MainContentProps> = ({
           </div>
         )}
       </div>
+
+      {/* Edit Agent Modal */}
+      <EditAgentModal
+        isOpen={showEditAgent}
+        onClose={() => setShowEditAgent(false)}
+        onSuccess={() => {
+          // Reload profile data after edit
+          if (selectedAgent?.agent.agent_id) {
+            loadProfile(selectedAgent.agent.agent_id);
+          }
+        }}
+        agentId={selectedAgent?.agent.agent_id ?? null}
+      />
     </div>
   );
 };
