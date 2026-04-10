@@ -6,6 +6,7 @@ import { TabType, AgentWithRuntime } from './types';
 import { useThreadChat } from './lib/useThreadChat';
 import { useChannel } from './lib/useChannel';
 import { useAgentStatus } from './lib/useAgentStatus';
+import { deleteAgent } from './lib/ipc';
 
 export default function App() {
   const [activeChannel, setActiveChannel] = useState<string | null>(null);
@@ -15,7 +16,7 @@ export default function App() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
 
   // Thread chat hook (shared between Sidebar and MainContent)
-  const { threads, loadThreads, createNewThread, selectThread, activeThread, send: sendThreadMessage } = useThreadChat();
+  const { threads, loadThreads, createNewThread, selectThread, activeThread, send: sendThreadMessage, removeThread } = useThreadChat();
 
   // Channel hook
   const {
@@ -30,10 +31,11 @@ export default function App() {
     streamingText: channelStreamingText,
     agentStreams: channelAgentStreams,
     clearActive: _clearActiveChannel,
+    remove: _removeChannel,
   } = useChannel();
 
   // Agent status for channel member selection
-  const { agents: allAgents } = useAgentStatus();
+  const { agents: allAgents, scan } = useAgentStatus();
 
   // Keep selectedAgent in sync with the latest allAgents data
   // This ensures edits to agent properties (name, icon, etc.) are reflected everywhere
@@ -72,6 +74,7 @@ export default function App() {
   /** Handle thread selection from sidebar */
   const handleThreadSelect = (threadId: string) => {
     setActiveThreadId(threadId);
+    setIsThreadOpen(true);
     if (selectedAgent) {
       selectThread(selectedAgent.agent.agent_id, threadId);
     }
@@ -116,6 +119,57 @@ export default function App() {
     }
   };
 
+  /** Handle channel deletion */
+  const handleDeleteChannel = async (channelId: string) => {
+    try {
+      await _removeChannel(channelId);
+      if (activeChannel === channelId) {
+        setActiveChannel(null);
+      }
+    } catch (err) {
+      console.error('Failed to delete channel:', err);
+    }
+  };
+
+  /** Handle thread deletion */
+  const handleDeleteThread = async (threadId: string) => {
+    if (!selectedAgent) return;
+    try {
+      await removeThread(selectedAgent.agent.agent_id, threadId);
+      if (activeThreadId === threadId) {
+        setActiveThreadId(null);
+        setIsThreadOpen(false);
+      }
+    } catch (err) {
+      console.error('Failed to delete thread:', err);
+    }
+  };
+
+  /** Handle agent deletion */
+  const handleDeleteAgent = async (agentId: string) => {
+    try {
+      await deleteAgent(agentId);
+      if (selectedAgent?.agent.agent_id === agentId) {
+        setSelectedAgent(null);
+        setActiveThreadId(null);
+        setIsThreadOpen(false);
+      }
+      scan();
+    } catch (err) {
+      console.error('Failed to delete agent:', err);
+    }
+  };
+
+  /** Handle agent selection with proper state cleanup */
+  const handleAgentSelect = (agent: AgentWithRuntime) => {
+    setSelectedAgent(agent);
+    setActiveChannel(null);
+    _clearActiveChannel();
+    setActiveThreadId(null);
+    setIsThreadOpen(false);
+    setActiveTab('CHAT');
+  };
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-brutal-bg">
       {/* Left Sidebar */}
@@ -123,7 +177,7 @@ export default function App() {
         activeChannel={activeChannel ?? ''}
         onChannelSelect={handleChannelSelect}
         selectedAgentId={selectedAgent?.agent.agent_id ?? null}
-        onAgentSelect={setSelectedAgent}
+        onAgentSelect={handleAgentSelect}
         threads={threads}
         activeThreadId={activeThreadId}
         onThreadSelect={handleThreadSelect}
@@ -131,6 +185,9 @@ export default function App() {
         channels={channels}
         onCreateChannel={handleCreateChannel}
         agents={allAgents}
+        onDeleteChannel={handleDeleteChannel}
+        onDeleteThread={handleDeleteThread}
+        onDeleteAgent={handleDeleteAgent}
       />
 
       {/* Main Content Area */}
