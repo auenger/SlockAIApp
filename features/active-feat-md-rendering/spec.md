@@ -45,7 +45,25 @@ Claude Code 的 tool call（如 Read/Edit/Bash/Write/Glob/Grep 等）不再以�
 - feat-agent-runtime-exec (已完成) — 多 Runtime 对话执行
 
 ## Technical Solution
-<!-- To be filled during implementation -->
+
+### 实现方案
+
+#### 新增文件
+- `src/components/markdown/MarkdownRenderer.tsx` — 统一 Markdown 渲染，使用 react-markdown + remark-gfm + rehype-raw，自定义 Neo-Brutalism 样式
+- `src/components/markdown/CodeBlock.tsx` — Shiki 语法高亮代码块，支持 20+ 语言，一行复制，行号显示，暗色/亮色主题
+- `src/components/markdown/ToolCallBlock.tsx` — Tool Call 结构化卡片（Read/Edit/Bash/Write/Glob/Grep），可折叠/展开
+- `src/components/markdown/MessageContentRenderer.tsx` — 消息内容统一渲染入口，支持纯文本/Markdown/ContentBlock[]
+- `src/components/markdown/types.ts` — ContentBlock 类型定义和解析工具函数
+- `src/components/markdown/index.ts` — Barrel export
+
+#### 修改文件
+- `src/components/MainContent.tsx` — Agent 消息渲染使用 MarkdownRenderer，流式文本也通过 MarkdownRenderer
+- `src/components/ThreadPanel.tsx` — Thread Agent 消息渲染使用 MarkdownRenderer (compact mode)
+- `src/types.ts` — StreamEvent 增加 content_blocks 字段
+- `src/index.css` — 添加 Shiki 代码高亮样式和 Markdown body 样式
+- `src-tauri/src/runtime/mod.rs` — StreamEvent 结构体增加 content_blocks 字段
+- `src-tauri/src/runtime/claude.rs` — 从 Claude CLI verbose JSON 提取 tool_use/tool_result 结构化数据
+- `src-tauri/src/runtime/codex.rs` — StreamEvent 兼容更新
 
 ### 技术选型
 - **react-markdown** — Markdown 解析渲染

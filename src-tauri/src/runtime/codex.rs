@@ -232,6 +232,7 @@ impl AgentRuntime for CodexRuntime {
                                     error: None,
                                     msg_type: Some(msg_type),
                                     session_id: None,
+                                    content_blocks: None,
                                 };
 
                                 if tx_stdout.send(event).is_err() {
@@ -246,6 +247,7 @@ impl AgentRuntime for CodexRuntime {
                                     error: None,
                                     msg_type: Some("raw".to_string()),
                                     session_id: None,
+                                    content_blocks: None,
                                 };
                                 if tx_stdout.send(event).is_err() {
                                     break;
@@ -266,6 +268,7 @@ impl AgentRuntime for CodexRuntime {
                     error: None,
                     msg_type: Some("process_exit".to_string()),
                     session_id: None,
+                    content_blocks: None,
                 });
             }
         });
@@ -294,6 +297,7 @@ impl AgentRuntime for CodexRuntime {
                                 error: Some(format!("CLI stderr: {}", trimmed)),
                                 msg_type: Some("stderr".to_string()),
                                 session_id: None,
+                                content_blocks: None,
                             };
                             if tx_stderr.send(event).is_err() {
                                 break;
@@ -331,6 +335,7 @@ impl AgentRuntime for CodexRuntime {
                         )),
                         msg_type: Some("timeout".to_string()),
                         session_id: None,
+                        content_blocks: None,
                     });
                     break;
                 }

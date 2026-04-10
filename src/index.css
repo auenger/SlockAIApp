@@ -57,3 +57,51 @@
 @utility brutal-card {
   @apply brutal-border brutal-shadow bg-white p-4;
 }
+
+/* ---------------------------------------------------------------------------
+ * Markdown rendering styles
+ * --------------------------------------------------------------------------- */
+
+/* Shiki code block styling — respects light/dark themes */
+.shiki-code {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+  line-height: 1.625;
+  tab-size: 2;
+}
+
+.shiki-code pre,
+.shiki-code code {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* Light/dark mode Shiki theme switching */
+.shiki-code {
+  background-color: transparent !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  .shiki-code > pre,
+  .shiki-code {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  .shiki-code > pre,
+  .shiki-code {
+    color: var(--shiki-light) !important;
+    background-color: var(--shiki-light-bg) !important;
+  }
+}
+
+/* Markdown body tweaks */
+.markdown-body > *:first-child {
+  margin-top: 0 !important;
+}
+
+.markdown-body > *:last-child {
+  margin-bottom: 0 !important;
+}

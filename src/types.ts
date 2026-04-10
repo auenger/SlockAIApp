@@ -156,6 +156,8 @@ export interface StreamEvent {
   error?: string;
   type?: string;
   session_id?: string;
+  /** Structured content blocks (tool_use, tool_result) from verbose JSON output */
+  content_blocks?: unknown[];
 }
 
 /** Channel streaming chunk event (wraps StreamEvent with agent context) */

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, User } from 'lucide-react';
 import { AgentIcon } from './AgentIcon';
+import { MarkdownRenderer } from './markdown';
 import type { Thread, ThreadMessageData, AgentWithRuntime } from '../types';
 
 interface ThreadPanelProps {
@@ -128,8 +129,12 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
                     {formatTime(msg.timestamp)}
                   </span>
                 </div>
-                <div className="text-xs leading-relaxed whitespace-pre-wrap">
-                  {msg.content}
+                <div className="text-xs leading-relaxed">
+                  {msg.role === 'agent' ? (
+                    <MarkdownRenderer content={msg.content} compact />
+                  ) : (
+                    <span className="whitespace-pre-wrap">{msg.content}</span>
+                  )}
                 </div>
               </div>
             </div>
