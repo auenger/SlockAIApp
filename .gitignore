@@ -40,3 +40,9 @@ npm-debug.log*
 
 # OS generated
 Thumbs.db
+
+# Reference materials
+reference/
+
+# Build info
+tsconfig.tsbuildinfo
