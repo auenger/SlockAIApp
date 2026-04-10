@@ -121,6 +121,7 @@ pub fn run() {
             commands::channel::remove_channel_member,
             commands::channel::send_channel_message,
             commands::channel::save_channel_response,
+            commands::channel::compact_channel,
             commands::list_skills,
             commands::add_skill,
             commands::update_skill,

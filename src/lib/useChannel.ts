@@ -21,6 +21,7 @@ import {
   removeChannelMember,
   sendChannelMessage,
   saveChannelResponse,
+  compactChannel,
 } from "./ipc";
 
 // ---------------------------------------------------------------------------
@@ -84,6 +85,8 @@ export interface ChannelState {
   removeMember: (channelId: string, agentId: string) => Promise<void>;
   /** Send a message in the active channel */
   send: (channelId: string, message: string, agents: AgentWithRuntime[]) => Promise<void>;
+  /** Manually trigger compaction for a channel */
+  compact: (channelId: string) => Promise<void>;
   /** Clear the active channel */
   clearActive: () => void;
 }
@@ -163,6 +166,9 @@ export function useChannel(): ChannelState {
             joined_at: new Date().toISOString(),
           })),
           messages: [],
+          summary: null,
+          summary_up_to: null,
+          summary_updated_at: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -193,6 +199,9 @@ export function useChannel(): ChannelState {
           name: channelId === "dev-channel-1" ? "all" : "channel",
           members: [],
           messages: [],
+          summary: null,
+          summary_up_to: null,
+          summary_updated_at: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         });
@@ -518,6 +527,19 @@ export function useChannel(): ChannelState {
     setAgentStreams([]);
   }, []);
 
+  /** Manually trigger compaction for a channel */
+  const compact = useCallback(async (channelId: string) => {
+    if (!isTauri) return;
+    try {
+      const updated = await compactChannel(channelId);
+      if (activeChannel?.id === channelId) {
+        setActiveChannel(updated);
+      }
+    } catch (err) {
+      console.error("[useChannel] compact failed:", err);
+    }
+  }, [activeChannel]);
+
   return {
     channels,
     activeChannel,
@@ -535,6 +557,7 @@ export function useChannel(): ChannelState {
     addMember,
     removeMember,
     send,
+    compact,
     clearActive,
   };
 }

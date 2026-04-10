@@ -285,6 +285,13 @@ export async function saveChannelResponse(
   return invoke<Channel>("save_channel_response", { channelId, agentId, content });
 }
 
+/** Compact (summarize) older messages in a channel. */
+export async function compactChannel(
+  channelId: string
+): Promise<Channel> {
+  return invoke<Channel>("compact_channel", { channelId });
+}
+
 // ---------------------------------------------------------------------------
 // API Key management commands
 // ---------------------------------------------------------------------------

@@ -63,6 +63,9 @@ pub fn create_channel(
         name: request.name,
         members,
         messages: Vec::new(),
+        summary: None,
+        summary_up_to: None,
+        summary_updated_at: None,
         created_at: now.clone(),
         updated_at: now,
     };
@@ -529,19 +532,46 @@ pub async fn send_channel_message(
                 .build_context_prefix(&agent_id)
                 .unwrap_or_default();
 
-            // Append channel context: recent N messages as conversation history
+            // --- Sliding window + summary context ---
+            // If a summary exists, include it as the "older context" prefix,
+            // then only include recent messages that are NOT already summarized.
+            let summary_up_to_idx = match &latest_channel.summary_up_to {
+                Some(sid) => latest_channel
+                    .messages
+                    .iter()
+                    .position(|m| m.id == *sid)
+                    .map(|i| i + 1)
+                    .unwrap_or(0),
+                None => 0,
+            };
+
+            // Recent messages = those after the summary cutoff
+            let recent_start = if summary_up_to_idx > 0 {
+                summary_up_to_idx
+            } else {
+                // No summary: use the last N messages (legacy behavior)
+                latest_channel
+                    .messages
+                    .len()
+                    .saturating_sub(CHANNEL_CONTEXT_HISTORY_LIMIT)
+            };
+
             let recent: Vec<&ChannelMessage> = latest_channel
                 .messages
                 .iter()
-                .rev()
-                .take(CHANNEL_CONTEXT_HISTORY_LIMIT)
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
+                .skip(recent_start)
                 .collect();
 
+            // Include summary if available
+            if let Some(ref summary) = latest_channel.summary {
+                context_prefix.push_str("\n\n# Earlier Conversation Summary\n\n");
+                context_prefix.push_str(summary);
+                context_prefix.push_str("\n\n");
+            }
+
+            // Append recent conversation history
             if !recent.is_empty() {
-                context_prefix.push_str("\n\n# Channel Conversation History\n\n");
+                context_prefix.push_str("# Channel Recent Messages\n\n");
                 context_prefix.push_str(&format!(
                     "You are in a channel named \"{}\". Here are the recent messages:\n\n",
                     latest_channel.name
@@ -760,6 +790,9 @@ pub async fn send_channel_message(
         store.load(&channel_id).map_err(|e| format!("load failed: {e}"))?
     };
 
+    // Trigger auto-compaction check (runs asynchronously, does not block response)
+    maybe_auto_compact(app, state, channel_id.clone());
+
     Ok(final_channel)
 }
 
@@ -794,4 +827,258 @@ pub fn save_channel_response(
     store.save(&channel).map_err(|e| format!("save failed: {e}"))?;
 
     Ok(channel)
+}
+
+// ---------------------------------------------------------------------------
+// Channel context compaction (sliding window + auto summary)
+// ---------------------------------------------------------------------------
+
+/// Trigger auto-compaction when message count exceeds this threshold.
+const COMPACT_THRESHOLD: usize = 30;
+/// Number of recent messages to keep in full (not summarized).
+const RECENT_KEEP_COUNT: usize = 10;
+
+/// The prompt used to instruct the Agent to generate a conversation summary.
+const SUMMARY_PROMPT: &str = r#"你是一个对话摘要助手。请将以下 Channel 对话历史压缩为一份简洁的结构化摘要。
+
+要求：
+1. 保留所有关键决策和结论
+2. 保留未完成的任务和待办事项
+3. 保留 Agent 之间的协作上下文（谁做了什么、约定了什么）
+4. 用 [AgentName]: 标记发言人
+5. 不超过 500 字
+
+对话历史：
+"#;
+
+/// Format a slice of channel messages into a readable transcript for summarization.
+fn format_messages_for_summary(
+    messages: &[ChannelMessage],
+    manager: &crate::workspace::manager::AgentManager,
+) -> String {
+    messages
+        .iter()
+        .map(|msg| {
+            let sender = if msg.sender_type == "user" {
+                "User".to_string()
+            } else {
+                manager
+                    .get_agent(&msg.sender_id)
+                    .map(|a| a.identity.name.clone())
+                    .unwrap_or_else(|| msg.sender_id.clone())
+            };
+            format!("[{}]: {}", sender, msg.content)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Compact (summarize) older messages in a channel.
+///
+/// This can be called:
+/// - Automatically by `send_channel_message` when messages exceed `COMPACT_THRESHOLD`
+/// - Manually via the `compact_channel` Tauri command
+///
+/// Uses the first available agent's runtime to generate the summary.
+#[tauri::command]
+pub async fn compact_channel(
+    state: tauri::State<'_, crate::AppState>,
+    channel_id: String,
+) -> Result<Channel, String> {
+    // Load channel and determine the range of messages to summarize
+    let (full_prompt, summary_up_to_id, _agent_id, runtime_id, workspace_path) = {
+        let manager = state
+            .agent_manager
+            .lock()
+            .map_err(|e| format!("lock error: {e}"))?;
+
+        let channels_dir = manager.channels_dir();
+        let store = ChannelStore::new(&channels_dir);
+        let channel = store.load(&channel_id).map_err(|e| format!("load failed: {e}"))?;
+
+        let total = channel.messages.len();
+        if total <= RECENT_KEEP_COUNT {
+            return Ok(channel);
+        }
+
+        let start_idx = match &channel.summary_up_to {
+            Some(sid) => channel
+                .messages
+                .iter()
+                .position(|m| m.id == *sid)
+                .map(|i| i + 1)
+                .unwrap_or(0),
+            None => 0,
+        };
+
+        let end_idx = total.saturating_sub(RECENT_KEEP_COUNT);
+        if start_idx >= end_idx {
+            return Ok(channel);
+        }
+
+        let messages_to_summarize: Vec<ChannelMessage> =
+            channel.messages[start_idx..end_idx].to_vec();
+        if messages_to_summarize.is_empty() {
+            return Ok(channel);
+        }
+
+        let summary_up_to_id = messages_to_summarize
+            .last()
+            .map(|m| m.id.clone())
+            .unwrap_or_default();
+
+        let agent_id = channel
+            .members
+            .first()
+            .map(|m| m.agent_id.clone())
+            .ok_or_else(|| "channel has no members".to_string())?;
+
+        let agent = manager
+            .get_agent(&agent_id)
+            .ok_or_else(|| format!("agent not found: {agent_id}"))?;
+
+        let runtime_id = agent.identity.runtime_type.runtime_id().to_string();
+
+        let workspace = manager
+            .get_workspace(&agent_id)
+            .ok_or_else(|| format!("workspace not found for agent: {agent_id}"))?;
+        let workspace_path = workspace.base_path().to_string_lossy().to_string();
+
+        let transcript = format_messages_for_summary(&messages_to_summarize, &manager);
+
+        let full_prompt = match &channel.summary {
+            Some(existing) => {
+                format!(
+                    "{}\n\n## 已有摘要\n\n{}\n\n## 新增对话\n\n{}",
+                    SUMMARY_PROMPT, existing, transcript
+                )
+            }
+            None => format!("{}{}", SUMMARY_PROMPT, transcript),
+        };
+
+        log::info!(
+            "[compact_channel] Summarizing {} messages (idx {}..{}) for channel {}",
+            messages_to_summarize.len(),
+            start_idx,
+            end_idx,
+            channel_id
+        );
+
+        (full_prompt, summary_up_to_id, agent_id, runtime_id, workspace_path)
+    };
+
+    // Execute summary generation via Agent runtime
+    let summary_text = {
+        let registry = state
+            .agent_runtime_registry
+            .lock()
+            .map_err(|e| e.to_string())?;
+
+        let runtime = registry.get_runtime_instance(&runtime_id)?;
+
+        if !runtime.is_ready() {
+            return Err(format!(
+                "Runtime {} not available for summary generation",
+                runtime.name()
+            ));
+        }
+
+        let params = crate::runtime::ExecuteParams {
+            message: full_prompt,
+            session_id: None, // Fresh session for summary
+            workspace: Some(workspace_path),
+            system_prompt: None,
+            timeout_secs: 60,
+        };
+
+        let receiver = runtime.execute(params)?;
+
+        // Collect the full response
+        let mut result = String::new();
+        while let Ok(event) = receiver.recv_timeout(std::time::Duration::from_secs(60)) {
+            if event.msg_type.as_deref() == Some("assistant") && !event.text.is_empty() {
+                result.push_str(&event.text);
+            }
+            if event.is_done {
+                break;
+            }
+        }
+
+        if result.is_empty() {
+            return Err("Summary generation returned empty result".to_string());
+        }
+
+        result
+    };
+
+    log::info!(
+        "[compact_channel] Summary generated ({} chars) for channel {}",
+        summary_text.len(),
+        channel_id
+    );
+
+    // Update channel with the new summary
+    let updated_channel = {
+        let manager = state
+            .agent_manager
+            .lock()
+            .map_err(|e| format!("lock error: {e}"))?;
+
+        let channels_dir = manager.channels_dir();
+        let store = ChannelStore::new(&channels_dir);
+        let mut channel = store.load(&channel_id).map_err(|e| format!("load failed: {e}"))?;
+
+        channel.summary = Some(summary_text);
+        channel.summary_up_to = Some(summary_up_to_id);
+        channel.summary_updated_at = Some(channel::now_iso());
+        channel.updated_at = channel::now_iso();
+
+        store.save(&channel).map_err(|e| format!("save failed: {e}"))?;
+
+        channel
+    };
+
+    Ok(updated_channel)
+}
+
+/// Check if a channel needs compaction and trigger it asynchronously.
+///
+/// Called by `send_channel_message` after adding the user message.
+/// Returns immediately; compaction runs in a background thread.
+pub fn maybe_auto_compact(
+    app: AppHandle,
+    state: tauri::State<'_, crate::AppState>,
+    channel_id: String,
+) {
+    // Quick check: do we need compaction?
+    let needs_compact = {
+        let manager = match state.agent_manager.lock() {
+            Ok(m) => m,
+            Err(_) => return,
+        };
+        let channels_dir = manager.channels_dir();
+        let store = ChannelStore::new(&channels_dir);
+        match store.load(&channel_id) {
+            Ok(ch) => ch.messages.len() > COMPACT_THRESHOLD,
+            Err(_) => false,
+        }
+    };
+
+    if !needs_compact {
+        return;
+    }
+
+    log::info!(
+        "[maybe_auto_compact] Channel {} exceeds {} messages, triggering auto-compaction",
+        channel_id,
+        COMPACT_THRESHOLD
+    );
+
+    // Emit event to frontend so it can call compact_channel command
+    let _ = app.emit(
+        "channel://needs-compact",
+        serde_json::json!({
+            "channel_id": channel_id,
+        }),
+    );
 }

@@ -205,10 +205,21 @@ export const MentionAutocomplete: React.FC<MentionAutocompleteProps> = ({
               </div>
               <div className="flex-1 min-w-0">
                 <div className={cn(
-                  "font-black truncate",
+                  "font-black truncate flex items-center gap-1.5",
                   idx === selectedIndex ? "text-white" : ""
                 )}>
                   {awr.agent.name}
+                  <span className={cn(
+                    "text-[8px] font-mono px-1 py-0 rounded-sm",
+                    idx === selectedIndex
+                      ? "bg-white/20 text-white/80"
+                      : "bg-gray-100 text-gray-400"
+                  )}>
+                    {awr.runtime_type === 'claude_code' ? 'Claude Code'
+                      : awr.runtime_type === 'codex' ? 'Codex'
+                      : awr.runtime_type === 'gemini' ? 'Gemini'
+                      : String(awr.runtime_type)}
+                  </span>
                 </div>
                 <div className={cn(
                   "text-[9px] truncate",
@@ -230,28 +241,36 @@ export const MentionAutocomplete: React.FC<MentionAutocompleteProps> = ({
 // ---------------------------------------------------------------------------
 
 /**
- * Renders message content with @mentions highlighted.
+ * Renders message content with @mentions highlighted as colored agent pills.
  * Returns an array of React nodes.
  */
 export function renderMentionText(
   content: string,
   agents: AgentWithRuntime[],
-  mentionClassName: string = "text-blue-600 font-bold bg-blue-50 px-0.5 rounded"
+  mentionClassName?: string,
+  agentColorMap?: Map<string, number>
 ): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
 
-  // Build regex pattern from agent names/ids
-  const agentPatterns = agents.map((awr) => ({
+  // Build lookup from agent names/ids
+  const agentLookup = agents.map((awr) => ({
     id: awr.agent.agent_id,
     name: awr.agent.name,
-    pattern: `@${awr.agent.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
+    emoji: awr.agent.emoji || '',
+    awr,
   }));
 
-  // Simple approach: find all @Word patterns
+  // Find all @Word patterns
   const mentionRegex = /@(\S+)/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   let keyIdx = 0;
+
+  const colorList = [
+    'bg-brutal-cyan', 'bg-brutal-pink', 'bg-brutal-yellow',
+    'bg-purple-400', 'bg-brutal-green', 'bg-orange-400',
+    'bg-teal-400', 'bg-red-400',
+  ];
 
   while ((match = mentionRegex.exec(content)) !== null) {
     // Push text before the mention
@@ -265,12 +284,25 @@ export function renderMentionText(
     const mentionName = match[1]; // e.g., "Claude"
 
     // Check if this matches an agent
-    const matchedAgent = agentPatterns.find(
-      (ap) => ap.name.toLowerCase() === mentionName.toLowerCase() ||
-              ap.id.toLowerCase() === mentionName.toLowerCase()
+    const matched = agentLookup.find(
+      (a) => a.name.toLowerCase() === mentionName.toLowerCase() ||
+              a.id.toLowerCase() === mentionName.toLowerCase()
     );
 
-    if (matchedAgent) {
+    if (matched) {
+      const colorIdx = agentColorMap?.get(matched.id) ?? 0;
+      const bgColor = colorList[colorIdx % colorList.length];
+      const emoji = matched.emoji ? `${matched.emoji} ` : '';
+      parts.push(
+        <span
+          key={keyIdx++}
+          className={`inline-flex items-center gap-0.5 ${bgColor} text-black font-bold px-1.5 py-0 rounded-sm text-xs border border-black`}
+        >
+          {emoji}{matched.name}
+        </span>
+      );
+    } else if (mentionClassName) {
+      // Fallback to legacy style if className provided
       parts.push(
         <span key={keyIdx++} className={mentionClassName}>
           {fullMatch}

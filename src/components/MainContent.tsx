@@ -733,7 +733,7 @@ export const MainContent: React.FC<MainContentProps> = ({
                       <div className="text-sm leading-relaxed whitespace-pre-wrap">
                         {/* Highlight @mentions in channel messages */}
                         {isChannelMode
-                          ? renderMentionText(msg.content, allAgents)
+                          ? renderMentionText(msg.content, allAgents, undefined, agentColorMap)
                           : msg.content
                         }
                       </div>
