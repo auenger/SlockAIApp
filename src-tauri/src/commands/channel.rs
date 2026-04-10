@@ -3,12 +3,18 @@
 //! Provides CRUD operations for Channels, member management,
 //! message sending with multi-Agent @mention support,
 //! and context-orchestrated execution.
+//!
+//! ## Dual-Write Strategy
+//!
+//! Activity logs are written to both JSONL and SQLite.
+//! Channel metadata is tracked in SQLite for fast listing.
 
 use crate::workspace::channel::{
     self, Channel, ChannelInfo, ChannelMember, ChannelMessage, ChannelStore,
 };
 use crate::workspace::mention;
 use crate::storage::activity::{ActivityStore, ActivityType, create_entry};
+use crate::storage::db_helpers;
 use tauri::{AppHandle, Emitter};
 
 // ---------------------------------------------------------------------------
@@ -71,9 +77,35 @@ pub fn create_channel(
         new_channel.name
     );
 
-    // Log activity
+    // Insert channel metadata into SQLite
     {
-        let store = ActivityStore::new(manager.workspace_root());
+        let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
+        let channel_row = db_helpers::ChannelRow {
+            id: new_channel.id.clone(),
+            name: new_channel.name.clone(),
+            messages_jsonl_path: None,
+            created_at: new_channel.created_at.clone(),
+            updated_at: new_channel.updated_at.clone(),
+        };
+        if let Err(e) = db_helpers::insert_channel(&db_conn, &channel_row) {
+            log::warn!("[create_channel] Failed to insert channel into SQLite: {}", e);
+        }
+
+        // Insert channel members into SQLite
+        for member in &new_channel.members {
+            let member_row = db_helpers::ChannelMemberRow {
+                channel_id: new_channel.id.clone(),
+                agent_id: member.agent_id.clone(),
+                role: member.role.clone(),
+                joined_at: member.joined_at.clone(),
+            };
+            if let Err(e) = db_helpers::insert_channel_member(&db_conn, &member_row) {
+                log::warn!("[create_channel] Failed to insert channel member into SQLite: {}", e);
+            }
+        }
+
+        // Log activity (dual-write: JSONL + SQLite)
+        let activity_store = ActivityStore::new(manager.workspace_root());
         let member_ids: Vec<&str> = new_channel.members.iter().map(|m| m.agent_id.as_str()).collect();
         let entry = create_entry(
             ActivityType::ChannelCreated,
@@ -85,8 +117,25 @@ pub fn create_channel(
                 "members": member_ids,
             }),
         );
-        if let Err(e) = store.append(&entry) {
-            log::warn!("[create_channel] Failed to log activity: {}", e);
+        if let Err(e) = activity_store.append(&entry) {
+            log::warn!("[create_channel] Failed to log activity to JSONL: {}", e);
+        }
+
+        let activity_type_str = serde_json::to_string(&ActivityType::ChannelCreated)
+            .unwrap_or_else(|_| "\"system\"".to_string())
+            .trim_matches('"')
+            .to_string();
+        let db_row = db_helpers::ActivityLogRow {
+            id: entry.id,
+            timestamp: entry.timestamp,
+            activity_type: activity_type_str,
+            agent_id: entry.agent_id,
+            workspace_id: entry.workspace_id,
+            summary: entry.summary,
+            details_json: serde_json::to_string(&entry.details).unwrap_or_else(|_| "{}".to_string()),
+        };
+        if let Err(e) = db_helpers::insert_activity(&db_conn, &db_row) {
+            log::warn!("[create_channel] Failed to log activity to SQLite: {}", e);
         }
     }
 
@@ -98,6 +147,49 @@ pub fn create_channel(
 pub fn list_channels(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<Vec<ChannelInfo>, String> {
+    // Try SQLite first for fast listing
+    {
+        let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
+        if let Ok(rows) = db_helpers::list_channels(&db_conn) {
+            if !rows.is_empty() {
+                let channel_infos: Vec<ChannelInfo> = rows.into_iter().map(|r| {
+                    ChannelInfo {
+                        id: r.id,
+                        name: r.name,
+                        member_count: 0, // Would need join query, will be filled from file fallback
+                        unread_count: 0,
+                        preview: String::new(),
+                        message_count: 0,
+                        created_at: r.created_at,
+                        updated_at: r.updated_at,
+                    }
+                }).collect();
+                // If we have SQLite data, supplement with member counts from file
+                let manager = state
+                    .agent_manager
+                    .lock()
+                    .map_err(|e| format!("lock error: {e}"))?;
+                let channels_dir = manager.channels_dir();
+                let store = ChannelStore::new(&channels_dir);
+                let file_channels = store.list().unwrap_or_default();
+                let file_map: std::collections::HashMap<String, ChannelInfo> = file_channels
+                    .into_iter()
+                    .map(|c| (c.id.clone(), c))
+                    .collect();
+                let merged: Vec<ChannelInfo> = channel_infos.into_iter().map(|mut ci| {
+                    if let Some(fc) = file_map.get(&ci.id) {
+                        ci.member_count = fc.member_count;
+                        ci.message_count = fc.message_count;
+                        ci.preview = fc.preview.clone();
+                    }
+                    ci
+                }).collect();
+                return Ok(merged);
+            }
+        }
+    }
+
+    // Fallback to file-based listing
     let manager = state
         .agent_manager
         .lock()
@@ -154,17 +246,47 @@ pub fn update_channel(
 
     log::info!("[update_channel] channel_id={}", channel_id);
 
-    // Log activity
+    // Update channel metadata in SQLite
     {
-        let store = ActivityStore::new(manager.workspace_root());
+        let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
+        let channel_row = db_helpers::ChannelRow {
+            id: channel.id.clone(),
+            name: channel.name.clone(),
+            messages_jsonl_path: None,
+            created_at: channel.created_at.clone(),
+            updated_at: channel.updated_at.clone(),
+        };
+        if let Err(e) = db_helpers::insert_channel(&db_conn, &channel_row) {
+            log::warn!("[update_channel] Failed to update channel in SQLite: {}", e);
+        }
+
+        // Log activity (dual-write: JSONL + SQLite)
+        let activity_store = ActivityStore::new(manager.workspace_root());
         let entry = create_entry(
             ActivityType::ChannelUpdated,
             None,
             format!("Channel \"{}\" updated", channel.name),
             serde_json::json!({ "channel_id": channel_id, "channel_name": channel.name }),
         );
-        if let Err(e) = store.append(&entry) {
-            log::warn!("[update_channel] Failed to log activity: {}", e);
+        if let Err(e) = activity_store.append(&entry) {
+            log::warn!("[update_channel] Failed to log activity to JSONL: {}", e);
+        }
+
+        let activity_type_str = serde_json::to_string(&ActivityType::ChannelUpdated)
+            .unwrap_or_else(|_| "\"system\"".to_string())
+            .trim_matches('"')
+            .to_string();
+        let db_row = db_helpers::ActivityLogRow {
+            id: entry.id,
+            timestamp: entry.timestamp,
+            activity_type: activity_type_str,
+            agent_id: entry.agent_id,
+            workspace_id: entry.workspace_id,
+            summary: entry.summary,
+            details_json: serde_json::to_string(&entry.details).unwrap_or_else(|_| "{}".to_string()),
+        };
+        if let Err(e) = db_helpers::insert_activity(&db_conn, &db_row) {
+            log::warn!("[update_channel] Failed to log activity to SQLite: {}", e);
         }
     }
 
@@ -186,10 +308,19 @@ pub fn delete_channel(
     let store = ChannelStore::new(&channels_dir);
     store.delete(&channel_id).map_err(|e| format!("delete failed: {e}"))?;
 
+    // Delete from SQLite
+    {
+        let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
+        if let Err(e) = db_helpers::delete_channel(&db_conn, &channel_id) {
+            log::warn!("[delete_channel] Failed to delete channel from SQLite: {}", e);
+        }
+    }
+
     log::info!("[delete_channel] channel_id={}", channel_id);
 
-    // Log activity
+    // Log activity (dual-write: JSONL + SQLite)
     {
+        let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
         let activity_store = ActivityStore::new(manager.workspace_root());
         let entry = create_entry(
             ActivityType::ChannelDeleted,
@@ -198,7 +329,24 @@ pub fn delete_channel(
             serde_json::json!({ "channel_id": channel_id }),
         );
         if let Err(e) = activity_store.append(&entry) {
-            log::warn!("[delete_channel] Failed to log activity: {}", e);
+            log::warn!("[delete_channel] Failed to log activity to JSONL: {}", e);
+        }
+
+        let activity_type_str = serde_json::to_string(&ActivityType::ChannelDeleted)
+            .unwrap_or_else(|_| "\"system\"".to_string())
+            .trim_matches('"')
+            .to_string();
+        let db_row = db_helpers::ActivityLogRow {
+            id: entry.id,
+            timestamp: entry.timestamp,
+            activity_type: activity_type_str,
+            agent_id: entry.agent_id,
+            workspace_id: entry.workspace_id,
+            summary: entry.summary,
+            details_json: serde_json::to_string(&entry.details).unwrap_or_else(|_| "{}".to_string()),
+        };
+        if let Err(e) = db_helpers::insert_activity(&db_conn, &db_row) {
+            log::warn!("[delete_channel] Failed to log activity to SQLite: {}", e);
         }
     }
 

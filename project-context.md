@@ -1,6 +1,6 @@
 ---
 last_updated: '2026-04-06'
-version: 3
+version: 4
 features_completed: 0
 ---
 
@@ -18,7 +18,7 @@ features_completed: 0
 2. **@Agent = 触发器** — 在 channel 里 @某个 Agent，触发一次 LLM 请求
 3. **上下文编排 = 核心引擎** — 决定对话历史哪些压缩、哪些全量携带，喂给 Agent
 4. **Workspace = Agent 文件目录** — 每个 Agent 对应独立的文件存放目录
-5. **文档/JSONL 驱动** — 不用数据库，App 直接读写文件
+5. **SQLite + JSONL 混合存储** — SQLite 管理结构化元数据，JSONL 存储消息体
 
 ### 核心交互流
 
@@ -38,7 +38,7 @@ features_completed: 0
 | Agent Runtime | Claude Code via MCP | **Claude Code + Codex 双 runtime** |
 | 通信 | MCP over WebSocket | **直接调用 LLM API** |
 | 上下文管理 | 隐式（Agent 自行管理 MEMORY.md） | **显式上下文编排引擎** |
-| 存储 | 云端 + 本地混合 | **纯本地 JSONL / Markdown** |
+| 存储 | 云端 + 本地混合 | **SQLite + JSONL 混合存储** |
 | 触发机制 | Agent 自动轮询消息 | **@Agent 显式触发** |
 
 ## 技术栈
@@ -53,7 +53,7 @@ features_completed: 0
 | Backend | Rust | Tauri Commands + Events |
 | Agent Runtime | **Claude Code** / **Codex** | 双 runtime 支持 |
 | LLM 调用 | Anthropic API / OpenAI API | Rust 端直接调用 |
-| 对话存储 | **JSONL** (对话记录) + **Markdown** (文档) | 文件驱动，无数据库 |
+| 对话存储 | **SQLite** (元数据) + **JSONL** (消息体) | 混合存储，结构化查询 + 追加写入 |
 | State | `useState` + switch 视图切换 | 不引入 Redux |
 | Testing | Vitest | 前端测试 |
 
@@ -143,8 +143,9 @@ SlockAI/
 │  │  └─────────────────────────────────────────────┘     ││
 │  │                                                      ││
 │  │  ┌─────────────────────────────────────────────┐     ││
-│  │  │    Storage Layer (文档 / JSONL 驱动)          │     ││
-│  │  │  workspaces/{agent-id}/conversations/        │     ││
+│  │  │    Storage Layer (SQLite + JSONL 混合)        │     ││
+│  │  │  SQLite: metadata (agents/channels/...)      │     ││
+│  │  │  JSONL: message bodies (append-only)         │     ││
 │  │  └─────────────────────────────────────────────┘     ││
 │  └──────────────────────────────────────────────────────┘│
 └──────────────────────────────────────────────────────────┘
@@ -209,9 +210,33 @@ Channel "general"
 - `workspaces/{agent-id}/context/` — 上下文快照
 - `workspaces/{agent-id}/output/` — Agent 输出文件
 
-#### 5. 文档/JSONL 驱动
+#### 5. SQLite + JSONL 混合存储
 
-不使用数据库。对话记录以 JSONL 格式存储，每行一条消息：
+使用 SQLite 管理结构化元数据（agents, channels, threads, tasks, skills, activity_log），JSONL 存储消息体。SQLite 只保存文件路径指针，不存储消息正文。
+
+**SQLite Tables (结构化元数据)**:
+- `agents` — Agent 配置与状态
+- `channels` — Channel 元数据
+- `channel_members` — Channel <-> Agent 多对多
+- `threads` — Thread 元数据 + JSONL 指针
+- `tasks` — Task 看板
+- `skills` — 技能配置
+- `activity_log` — Activity 时间线索引
+
+**JSONL / Files (追加写入)**:
+- Thread 消息体: `agents/{agent_id}/conversations/threads/{thread_id}.jsonl`
+- Channel 消息体: Channel JSON 或独立 JSONL
+- Agent 身份文件: `agents/{agent_id}/IDENTITY.md`, `SOUL.md`
+- Workspace 文件: 代码、输出、上下文快照
+
+**读写模式**:
+```
+写入消息: JSONL.append(message) + SQLite.update(thread metadata)
+查询列表: SQLite.query("SELECT * FROM threads WHERE agent_id = ?")
+加载历史: SQLite.query(jsonl_path) -> JSONL.read_all(path)
+```
+
+对话记录仍以 JSONL 格式存储，每行一条消息：
 
 ```jsonl
 {"id":"msg_001","role":"user","content":"帮我 review 代码 @Claude","timestamp":"2026-04-06T22:00:00+08:00","channel":"code-review","trigger_agent":"claude"}
@@ -253,7 +278,7 @@ trait AgentRuntime {
 | 对话模型 | Channel = 对话容器 | 不同频道隔离对话上下文 |
 | 触发机制 | @Agent 显式触发 | 用户明确控制何时调用 LLM |
 | 上下文管理 | 编排引擎 (Orchestrator) | 显式控制 token 预算和压缩策略 |
-| 存储 | JSONL + Markdown (文件驱动) | 零数据库依赖，透明可查 |
+| 存储 | **SQLite + JSONL 混合方案** | SQLite 管理元数据（快速查询），JSONL 存储消息体（追加写入） |
 | 状态管理 | useState + switch | 轻量，无 React Router |
 | IPC | Tauri v2 invoke/listen | 前端 ↔ Rust 双向通信 |
 
@@ -274,7 +299,6 @@ trait AgentRuntime {
 
 - 不在前端硬编码 API Keys
 - 不引入 React Router
-- 不使用 SQLite 或任何数据库
 - 不在前端 mock 终端 I/O
 - 不在 Thread 内触发新的 @Agent（只有 Channel 顶层可触发）
 - 不跳过上下文编排直接调用 LLM API
@@ -298,3 +322,4 @@ trait AgentRuntime {
 - 2026-04-06: 初始 project-context 创建
 - 2026-04-06: v2 — 确定技术栈 (React + Tauri Rust)
 - 2026-04-06: v3 — 核心架构重构：Channel=对话容器, @Agent=触发器, 上下文编排引擎, 双Runtime(Claude Code+Codex), JSONL驱动
+- 2026-04-10: v4 — 存储架构升级为 SQLite + JSONL 混合方案：SQLite 管理结构化元数据（agents, channels, threads, tasks, skills, activity_log），JSONL 继续存储消息体。添加 rusqlite (bundled) + migration 系统。

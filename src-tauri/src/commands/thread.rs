@@ -14,9 +14,14 @@
 //!    Each message is appended as a single JSON line. Used for crash recovery
 //!    and as a redundant backup. On thread load, JSONL messages are reconciled
 //!    with the thread JSON to recover any lost data.
+//!
+//! 3. **SQLite** -- Thread metadata (id, agent_id, title, message_count, jsonl_path)
+//!    is tracked in the `threads` table. This enables fast listing without scanning
+//!    JSON files, and keeps metadata in sync with the file-based storage.
 
 use crate::storage::jsonl::JsonlStore;
 use crate::storage::activity::{ActivityStore, ActivityType, create_entry};
+use crate::storage::db_helpers;
 use crate::AppState;
 use crate::runtime::ExecuteParams;
 use crate::workspace::thread::{self, Thread, ThreadInfo, ThreadMessage, ThreadStore};
@@ -68,18 +73,37 @@ pub fn create_thread(
     let now = thread::now_iso();
 
     let new_thread = Thread {
-        id: thread_id,
+        id: thread_id.clone(),
         agent_id: agent_id.clone(),
         title: format!("Thread with {}", agent.identity.name),
         session_id: Some(session_id),
         messages: Vec::new(),
         created_at: now.clone(),
-        updated_at: now,
+        updated_at: now.clone(),
     };
 
     let conv_dir = workspace.conversations_dir();
     let store = ThreadStore::new(&conv_dir);
     store.save(&new_thread).map_err(|e| format!("save failed: {e}"))?;
+
+    // Insert thread metadata into SQLite
+    {
+        let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
+        let jsonl_rel_path = format!("agents/{}/conversations/threads/{}.jsonl", agent_id, new_thread.id);
+        let thread_row = db_helpers::ThreadRow {
+            id: new_thread.id.clone(),
+            agent_id: agent_id.clone(),
+            title: new_thread.title.clone(),
+            session_id: new_thread.session_id.clone(),
+            message_count: 0,
+            jsonl_path: Some(jsonl_rel_path),
+            created_at: new_thread.created_at.clone(),
+            updated_at: new_thread.updated_at.clone(),
+        };
+        if let Err(e) = db_helpers::insert_thread(&db_conn, &thread_row) {
+            log::warn!("[create_thread] Failed to insert thread into SQLite: {}", e);
+        }
+    }
 
     log::info!(
         "[create_thread] thread_id={}, agent_id={}",
@@ -87,17 +111,36 @@ pub fn create_thread(
         new_thread.agent_id
     );
 
-    // Log activity
+    // Log activity (dual-write: JSONL + SQLite)
     {
-        let store = ActivityStore::new(manager.workspace_root());
+        let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
+        let activity_store = ActivityStore::new(manager.workspace_root());
         let entry = create_entry(
             ActivityType::ConversationStarted,
             Some(agent_id.clone()),
             format!("Conversation started with {}", agent.identity.name),
             serde_json::json!({ "thread_id": new_thread.id }),
         );
-        if let Err(e) = store.append(&entry) {
-            log::warn!("[create_thread] Failed to log activity: {}", e);
+        if let Err(e) = activity_store.append(&entry) {
+            log::warn!("[create_thread] Failed to log activity to JSONL: {}", e);
+        }
+
+        // Dual-write activity to SQLite
+        let activity_type_str = serde_json::to_string(&ActivityType::ConversationStarted)
+            .unwrap_or_else(|_| "\"system\"".to_string())
+            .trim_matches('"')
+            .to_string();
+        let db_row = db_helpers::ActivityLogRow {
+            id: entry.id.clone(),
+            timestamp: entry.timestamp.clone(),
+            activity_type: activity_type_str,
+            agent_id: entry.agent_id.clone(),
+            workspace_id: entry.workspace_id.clone(),
+            summary: entry.summary.clone(),
+            details_json: serde_json::to_string(&entry.details).unwrap_or_else(|_| "{}".to_string()),
+        };
+        if let Err(e) = db_helpers::insert_activity(&db_conn, &db_row) {
+            log::warn!("[create_thread] Failed to log activity to SQLite: {}", e);
         }
     }
 
@@ -110,6 +153,30 @@ pub fn list_threads(
     state: tauri::State<'_, AppState>,
     agent_id: String,
 ) -> Result<Vec<ThreadInfo>, String> {
+    // Try SQLite first for fast listing
+    {
+        let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
+        let db_threads = db_helpers::list_threads_by_agent(&db_conn, &agent_id);
+        if let Ok(rows) = db_threads {
+            if !rows.is_empty() {
+                // We have SQLite data -- use it for fast listing
+                let thread_infos: Vec<ThreadInfo> = rows.into_iter().map(|r| {
+                    ThreadInfo {
+                        id: r.id,
+                        agent_id: r.agent_id,
+                        title: r.title,
+                        preview: String::new(), // preview not stored in SQLite metadata
+                        message_count: r.message_count as usize,
+                        created_at: r.created_at,
+                        updated_at: r.updated_at,
+                    }
+                }).collect();
+                return Ok(thread_infos);
+            }
+        }
+    }
+
+    // Fallback to file-based listing if SQLite has no data
     let manager = state
         .agent_manager
         .lock()
@@ -191,19 +258,45 @@ pub fn delete_thread(
         log::warn!("[delete_thread] JSONL delete failed for thread {}: {}", thread_id, e);
     }
 
+    // Delete from SQLite
+    {
+        let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
+        if let Err(e) = db_helpers::delete_thread(&db_conn, &thread_id) {
+            log::warn!("[delete_thread] SQLite delete failed for thread {}: {}", thread_id, e);
+        }
+    }
+
     log::info!("[delete_thread] thread_id={}, agent_id={}", thread_id, agent_id);
 
-    // Log activity
+    // Log activity (dual-write: JSONL + SQLite)
     {
-        let store = ActivityStore::new(manager.workspace_root());
+        let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
+        let activity_store = ActivityStore::new(manager.workspace_root());
         let entry = create_entry(
             ActivityType::ConversationEnded,
             Some(agent_id.clone()),
             format!("Conversation {} ended", thread_id),
             serde_json::json!({ "thread_id": thread_id }),
         );
-        if let Err(e) = store.append(&entry) {
-            log::warn!("[delete_thread] Failed to log activity: {}", e);
+        if let Err(e) = activity_store.append(&entry) {
+            log::warn!("[delete_thread] Failed to log activity to JSONL: {}", e);
+        }
+
+        let activity_type_str = serde_json::to_string(&ActivityType::ConversationEnded)
+            .unwrap_or_else(|_| "\"system\"".to_string())
+            .trim_matches('"')
+            .to_string();
+        let db_row = db_helpers::ActivityLogRow {
+            id: entry.id,
+            timestamp: entry.timestamp,
+            activity_type: activity_type_str,
+            agent_id: entry.agent_id,
+            workspace_id: entry.workspace_id,
+            summary: entry.summary,
+            details_json: serde_json::to_string(&entry.details).unwrap_or_else(|_| "{}".to_string()),
+        };
+        if let Err(e) = db_helpers::insert_activity(&db_conn, &db_row) {
+            log::warn!("[delete_thread] Failed to log activity to SQLite: {}", e);
         }
     }
 
@@ -251,6 +344,8 @@ pub async fn send_message(
         thread.messages.push(user_msg.clone());
         thread.updated_at = thread::now_iso();
 
+        let message_count = thread.messages.len() as i64;
+
         // Save updated thread (JSON)
         store.save(&thread).map_err(|e| format!("save failed: {e}"))?;
 
@@ -258,6 +353,19 @@ pub async fn send_message(
         let jsonl = jsonl_store_for_agent(&manager, &agent_id)?;
         if let Err(e) = jsonl.append_message(&thread_id, &user_msg) {
             log::warn!("[send_message] JSONL append failed for thread {}: {}", thread_id, e);
+        }
+
+        // Update thread metadata in SQLite
+        {
+            let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
+            if let Err(e) = db_helpers::update_thread_meta(
+                &db_conn,
+                &thread_id,
+                message_count,
+                &thread.updated_at,
+            ) {
+                log::warn!("[send_message] Failed to update thread meta in SQLite: {}", e);
+            }
         }
 
         // Build context prefix using ContextBuilder (same as Channel mode)
@@ -367,12 +475,27 @@ pub fn save_agent_response(
     thread.messages.push(agent_msg.clone());
     thread.updated_at = thread::now_iso();
 
+    let message_count = thread.messages.len() as i64;
+
     store.save(&thread).map_err(|e| format!("save failed: {e}"))?;
 
     // Also persist to JSONL (append-only)
     let jsonl = jsonl_store_for_agent(&manager, &agent_id)?;
     if let Err(e) = jsonl.append_message(&thread_id, &agent_msg) {
         log::warn!("[save_agent_response] JSONL append failed for thread {}: {}", thread_id, e);
+    }
+
+    // Update thread metadata in SQLite
+    {
+        let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
+        if let Err(e) = db_helpers::update_thread_meta(
+            &db_conn,
+            &thread_id,
+            message_count,
+            &thread.updated_at,
+        ) {
+            log::warn!("[save_agent_response] Failed to update thread meta in SQLite: {}", e);
+        }
     }
 
     Ok(thread)
