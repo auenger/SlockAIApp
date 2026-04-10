@@ -316,3 +316,46 @@ export interface SkillInfo {
   /** Last updated timestamp (ISO 8601) */
   updated_at: string;
 }
+
+// ===========================================================================
+// Activity Log types
+// ===========================================================================
+
+/** Activity type enum */
+export type ActivityType =
+  | "agent_created"
+  | "agent_deleted"
+  | "conversation_started"
+  | "conversation_ended"
+  | "skill_changed"
+  | "channel_created"
+  | "channel_updated"
+  | "channel_deleted"
+  | "channel_message"
+  | "system";
+
+/** A single activity log entry */
+export interface ActivityLogEntry {
+  /** Unique identifier */
+  id: string;
+  /** ISO 8601 timestamp */
+  timestamp: string;
+  /** Type of activity */
+  activity_type: ActivityType;
+  /** Agent ID this relates to (if applicable) */
+  agent_id: string | null;
+  /** Workspace ID (if applicable) */
+  workspace_id: string | null;
+  /** Human-readable summary */
+  summary: string;
+  /** Additional details */
+  details: Record<string, unknown>;
+}
+
+/** Paginated result of activity log entries */
+export interface ListActivitiesResult {
+  /** Activity entries (newest first) */
+  entries: ActivityLogEntry[];
+  /** Total count of matching entries (before pagination) */
+  total: number;
+}

@@ -16,6 +16,7 @@
 //!    with the thread JSON to recover any lost data.
 
 use crate::storage::jsonl::JsonlStore;
+use crate::storage::activity::{ActivityStore, ActivityType, create_entry};
 use crate::AppState;
 use crate::runtime::ExecuteParams;
 use crate::workspace::thread::{self, Thread, ThreadInfo, ThreadMessage, ThreadStore};
@@ -85,6 +86,20 @@ pub fn create_thread(
         new_thread.id,
         new_thread.agent_id
     );
+
+    // Log activity
+    {
+        let store = ActivityStore::new(manager.workspace_root());
+        let entry = create_entry(
+            ActivityType::ConversationStarted,
+            Some(agent_id.clone()),
+            format!("Conversation started with {}", agent.identity.name),
+            serde_json::json!({ "thread_id": new_thread.id }),
+        );
+        if let Err(e) = store.append(&entry) {
+            log::warn!("[create_thread] Failed to log activity: {}", e);
+        }
+    }
 
     Ok(new_thread)
 }
@@ -177,6 +192,21 @@ pub fn delete_thread(
     }
 
     log::info!("[delete_thread] thread_id={}, agent_id={}", thread_id, agent_id);
+
+    // Log activity
+    {
+        let store = ActivityStore::new(manager.workspace_root());
+        let entry = create_entry(
+            ActivityType::ConversationEnded,
+            Some(agent_id.clone()),
+            format!("Conversation {} ended", thread_id),
+            serde_json::json!({ "thread_id": thread_id }),
+        );
+        if let Err(e) = store.append(&entry) {
+            log::warn!("[delete_thread] Failed to log activity: {}", e);
+        }
+    }
+
     Ok(())
 }
 

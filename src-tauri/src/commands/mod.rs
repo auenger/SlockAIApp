@@ -3,6 +3,7 @@
 //! Each command handles a specific domain of IPC calls from the frontend.
 //! Commands are registered in lib.rs via `invoke_handler`.
 
+pub mod activity;
 pub mod channel;
 pub mod thread;
 
@@ -12,6 +13,7 @@ use std::sync::Mutex;
 
 use crate::context::ContextBuilder;
 use crate::runtime::registry::RuntimeRegistry;
+use crate::storage::activity::{ActivityStore, ActivityType, create_entry};
 use crate::workspace::manager::{AgentManager, AgentSummary, ManagerStatus};
 use crate::workspace::identity::IdentitySummary;
 
@@ -36,6 +38,25 @@ pub struct AppState {
 pub struct AgentSessionState {
     /// The current session ID (if any)
     pub session_id: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Activity logging helper (best-effort, non-blocking)
+// ---------------------------------------------------------------------------
+
+/// Log an activity entry. Best-effort: errors are logged but not propagated.
+fn try_log_activity(
+    workspace_root: &std::path::Path,
+    activity_type: ActivityType,
+    agent_id: Option<String>,
+    summary: String,
+    details: serde_json::Value,
+) {
+    let store = ActivityStore::new(workspace_root);
+    let entry = create_entry(activity_type, agent_id, summary, details);
+    if let Err(e) = store.append(&entry) {
+        log::warn!("[ActivityLog] Failed to log activity: {}", e);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +153,21 @@ pub fn create_agent(
         )
         .map_err(|e| format!("create failed: {e}"))?;
 
-    Ok(agent.to_summary())
+    let summary = agent.to_summary();
+
+    // Log activity
+    try_log_activity(
+        manager.workspace_root(),
+        ActivityType::AgentCreated,
+        Some(summary.agent_id.clone()),
+        format!("Agent \"{}\" created", summary.name),
+        serde_json::json!({
+            "name": summary.name,
+            "emoji": summary.emoji,
+        }),
+    );
+
+    Ok(summary)
 }
 
 /// List all available Agents.
@@ -189,6 +224,15 @@ pub fn delete_agent(
     manager
         .delete_agent(&agent_id)
         .map_err(|e| format!("delete failed: {e}"))?;
+
+    // Log activity
+    try_log_activity(
+        manager.workspace_root(),
+        ActivityType::AgentDeleted,
+        Some(agent_id.clone()),
+        format!("Agent \"{}\" deleted", agent_id),
+        serde_json::json!({ "agent_id": agent_id }),
+    );
 
     Ok(())
 }

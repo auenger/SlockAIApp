@@ -8,6 +8,7 @@ use crate::workspace::channel::{
     self, Channel, ChannelInfo, ChannelMember, ChannelMessage, ChannelStore,
 };
 use crate::workspace::mention;
+use crate::storage::activity::{ActivityStore, ActivityType, create_entry};
 use tauri::{AppHandle, Emitter};
 
 // ---------------------------------------------------------------------------
@@ -69,6 +70,25 @@ pub fn create_channel(
         new_channel.id,
         new_channel.name
     );
+
+    // Log activity
+    {
+        let store = ActivityStore::new(manager.workspace_root());
+        let member_ids: Vec<&str> = new_channel.members.iter().map(|m| m.agent_id.as_str()).collect();
+        let entry = create_entry(
+            ActivityType::ChannelCreated,
+            None,
+            format!("Channel \"{}\" created with {} members", new_channel.name, new_channel.members.len()),
+            serde_json::json!({
+                "channel_id": new_channel.id,
+                "channel_name": new_channel.name,
+                "members": member_ids,
+            }),
+        );
+        if let Err(e) = store.append(&entry) {
+            log::warn!("[create_channel] Failed to log activity: {}", e);
+        }
+    }
 
     Ok(new_channel)
 }
@@ -133,6 +153,21 @@ pub fn update_channel(
     store.save(&channel).map_err(|e| format!("save failed: {e}"))?;
 
     log::info!("[update_channel] channel_id={}", channel_id);
+
+    // Log activity
+    {
+        let store = ActivityStore::new(manager.workspace_root());
+        let entry = create_entry(
+            ActivityType::ChannelUpdated,
+            None,
+            format!("Channel \"{}\" updated", channel.name),
+            serde_json::json!({ "channel_id": channel_id, "channel_name": channel.name }),
+        );
+        if let Err(e) = store.append(&entry) {
+            log::warn!("[update_channel] Failed to log activity: {}", e);
+        }
+    }
+
     Ok(channel)
 }
 
@@ -152,6 +187,21 @@ pub fn delete_channel(
     store.delete(&channel_id).map_err(|e| format!("delete failed: {e}"))?;
 
     log::info!("[delete_channel] channel_id={}", channel_id);
+
+    // Log activity
+    {
+        let activity_store = ActivityStore::new(manager.workspace_root());
+        let entry = create_entry(
+            ActivityType::ChannelDeleted,
+            None,
+            format!("Channel {} deleted", channel_id),
+            serde_json::json!({ "channel_id": channel_id }),
+        );
+        if let Err(e) = activity_store.append(&entry) {
+            log::warn!("[delete_channel] Failed to log activity: {}", e);
+        }
+    }
+
     Ok(())
 }
 

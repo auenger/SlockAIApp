@@ -24,6 +24,8 @@ import type {
   FileContent,
   ApiKeyInfo,
   SkillInfo,
+  ActivityLogEntry,
+  ListActivitiesResult,
 } from "../types";
 
 /**
@@ -342,4 +344,45 @@ export async function getSkillStatus(
   skillId: string
 ): Promise<SkillInfo> {
   return invoke<SkillInfo>("get_skill_status", { agentId, skillId });
+}
+
+// ---------------------------------------------------------------------------
+// Activity Log commands
+// ---------------------------------------------------------------------------
+
+/** Log a new activity entry. */
+export async function logActivity(params: {
+  activity_type: string;
+  agent_id?: string | null;
+  summary: string;
+  details?: Record<string, unknown>;
+}): Promise<ActivityLogEntry> {
+  return invoke<ActivityLogEntry>("log_activity", {
+    request: {
+      activity_type: params.activity_type,
+      agent_id: params.agent_id ?? null,
+      summary: params.summary,
+      details: params.details ?? {},
+    },
+  });
+}
+
+/** List activity entries with optional filter and pagination. */
+export async function listActivities(params?: {
+  agent_id?: string | null;
+  offset?: number;
+  limit?: number;
+}): Promise<ListActivitiesResult> {
+  return invoke<ListActivitiesResult>("list_activities", {
+    request: {
+      agent_id: params?.agent_id ?? null,
+      offset: params?.offset ?? 0,
+      limit: params?.limit ?? 50,
+    },
+  });
+}
+
+/** Clear all activity entries. */
+export async function clearActivities(): Promise<void> {
+  return invoke<void>("clear_activities");
 }

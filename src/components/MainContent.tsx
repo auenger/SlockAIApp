@@ -27,6 +27,7 @@ import {
   Loader2,
   Settings,
   AlertCircle,
+  Filter,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { TabType, Task, Message, AgentWithRuntime, Channel, ChannelMessage } from '../types';
@@ -37,6 +38,7 @@ import { useWorkspace } from '../lib/useWorkspace';
 import { useSkills } from '../lib/useSkills';
 import { SkillFormModal } from './SkillsPanel';
 import type { SkillInfo } from '../types';
+import { useActivityLog, getActivityTypeConfig } from '../lib/useActivityLog';
 import { MentionAutocomplete, renderMentionText } from './MentionAutocomplete';
 import type { AgentStreamState } from '../lib/useChannel';
 
@@ -176,11 +178,6 @@ export const MainContent: React.FC<MainContentProps> = ({
 }) => {
   const [taskFilter, setTaskFilter] = useState('All');
   const [inputValue, setInputValue] = useState('');
-  const [logs, setLogs] = useState<{ time: string; status: string; text?: string; color?: string }[]>([
-    { time: '08:27:17 AM', status: 'Thinking', color: 'text-brutal-yellow' },
-    { time: '08:27:17 AM', status: 'Idle', color: 'text-brutal-green', text: 'Idle' },
-    { time: '08:30:09 AM', status: 'Working', color: 'text-brutal-cyan', text: 'Message received' },
-  ]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Skills management state
@@ -222,11 +219,6 @@ export const MainContent: React.FC<MainContentProps> = ({
     selectThread,
     send,
   } = useThreadChat();
-
-  const addLog = (status: string, text?: string, color?: string) => {
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setLogs(prev => [...prev, { time, status, text, color }]);
-  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -282,6 +274,17 @@ export const MainContent: React.FC<MainContentProps> = ({
     }
   }, [selectedAgent?.agent.agent_id, activeTab, loadSkills]);
 
+  // Activity log hook (filtered by selected agent if any)
+  const [activityAgentFilter, setActivityAgentFilter] = useState<string | null>(null);
+  const {
+    entries: activityEntries,
+    total: activityTotal,
+    loading: activityLoading,
+    refresh: refreshActivity,
+    loadMore: loadMoreActivity,
+    hasMore: hasMoreActivity,
+  } = useActivityLog(activityAgentFilter);
+
   const handleSendMessage = async () => {
     if (!inputValue.trim() || !selectedAgent) return;
     if (isStreaming || isThinking) return;
@@ -292,29 +295,21 @@ export const MainContent: React.FC<MainContentProps> = ({
     // If no active thread, create one
     if (!threadId) {
       try {
-        addLog('Working', 'Creating new thread...', 'text-brutal-cyan');
         const newThread = await createNewThread(agentId, selectedAgent.agent.name);
         threadId = newThread.id;
         onThreadCreated?.(threadId);
       } catch (err) {
-        addLog('Error', 'Failed to create thread', 'text-brutal-pink');
         return;
       }
     }
 
     const userInput = inputValue;
     setInputValue('');
-    addLog('Working', 'Message sent', 'text-brutal-cyan');
-    addLog('Thinking', undefined, 'text-brutal-yellow');
 
     try {
       await send(agentId, threadId, userInput);
-      addLog('Output', `Responded to: ${userInput.substring(0, 20)}...`);
     } catch (error) {
       console.error("Agent Error:", error);
-      addLog('Error', 'Failed to generate response', 'text-brutal-pink');
-    } finally {
-      addLog('Idle', 'Task completed', 'text-brutal-green');
     }
   };
 
@@ -362,17 +357,11 @@ export const MainContent: React.FC<MainContentProps> = ({
 
     const userInput = inputValue;
     setInputValue('');
-    addLog('Working', 'Channel message sent', 'text-brutal-cyan');
-    addLog('Thinking', undefined, 'text-brutal-yellow');
 
     try {
       await onSendChannelMessage(activeChannel.id, userInput);
-      addLog('Output', `Channel responded to: ${userInput.substring(0, 20)}...`);
     } catch (error) {
       console.error("Channel Error:", error);
-      addLog('Error', 'Failed to generate channel response', 'text-brutal-pink');
-    } finally {
-      addLog('Idle', 'Channel task completed', 'text-brutal-green');
     }
   };
 
@@ -1076,25 +1065,94 @@ export const MainContent: React.FC<MainContentProps> = ({
         )}
 
         {activeTab === 'ACTIVITY' && (
-          <div className="space-y-1 font-mono text-[11px]">
-            {logs.map((log, i) => (
-              <div key={i} className="flex gap-4 py-1 hover:bg-white/50 px-2 transition-colors">
-                <span className="text-gray-400 shrink-0">{log.time}</span>
-                <div className="flex items-center gap-2 shrink-0 w-24">
-                  <Circle
-                    size={8}
-                    fill={
-                      log.status === 'Thinking' ? '#FFDE00' :
-                      log.status === 'Idle' ? '#39FF14' :
-                      log.status === 'Working' ? '#00E5FF' :
-                      log.status === 'Error' ? '#FF4081' : '#000000'
-                    }
-                  />
-                  <span className={cn("font-bold", log.color)}>{log.status}</span>
-                </div>
-                <span className="text-gray-600 italic truncate">{log.text}</span>
+          <div className="space-y-4">
+            {/* Filter controls */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Filter size={14} className="text-gray-400" />
+                <button
+                  onClick={() => setActivityAgentFilter(null)}
+                  className={cn(
+                    "px-2 py-0.5 brutal-border text-[10px] font-black uppercase",
+                    !activityAgentFilter ? "bg-brutal-yellow" : "bg-white hover:bg-gray-100"
+                  )}
+                >
+                  All ({activityTotal})
+                </button>
+                {allAgents.map((awr) => (
+                  <button
+                    key={awr.agent.agent_id}
+                    onClick={() => setActivityAgentFilter(awr.agent.agent_id)}
+                    className={cn(
+                      "px-2 py-0.5 brutal-border text-[10px] font-black uppercase flex items-center gap-1",
+                      activityAgentFilter === awr.agent.agent_id ? "bg-brutal-yellow" : "bg-white hover:bg-gray-100"
+                    )}
+                  >
+                    {awr.agent.emoji} {awr.agent.name}
+                  </button>
+                ))}
               </div>
-            ))}
+              <button
+                onClick={refreshActivity}
+                className="p-1 brutal-border hover:bg-gray-100"
+                title="Refresh"
+              >
+                <RotateCcw size={12} className={activityLoading ? "animate-spin" : ""} />
+              </button>
+            </div>
+
+            {/* Activity timeline */}
+            {activityLoading && activityEntries.length === 0 ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 size={24} className="animate-spin text-gray-400" />
+              </div>
+            ) : activityEntries.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                <Activity size={48} strokeWidth={1} className="mb-2 opacity-20" />
+                <span className="text-sm italic">No activity yet</span>
+                <span className="text-[10px] mt-1">Activities will appear here as you interact with agents</span>
+              </div>
+            ) : (
+              <div className="space-y-1 font-mono text-[11px]">
+                {activityEntries.map((entry) => {
+                  const config = getActivityTypeConfig(entry.activity_type);
+                  return (
+                    <div
+                      key={entry.id}
+                      className="flex gap-4 py-1.5 hover:bg-white/50 px-2 transition-colors brutal-border border-transparent hover:border-l-black hover:border-l-2"
+                    >
+                      <span className="text-gray-400 shrink-0 w-20">
+                        {new Date(entry.timestamp).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                        })}
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0 w-32">
+                        <Circle size={8} className={config.color} fill="currentColor" />
+                        <span className={cn("font-bold text-[10px] px-1", config.color)}>
+                          {config.label}
+                        </span>
+                      </div>
+                      <span className="text-gray-600 truncate">{entry.summary}</span>
+                      {entry.agent_id && (
+                        <span className="text-[9px] text-gray-400 shrink-0 ml-auto">
+                          @{entry.agent_id}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+                {hasMoreActivity && (
+                  <button
+                    onClick={loadMoreActivity}
+                    className="w-full py-2 text-[10px] font-bold text-gray-500 hover:text-black text-center hover:bg-gray-100 brutal-border border-transparent hover:border-black"
+                  >
+                    Load more...
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
