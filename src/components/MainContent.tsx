@@ -1224,7 +1224,10 @@ export const MainContent: React.FC<MainContentProps> = ({
                     <div>
                       <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Runtime</label>
                       <div className="brutal-btn bg-brutal-cyan text-xs inline-block">
-                        {selectedAgent.runtime_status === 'available' ? 'Claude Code' : 'Not Available'}
+                        {selectedAgent.runtime_type === 'claude_code' ? 'Claude Code'
+                          : selectedAgent.runtime_type === 'codex' ? 'Codex'
+                          : selectedAgent.runtime_type === 'gemini' ? 'Gemini CLI'
+                          : selectedAgent.runtime_type || 'Unknown'}
                       </div>
                     </div>
                     <div>
