@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-11T11:00:00+08:00"
-  version: 65
+  last_updated: "2026-04-11T12:00:00+08:00"
+  version: 66
 
 parents:
   - id: feat-agent-runtime-select
@@ -16,12 +16,14 @@ parents:
     children:
       - feat-channel-zone-protocol
       - feat-agent-a2a-trigger
-active: []
-pending:
+active:
   - id: feat-agent-workspace-persist
     name: "Agent Workspace 对话持久化"
     priority: 75
-    created_at: "2026-04-10T23:30:00+08:00"
+    branch: feature/feat-agent-workspace-persist
+    worktree: ../SlockAI-feat-agent-workspace-persist
+    started_at: "2026-04-11T12:00:00+08:00"
+pending:
   - id: feat-sidebar-style
     name: "Sidebar 标题更名与面板可调宽度"
     priority: 70
