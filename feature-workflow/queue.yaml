@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-11T19:00:00+08:00"
-  version: 74
+  last_updated: "2026-04-11T19:30:00+08:00"
+  version: 75
 
 parents:
   - id: feat-agent-runtime-select
@@ -16,16 +16,7 @@ parents:
     children:
       - feat-channel-zone-protocol
       - feat-agent-a2a-trigger
-active:
-  - id: feat-agent-a2a-trigger
-    name: "Agent-to-Agent @{agent} 触发机制"
-    priority: 60
-    dependencies:
-      - feat-channel-zone-protocol
-    created_at: "2026-04-10T23:55:00+08:00"
-    started_at: "2026-04-11T19:00:00+08:00"
-    branch: feature/feat-agent-a2a-trigger
-    worktree: ../AgentsZone-feat-agent-a2a-trigger
+active: []
 pending: []
 blocked: []
 completed:
@@ -153,3 +144,7 @@ completed:
     name: "Channel Zone Protocol（Prompt 7层架构 + Zone Agent Protocol）"
     completed_at: "2026-04-11T18:30:00+08:00"
     tag: feat-channel-zone-protocol-20260411
+  - id: feat-agent-a2a-trigger
+    name: "Agent-to-Agent @{agent} 触发机制"
+    completed_at: "2026-04-11T19:30:00+08:00"
+    tag: feat-agent-a2a-trigger-20260411
