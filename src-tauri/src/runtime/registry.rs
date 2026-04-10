@@ -3,7 +3,7 @@
 //! Thread-safe registry for managing agent runtimes.
 //! Handles registration, detection, querying, and health checking.
 
-use super::{AgentRuntime, AgentRuntimeInfo, AgentRuntimeStatus};
+use super::{AgentRuntime, AgentRuntimeInfo, AgentRuntimeStatus, RuntimeType};
 use std::collections::HashMap;
 
 // ===========================================================================
@@ -47,36 +47,42 @@ impl RuntimeRegistry {
                     results.push(AgentRuntimeInfo {
                         id: runtime.id().to_string(),
                         name: runtime.name().to_string(),
-                        runtime_type: runtime.runtime_type().to_string(),
+                        runtime_category: runtime.runtime_category().to_string(),
+                        runtime_type: runtime.typed_runtime_type(),
                         status: AgentRuntimeStatus::Available.as_str().to_string(),
                         version: Some(version),
                         install_path: Some(path),
                         capabilities: runtime.capabilities(),
                         install_hint: runtime.install_hint(),
+                        binary_name: Some(runtime.binary_name().to_string()),
                     });
                 }
                 Ok(None) => {
                     results.push(AgentRuntimeInfo {
                         id: runtime.id().to_string(),
                         name: runtime.name().to_string(),
-                        runtime_type: runtime.runtime_type().to_string(),
+                        runtime_category: runtime.runtime_category().to_string(),
+                        runtime_type: runtime.typed_runtime_type(),
                         status: AgentRuntimeStatus::NotInstalled.as_str().to_string(),
                         version: None,
                         install_path: None,
                         capabilities: runtime.capabilities(),
                         install_hint: runtime.install_hint(),
+                        binary_name: Some(runtime.binary_name().to_string()),
                     });
                 }
                 Err(_) => {
                     results.push(AgentRuntimeInfo {
                         id: runtime.id().to_string(),
                         name: runtime.name().to_string(),
-                        runtime_type: runtime.runtime_type().to_string(),
+                        runtime_category: runtime.runtime_category().to_string(),
+                        runtime_type: runtime.typed_runtime_type(),
                         status: AgentRuntimeStatus::NotInstalled.as_str().to_string(),
                         version: None,
                         install_path: None,
                         capabilities: runtime.capabilities(),
                         install_hint: runtime.install_hint(),
+                        binary_name: Some(runtime.binary_name().to_string()),
                     });
                 }
             }
@@ -95,23 +101,27 @@ impl RuntimeRegistry {
                     AgentRuntimeInfo {
                         id: rt.id().to_string(),
                         name: rt.name().to_string(),
-                        runtime_type: rt.runtime_type().to_string(),
+                        runtime_category: rt.runtime_category().to_string(),
+                        runtime_type: rt.typed_runtime_type(),
                         status: AgentRuntimeStatus::Available.as_str().to_string(),
                         version: Some(version.clone()),
                         install_path: Some(path.clone()),
                         capabilities: rt.capabilities(),
                         install_hint: rt.install_hint(),
+                        binary_name: Some(rt.binary_name().to_string()),
                     }
                 } else {
                     AgentRuntimeInfo {
                         id: rt.id().to_string(),
                         name: rt.name().to_string(),
-                        runtime_type: rt.runtime_type().to_string(),
+                        runtime_category: rt.runtime_category().to_string(),
+                        runtime_type: rt.typed_runtime_type(),
                         status: AgentRuntimeStatus::NotInstalled.as_str().to_string(),
                         version: None,
                         install_path: None,
                         capabilities: rt.capabilities(),
                         install_hint: rt.install_hint(),
+                        binary_name: Some(rt.binary_name().to_string()),
                     }
                 }
             })
@@ -129,23 +139,27 @@ impl RuntimeRegistry {
                     AgentRuntimeInfo {
                         id: rt.id().to_string(),
                         name: rt.name().to_string(),
-                        runtime_type: rt.runtime_type().to_string(),
+                        runtime_category: rt.runtime_category().to_string(),
+                        runtime_type: rt.typed_runtime_type(),
                         status: AgentRuntimeStatus::Available.as_str().to_string(),
                         version: Some(version.clone()),
                         install_path: Some(path.clone()),
                         capabilities: rt.capabilities(),
                         install_hint: rt.install_hint(),
+                        binary_name: Some(rt.binary_name().to_string()),
                     }
                 } else {
                     AgentRuntimeInfo {
                         id: rt.id().to_string(),
                         name: rt.name().to_string(),
-                        runtime_type: rt.runtime_type().to_string(),
+                        runtime_category: rt.runtime_category().to_string(),
+                        runtime_type: rt.typed_runtime_type(),
                         status: AgentRuntimeStatus::NotInstalled.as_str().to_string(),
                         version: None,
                         install_path: None,
                         capabilities: rt.capabilities(),
                         install_hint: rt.install_hint(),
+                        binary_name: Some(rt.binary_name().to_string()),
                     }
                 }
             })
@@ -181,12 +195,14 @@ impl RuntimeRegistry {
             results.push(AgentRuntimeInfo {
                 id: rt_id,
                 name: runtime.name().to_string(),
-                runtime_type: runtime.runtime_type().to_string(),
+                runtime_category: runtime.runtime_category().to_string(),
+                runtime_type: runtime.typed_runtime_type(),
                 status: status.as_str().to_string(),
                 version,
                 install_path,
                 capabilities: runtime.capabilities(),
                 install_hint: runtime.install_hint(),
+                binary_name: Some(runtime.binary_name().to_string()),
             });
         }
         results
@@ -196,11 +212,18 @@ impl RuntimeRegistry {
     pub fn available_count(&self) -> usize {
         self.detected.len()
     }
+
+    /// Get info for a runtime by its `RuntimeType` enum variant.
+    pub fn get_runtime_by_type(&self, runtime_type: &RuntimeType) -> Option<AgentRuntimeInfo> {
+        let target_id = runtime_type.runtime_id();
+        self.get_runtime(target_id)
+    }
 }
 
-/// Create the default registry with Claude Code runtime registered.
+/// Create the default registry with all known runtime implementations registered.
 pub fn create_default_registry() -> RuntimeRegistry {
     let mut registry = RuntimeRegistry::new();
     registry.register(Box::new(super::claude::ClaudeCodeRuntime::new()));
+    registry.register(Box::new(super::codex::CodexRuntime::new()));
     registry
 }

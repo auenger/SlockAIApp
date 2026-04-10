@@ -2,12 +2,14 @@
 //!
 //! Parses and represents the `IDENTITY.md` metadata file that lives
 //! inside each Agent workspace. The identity contains display information
-//! such as name, creature type, vibe, emoji, and avatar path.
+//! such as name, creature type, vibe, emoji, avatar path, and runtime type.
 
 use std::fs;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+
+use crate::runtime::RuntimeType;
 
 /// Agent identity metadata, stored in `IDENTITY.md`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -24,6 +26,9 @@ pub struct AgentIdentity {
     pub emoji: String,
     /// Avatar path (workspace-relative, URL, or data URI).
     pub avatar: Option<String>,
+    /// The runtime backend this agent is bound to (defaults to ClaudeCode).
+    #[serde(default)]
+    pub runtime_type: RuntimeType,
 }
 
 impl AgentIdentity {
@@ -42,12 +47,34 @@ impl AgentIdentity {
             vibe: vibe.into(),
             emoji: emoji.into(),
             avatar: None,
+            runtime_type: RuntimeType::ClaudeCode,
+        }
+    }
+
+    /// Create a new identity with an explicit runtime type.
+    pub fn with_runtime_type(
+        agent_id: impl Into<String>,
+        name: impl Into<String>,
+        creature: impl Into<String>,
+        vibe: impl Into<String>,
+        emoji: impl Into<String>,
+        runtime_type: RuntimeType,
+    ) -> Self {
+        Self {
+            agent_id: agent_id.into(),
+            name: name.into(),
+            creature: creature.into(),
+            vibe: vibe.into(),
+            emoji: emoji.into(),
+            avatar: None,
+            runtime_type,
         }
     }
 
     /// Create a default identity for a given agent ID.
     ///
     /// Uses the ID (title-cased) as the display name, with sensible defaults.
+    /// Runtime type defaults to ClaudeCode for backward compatibility.
     pub fn default_for(agent_id: &str) -> Self {
         Self {
             agent_id: agent_id.to_string(),
@@ -56,6 +83,7 @@ impl AgentIdentity {
             vibe: "helpful".to_string(),
             emoji: "robot".to_string(),
             avatar: None,
+            runtime_type: RuntimeType::ClaudeCode,
         }
     }
 
@@ -85,6 +113,7 @@ impl AgentIdentity {
         let mut vibe = "helpful".to_string();
         let mut emoji = "robot".to_string();
         let mut avatar: Option<String> = None;
+        let mut runtime_type: Option<RuntimeType> = None;
 
         for line in content.lines() {
             let line = line.trim();
@@ -119,6 +148,9 @@ impl AgentIdentity {
                                 avatar = Some(value);
                             }
                         }
+                        "runtime type" | "runtime_type" => {
+                            runtime_type = Some(parse_runtime_type(&value));
+                        }
                         _ => {}
                     }
                 }
@@ -137,6 +169,9 @@ impl AgentIdentity {
                         "vibe" if vibe == "helpful" => vibe = value,
                         "emoji" if emoji == "robot" => emoji = value,
                         "avatar" if avatar.is_none() => avatar = Some(value),
+                        "runtime type" | "runtime_type" if runtime_type.is_none() => {
+                            runtime_type = Some(parse_runtime_type(&value));
+                        }
                         _ => {}
                     }
                 }
@@ -161,6 +196,7 @@ impl AgentIdentity {
             vibe,
             emoji,
             avatar,
+            runtime_type: runtime_type.unwrap_or_default(),
         })
     }
 
@@ -177,6 +213,7 @@ impl AgentIdentity {
         let creature = &self.creature;
         let vibe = &self.vibe;
         let emoji = &self.emoji;
+        let runtime_type = self.runtime_type.as_str();
 
         format!(
             r#"# IDENTITY.md - Who Am I?
@@ -189,6 +226,7 @@ _Fill this in during your first conversation. Make it yours._
 - **Vibe**: {vibe}
 - **Emoji**: {emoji}
 - **Avatar**: {avatar}
+- **Runtime Type**: {runtime_type}
 
 ---
 
@@ -200,6 +238,7 @@ Notes:
 - The Avatar path is relative to the agent workspace, not the root workspace.
 - You can use online avatars with http(s) URLs.
 - You can embed avatars with data URIs.
+- Runtime Type determines which CLI/API backend this agent uses (default: claude_code).
 
 ---
 
@@ -238,6 +277,7 @@ _This file is yours to evolve. As you learn who you are, update it._
             avatar: self.avatar.clone(),
             creature: self.creature.clone(),
             vibe: self.vibe.clone(),
+            runtime_type: self.runtime_type.clone(),
         }
     }
 }
@@ -251,11 +291,32 @@ pub struct IdentitySummary {
     pub avatar: Option<String>,
     pub creature: String,
     pub vibe: String,
+    /// The runtime backend type this agent is bound to.
+    #[serde(default = "default_runtime_type")]
+    pub runtime_type: RuntimeType,
+}
+
+fn default_runtime_type() -> RuntimeType {
+    RuntimeType::ClaudeCode
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// Parse a runtime type string into a `RuntimeType` enum variant.
+///
+/// Accepts both snake_case (`claude_code`) and kebab-case (`claude-code`).
+/// Unknown values are mapped to `RuntimeType::Custom(name)`.
+fn parse_runtime_type(value: &str) -> RuntimeType {
+    let normalized = value.trim().to_lowercase().replace('-', "_");
+    match normalized.as_str() {
+        "claude_code" | "claudecode" => RuntimeType::ClaudeCode,
+        "codex" => RuntimeType::Codex,
+        "gemini" => RuntimeType::Gemini,
+        other => RuntimeType::Custom(other.to_string()),
+    }
+}
 
 /// Convert a snake_case or kebab-case string to Title Case.
 fn title_case(s: &str) -> String {

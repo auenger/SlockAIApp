@@ -4,11 +4,77 @@
 //! (Claude Code, Codex, etc.).
 
 pub mod claude;
+pub mod codex;
 pub mod commands;
 pub mod registry;
 
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc::Receiver;
+
+// ===========================================================================
+// Runtime type enum
+// ===========================================================================
+
+/// The type of runtime backend an agent is bound to.
+///
+/// Each agent is associated with exactly one runtime type, which determines
+/// which CLI/API client is used for execution. The default is `ClaudeCode`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeType {
+    /// Anthropic Claude Code CLI
+    ClaudeCode,
+    /// OpenAI Codex CLI
+    Codex,
+    /// Google Gemini CLI/API
+    Gemini,
+    /// Extensible custom runtime (name identifies the binary)
+    Custom(String),
+}
+
+impl RuntimeType {
+    /// Returns the kebab-case string used for serialization.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::ClaudeCode => "claude_code",
+            Self::Codex => "codex",
+            Self::Gemini => "gemini",
+            Self::Custom(name) => name.as_str(),
+        }
+    }
+
+    /// Returns the runtime ID used for registry lookups.
+    pub fn runtime_id(&self) -> &str {
+        match self {
+            Self::ClaudeCode => "claude-code",
+            Self::Codex => "codex",
+            Self::Gemini => "gemini",
+            Self::Custom(name) => name.as_str(),
+        }
+    }
+
+    /// Returns the human-readable display name.
+    pub fn display_name(&self) -> &str {
+        match self {
+            Self::ClaudeCode => "Claude Code",
+            Self::Codex => "OpenAI Codex",
+            Self::Gemini => "Google Gemini",
+            Self::Custom(name) => name.as_str(),
+        }
+    }
+}
+
+impl Default for RuntimeType {
+    fn default() -> Self {
+        Self::ClaudeCode
+    }
+}
+
+impl std::fmt::Display for RuntimeType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
 
 // ===========================================================================
 // Runtime status & capability types
@@ -60,8 +126,10 @@ pub struct AgentRuntimeInfo {
     pub id: String,
     /// Human-readable name
     pub name: String,
-    /// Runtime type ("cli" or "http")
-    pub runtime_type: String,
+    /// Runtime category ("cli" or "http")
+    pub runtime_category: String,
+    /// The typed runtime type enum
+    pub runtime_type: RuntimeType,
     /// Current status
     pub status: String,
     /// Detected version string (if available)
@@ -74,6 +142,9 @@ pub struct AgentRuntimeInfo {
     pub capabilities: Vec<AgentCapability>,
     /// Install hint command (shown when not-installed)
     pub install_hint: String,
+    /// The CLI binary name (e.g. "claude", "codex")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub binary_name: Option<String>,
 }
 
 /// Parameters for executing a message on an AgentRuntime.
@@ -120,12 +191,18 @@ pub trait AgentRuntime: Send + Sync {
     fn id(&self) -> &str;
     /// Human-readable name
     fn name(&self) -> &str;
-    /// Runtime type (e.g. "cli")
-    fn runtime_type(&self) -> &str;
+    /// Runtime category (e.g. "cli")
+    fn runtime_category(&self) -> &str {
+        "cli"
+    }
+    /// The typed RuntimeType enum variant for this runtime.
+    fn typed_runtime_type(&self) -> RuntimeType;
     /// List of capabilities this runtime supports
     fn capabilities(&self) -> Vec<AgentCapability>;
     /// Install hint command for this runtime
     fn install_hint(&self) -> String;
+    /// The CLI binary name (e.g. "claude", "codex")
+    fn binary_name(&self) -> &str;
     /// Detect whether the CLI is available and return (path, version)
     fn detect(&self) -> Result<Option<(String, String)>, String>;
     /// Perform a health check

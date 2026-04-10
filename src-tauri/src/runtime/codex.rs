@@ -1,8 +1,7 @@
-//! Claude Code CLI runtime implementation.
+//! OpenAI Codex CLI runtime implementation.
 //!
-//! Wraps the Claude Code CLI (`claude`) as an AgentRuntime.
-//! Uses `--output-format stream-json` for streaming responses
-//! and `--resume` for session continuity.
+//! Wraps the Codex CLI (`codex`) as an AgentRuntime.
+//! Uses stdin/stdout streaming for interaction.
 
 use super::{
     AgentCapability, AgentRuntime, AgentRuntimeInfo, AgentRuntimeStatus, ExecuteParams,
@@ -15,26 +14,26 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // ===========================================================================
-// ClaudeCodeRuntime
+// CodexRuntime
 // ===========================================================================
 
-/// Claude Code CLI runtime implementation.
+/// OpenAI Codex CLI runtime implementation.
 #[derive(Default)]
-pub struct ClaudeCodeRuntime;
+pub struct CodexRuntime;
 
-impl ClaudeCodeRuntime {
+impl CodexRuntime {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl AgentRuntime for ClaudeCodeRuntime {
+impl AgentRuntime for CodexRuntime {
     fn id(&self) -> &str {
-        "claude-code"
+        "codex"
     }
 
     fn name(&self) -> &str {
-        "Claude Code"
+        "OpenAI Codex"
     }
 
     fn runtime_category(&self) -> &str {
@@ -42,7 +41,7 @@ impl AgentRuntime for ClaudeCodeRuntime {
     }
 
     fn typed_runtime_type(&self) -> RuntimeType {
-        RuntimeType::ClaudeCode
+        RuntimeType::Codex
     }
 
     fn capabilities(&self) -> Vec<AgentCapability> {
@@ -50,24 +49,23 @@ impl AgentRuntime for ClaudeCodeRuntime {
             AgentCapability::Streaming,
             AgentCapability::Sessions,
             AgentCapability::ToolUse,
-            AgentCapability::StructuredOutput,
         ]
     }
 
     fn install_hint(&self) -> String {
-        "npm install -g @anthropic-ai/claude-code".to_string()
+        "npm install -g @openai/codex".to_string()
     }
 
     fn binary_name(&self) -> &str {
-        "claude"
+        "codex"
     }
 
     fn detect(&self) -> Result<Option<(String, String)>, String> {
-        let path = RuntimeDetector::find_command("claude");
+        let path = RuntimeDetector::find_command("codex");
         match path {
             Some(p) => {
                 let version =
-                    RuntimeDetector::get_version("claude").unwrap_or_else(|| "unknown".to_string());
+                    RuntimeDetector::get_version("codex").unwrap_or_else(|| "unknown".to_string());
                 Ok(Some((p, version)))
             }
             None => Ok(None),
@@ -123,42 +121,26 @@ impl AgentRuntime for ClaudeCodeRuntime {
         // Pre-flight: verify CLI is available
         if !self.is_ready() {
             return Err(
-                "Claude Code CLI not found or not healthy. Please install: npm install -g @anthropic-ai/claude-code"
+                "Codex CLI not found or not healthy. Please install: npm install -g @openai/codex"
                     .to_string(),
             );
         }
 
         // Build CLI arguments
+        // codex CLI accepts messages via stdin and streams responses
         let mut args: Vec<String> = vec![
-            "--print".to_string(),
-            "--output-format".to_string(),
-            "stream-json".to_string(),
-            "--verbose".to_string(),
-            "--dangerously-skip-permissions".to_string(),
+            "--quiet".to_string(), // non-interactive mode
         ];
-
-        if let Some(ref sid) = params.session_id {
-            args.push("--resume".to_string());
-            args.push(sid.clone());
-        }
-
-        if let Some(ref sp) = params.system_prompt {
-            args.push("--append-system-prompt".to_string());
-            args.push(sp.clone());
-        }
 
         if let Some(ref ws) = params.workspace {
             if !ws.is_empty() {
-                args.push("--add-dir".to_string());
+                args.push("--cwd".to_string());
                 args.push(ws.clone());
             }
         }
 
-        args.push("--".to_string());
-        args.push(params.message.clone());
-
         // Spawn CLI process
-        let mut cmd = Command::new("claude");
+        let mut cmd = Command::new("codex");
         if let Some(ref ws) = params.workspace {
             if !ws.is_empty() {
                 cmd.current_dir(ws);
@@ -166,11 +148,19 @@ impl AgentRuntime for ClaudeCodeRuntime {
         }
         let mut child = cmd
             .args(&args)
-            .stdin(Stdio::null())
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| format!("Failed to spawn Claude CLI: {}", e))?;
+            .map_err(|e| format!("Failed to spawn Codex CLI: {}", e))?;
+
+        // Write message to stdin
+        if let Some(mut stdin) = child.stdin.take() {
+            use std::io::Write;
+            let _ = stdin.write_all(params.message.as_bytes());
+            let _ = stdin.write_all(b"\n");
+            drop(stdin); // Close stdin to signal EOF
+        }
 
         let stdout_handle = child
             .stdout
@@ -203,7 +193,6 @@ impl AgentRuntime for ClaudeCodeRuntime {
             for line in reader.lines() {
                 match line {
                     Ok(text) => {
-                        // Update activity timestamp for idle watchdog
                         last_active_stdout.store(
                             SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
@@ -217,7 +206,7 @@ impl AgentRuntime for ClaudeCodeRuntime {
                             continue;
                         }
 
-                        // Try to parse as JSON (stream-json format)
+                        // Try to parse as JSON (codex may output JSON)
                         match serde_json::from_str::<serde_json::Value>(trimmed) {
                             Ok(json_obj) => {
                                 let msg_type = json_obj
@@ -226,84 +215,23 @@ impl AgentRuntime for ClaudeCodeRuntime {
                                     .unwrap_or("unknown")
                                     .to_string();
 
-                                let response_session_id = json_obj
-                                    .get("session_id")
-                                    .and_then(|s| s.as_str())
-                                    .map(|s| s.to_string());
-
-                                let is_result = msg_type == "result";
+                                let is_result = msg_type == "result" || msg_type == "done";
                                 if is_result {
                                     got_result = true;
                                 }
 
-                                // Extract text content based on message type
-                                fn extract_content_blocks(val: &serde_json::Value) -> String {
-                                    if let Some(s) = val.as_str() {
-                                        s.to_string()
-                                    } else if let Some(arr) = val.as_array() {
-                                        arr.iter()
-                                            .filter_map(|item| {
-                                                if item.get("type").and_then(|t| t.as_str())
-                                                    == Some("text")
-                                                {
-                                                    item.get("text")
-                                                        .and_then(|t| t.as_str())
-                                                        .map(|s| s.to_string())
-                                                } else {
-                                                    None
-                                                }
-                                            })
-                                            .collect::<Vec<_>>()
-                                            .join("")
-                                    } else {
-                                        String::new()
-                                    }
-                                }
-
-                                let text = if msg_type == "assistant" {
-                                    // --verbose: content is nested under "message" key
-                                    if let Some(msg_obj) = json_obj.get("message") {
-                                        msg_obj
-                                            .get("content")
-                                            .map(extract_content_blocks)
-                                            .unwrap_or_default()
-                                    } else {
-                                        // non-verbose: content at top level
-                                        json_obj
-                                            .get("content")
-                                            .map(extract_content_blocks)
-                                            .unwrap_or_default()
-                                    }
-                                } else if is_result || msg_type == "system" {
-                                    String::new()
-                                } else {
-                                    trimmed.to_string()
-                                };
-
-                                // Check for error in result messages
-                                let error = if is_result {
-                                    let subtype = json_obj
-                                        .get("subtype")
-                                        .and_then(|s| s.as_str())
-                                        .unwrap_or("");
-                                    if subtype == "error" {
-                                        json_obj
-                                            .get("error")
-                                            .and_then(|e| e.as_str())
-                                            .map(|s| s.to_string())
-                                    } else {
-                                        None
-                                    }
-                                } else {
-                                    None
-                                };
+                                let text_content = json_obj
+                                    .get("content")
+                                    .and_then(|c| c.as_str())
+                                    .unwrap_or(trimmed)
+                                    .to_string();
 
                                 let event = StreamEvent {
-                                    text,
+                                    text: text_content,
                                     is_done: is_result,
-                                    error,
+                                    error: None,
                                     msg_type: Some(msg_type),
-                                    session_id: response_session_id,
+                                    session_id: None,
                                 };
 
                                 if tx_stdout.send(event).is_err() {
@@ -311,7 +239,7 @@ impl AgentRuntime for ClaudeCodeRuntime {
                                 }
                             }
                             Err(_) => {
-                                // Non-JSON line, emit as raw text
+                                // Non-JSON: emit as raw text
                                 let event = StreamEvent {
                                     text: trimmed.to_string(),
                                     is_done: false,
@@ -325,14 +253,12 @@ impl AgentRuntime for ClaudeCodeRuntime {
                             }
                         }
                     }
-                    Err(_) => break, // EOF
+                    Err(_) => break,
                 }
             }
 
-            // Mark process as done for idle watchdog
             process_done_stdout.store(true, Ordering::Relaxed);
 
-            // Only send process_exit is_done if we never received a result
             if !got_result {
                 let _ = tx_stdout.send(StreamEvent {
                     text: String::new(),
@@ -354,7 +280,6 @@ impl AgentRuntime for ClaudeCodeRuntime {
                     Ok(text) => {
                         let trimmed = text.trim();
                         if !trimmed.is_empty() {
-                            // Update activity timestamp
                             last_active_stderr.store(
                                 SystemTime::now()
                                     .duration_since(UNIX_EPOCH)
@@ -362,7 +287,7 @@ impl AgentRuntime for ClaudeCodeRuntime {
                                     .as_secs(),
                                 Ordering::Relaxed,
                             );
-                            log::warn!("[ClaudeCodeRuntime] stderr: {}", trimmed);
+                            log::warn!("[CodexRuntime] stderr: {}", trimmed);
                             let event = StreamEvent {
                                 text: String::new(),
                                 is_done: false,

@@ -13,6 +13,7 @@ use std::sync::Mutex;
 
 use crate::context::ContextBuilder;
 use crate::runtime::registry::RuntimeRegistry;
+use crate::runtime::RuntimeType;
 use crate::storage::activity::{ActivityStore, ActivityType, create_entry};
 use crate::workspace::manager::{AgentManager, AgentSummary, ManagerStatus};
 use crate::workspace::identity::IdentitySummary;
@@ -147,6 +148,9 @@ pub struct CreateAgentRequest {
     #[serde(default = "default_emoji")]
     pub emoji: String,
     pub avatar: Option<String>,
+    /// Runtime type for the agent (defaults to claude_code).
+    #[serde(default)]
+    pub runtime_type: Option<RuntimeType>,
 }
 
 fn default_creature() -> String {
@@ -177,6 +181,7 @@ pub fn create_agent(
             &request.vibe,
             &request.emoji,
             request.avatar.as_deref(),
+            request.runtime_type.clone().unwrap_or_default(),
         )
         .map_err(|e| format!("create failed: {e}"))?;
 
@@ -353,6 +358,8 @@ pub struct AgentWithRuntime {
     pub runtime_version: Option<String>,
     /// Install hint (shown when runtime is not installed).
     pub runtime_install_hint: Option<String>,
+    /// The runtime type this agent is configured to use.
+    pub runtime_type: RuntimeType,
 }
 
 /// Get all agents with their runtime status fused together.
@@ -394,9 +401,8 @@ pub fn get_agent_runtime_status(
     let result: Vec<AgentWithRuntime> = agents
         .into_iter()
         .map(|agent| {
-            // Currently all agents use the "claude-code" runtime.
-            // This will be configurable per-agent in the future.
-            let runtime = runtime_map.get("claude-code");
+            // Look up the runtime by the agent's configured runtime_type
+            let runtime = runtime_map.get(agent.runtime_type.runtime_id());
 
             AgentWithRuntime {
                 runtime_status: runtime
@@ -404,6 +410,7 @@ pub fn get_agent_runtime_status(
                     .unwrap_or_else(|| "not-installed".to_string()),
                 runtime_version: runtime.and_then(|rt| rt.version.clone()),
                 runtime_install_hint: runtime.map(|rt| rt.install_hint.clone()),
+                runtime_type: agent.runtime_type.clone(),
                 agent,
             }
         })

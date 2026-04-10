@@ -4,7 +4,7 @@
 //! agent runtimes, as well as session management.
 
 use crate::AppState;
-use super::ExecuteParams;
+use super::{ExecuteParams, RuntimeType};
 use tauri::{AppHandle, Emitter};
 
 /// Scan all registered agent runtimes and detect their availability.
@@ -134,4 +134,19 @@ pub fn runtime_session_stop(
     session.session_id = None;
     log::info!("[runtime_session_stop] session cleared");
     Ok(())
+}
+
+/// Get detailed information about a specific runtime by its RuntimeType.
+#[tauri::command]
+pub fn get_runtime_info(
+    state: tauri::State<'_, AppState>,
+    runtime_type: RuntimeType,
+) -> Result<super::AgentRuntimeInfo, String> {
+    let registry = state
+        .agent_runtime_registry
+        .lock()
+        .map_err(|e| e.to_string())?;
+    registry
+        .get_runtime_by_type(&runtime_type)
+        .ok_or_else(|| format!("Runtime type '{}' not found in registry", runtime_type.as_str()))
 }
