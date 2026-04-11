@@ -1,10 +1,32 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-12T04:30:00+08:00"
-  version: 28
-  total_completed: 28
+  last_updated: "2026-04-11T21:30:00+08:00"
+  version: 29
+  total_completed: 29
 
 records:
+  - id: feat-workspace-open-finder
+    name: "Workspace 在 Finder 中打开"
+    completed: "2026-04-11T21:30:00+08:00"
+    tag: feat-workspace-open-finder-20260411
+    merge_commit: "95fa578"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-workspace-open-finder
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-workspace-open-finder
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 3
+      scenarios_passed: 3
+    stats:
+      started: "2026-04-11T21:00:00+08:00"
+      duration: "30min"
+      commits: 1
+      files_changed: 4
   - id: feat-project-init
     name: "Project Init (Tauri V2 + React 19)"
     completed: "2026-04-08T13:20:00+08:00"

@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-12T04:30:00+08:00"
-  version: 90
+  last_updated: "2026-04-11T21:30:00+08:00"
+  version: 93
 
 parents:
   - id: feat-agent-runtime-select
@@ -20,6 +20,10 @@ active: []
 pending: []
 blocked: []
 completed:
+  - id: feat-workspace-open-finder
+    name: "Workspace 在 Finder 中打开"
+    completed_at: "2026-04-11T21:30:00+08:00"
+    tag: feat-workspace-open-finder-20260411
   - id: feat-thread-list-rename
     name: "Thread 全局展示 & 重命名"
     completed_at: "2026-04-12T04:30:00+08:00"
