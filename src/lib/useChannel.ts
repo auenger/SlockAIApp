@@ -10,7 +10,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { Channel, ChannelInfo, AgentWithRuntime, ChannelChunkEvent, ChannelResponseEvent, ChannelA2aStartEvent, ChannelA2aDepthExceededEvent } from "../types";
+import type { Channel, ChannelInfo, ChannelMessage, AgentWithRuntime, ChannelChunkEvent, ChannelResponseEvent, ChannelA2aStartEvent, ChannelA2aDepthExceededEvent } from "../types";
 import {
   createChannel,
   listChannels,
@@ -381,6 +381,21 @@ export function useChannel(): ChannelState {
       }
 
       // Real Tauri flow
+      // Optimistic update: insert user message immediately before IPC call
+      const optimisticUserMsg: ChannelMessage = {
+        id: `msg-pending-${Date.now()}`,
+        channel_id: channelId,
+        sender_type: "user",
+        sender_id: "user",
+        content: message,
+        timestamp: new Date().toISOString(),
+      };
+      setActiveChannel((prev) => {
+        if (!prev || prev.id !== channelId) return prev;
+        return { ...prev, messages: [...prev.messages, optimisticUserMsg] };
+      });
+
+      // IPC call to backend — on return, replace optimistic data with real data
       const updatedChannel = await sendChannelMessage(channelId, message);
       setActiveChannel(updatedChannel);
 
@@ -532,7 +547,18 @@ export function useChannel(): ChannelState {
             console.error("[useChannel] save_channel_response failed:", err);
           }
 
-          // Check if all agents are done
+          // Fix: Mark this agent as done immediately in channel-response,
+          // independent of whether channel-chunk(is_done) has fired yet.
+          // This eliminates the race condition where response arrives before chunk's is_done.
+          setAgentStreams((prev) =>
+            prev.map((s) =>
+              s.agent_id === agent_id
+                ? { ...s, streaming: false, thinking: false, done: true }
+                : s
+            )
+          );
+
+          // Now check if all agents are done (including the one we just marked)
           setAgentStreams((prev) => {
             const allDone = prev.every((s) => s.done);
             if (allDone) {
@@ -563,10 +589,18 @@ export function useChannel(): ChannelState {
       );
       unlistenResponseRef.current = unlistenResponse;
 
-      // Fallback timeout: if no agent-start event within 5s, consider it single-agent
+      // Fallback timeout: if streams are still active after 30s, force cleanup
       setTimeout(() => {
         setAgentStreams((prev) => {
+          if (prev.length > 0) {
+            // Residual streams — force cleanup
+            setIsStreaming(false);
+            setIsThinking(false);
+            setStreamingText("");
+            return [];
+          }
           if (prev.length === 0 && isStreaming) {
+            // No agent-start events received — single-agent fallback
             setIsStreaming(false);
             setIsThinking(false);
             setStreamingText("");
