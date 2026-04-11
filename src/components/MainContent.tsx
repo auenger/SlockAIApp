@@ -29,6 +29,7 @@ import {
   AlertCircle,
   Filter,
   Pencil,
+  FolderOpen,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { TabType, Task, Message, AgentWithRuntime, Channel, ChannelMessage } from '../types';
@@ -36,6 +37,7 @@ import { getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentSta
 import { useAgentProfile } from '../lib/useAgentProfile';
 import { useThreadChat } from '../lib/useThreadChat';
 import { useWorkspace } from '../lib/useWorkspace';
+import { openWorkspaceInFinder } from '../lib/ipc';
 import { useSkills } from '../lib/useSkills';
 import { SkillFormModal } from './SkillsPanel';
 import type { SkillInfo } from '../types';
@@ -697,6 +699,13 @@ export const MainContent: React.FC<MainContentProps> = ({
                     className="p-0.5 brutal-border hover:bg-gray-100"
                   >
                     <Copy size={10} />
+                  </button>
+                  <button
+                    onClick={() => openWorkspaceInFinder(selectedAgent.agent.agent_id).catch(err => console.error('[Workspace] Failed to open in Finder:', err))}
+                    className="p-0.5 brutal-border hover:bg-gray-100"
+                    title="Open in Finder"
+                  >
+                    <FolderOpen size={10} />
                   </button>
                 </div>
                 <div className="flex-1 flex brutal-border bg-white overflow-hidden">
