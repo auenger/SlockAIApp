@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-12T03:00:00+08:00"
-  version: 88
+  last_updated: "2026-04-12T04:00:00+08:00"
+  version: 89
 
 parents:
   - id: feat-agent-runtime-select
@@ -16,12 +16,15 @@ parents:
     children:
       - feat-channel-zone-protocol
       - feat-agent-a2a-trigger
-active: []
-pending:
+active:
   - id: feat-thread-list-rename
     name: "Thread 全局展示 & 重命名"
     priority: 75
     created_at: "2026-04-11T23:00:00+08:00"
+    started_at: "2026-04-12T04:00:00+08:00"
+    branch: feature/feat-thread-list-rename
+    worktree: ../AgentsZone-feat-thread-list-rename
+pending: []
 blocked: []
 completed:
   - id: feat-header-actions
