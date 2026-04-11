@@ -17,7 +17,7 @@ export default function App() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
 
   // Thread chat hook (shared between Sidebar and MainContent)
-  const { threads, loadThreads, createNewThread, selectThread, activeThread, send: sendThreadMessage, removeThread } = useThreadChat();
+  const { threads, loadAllThreads, createNewThread, selectThread, activeThread, send: sendThreadMessage, removeThread, renameThreadAction } = useThreadChat();
 
   // Channel hook
   const {
@@ -58,30 +58,32 @@ export default function App() {
     loadChannels();
   }, [loadChannels]);
 
-  // Load threads when agent changes
+  // Load all threads on mount (global thread list)
   useEffect(() => {
-    if (selectedAgent) {
-      loadThreads(selectedAgent.agent.agent_id);
-      setActiveThreadId(null);
-    } else {
-      setActiveThreadId(null);
-    }
-  }, [selectedAgent]);
+    loadAllThreads();
+  }, [loadAllThreads]);
 
   /** Handle thread creation: notify sidebar and select the new thread */
   const handleThreadCreated = (threadId: string) => {
     setActiveThreadId(threadId);
-    if (selectedAgent) {
-      loadThreads(selectedAgent.agent.agent_id);
-    }
+    loadAllThreads();
   };
 
   /** Handle thread selection from sidebar */
   const handleThreadSelect = (threadId: string) => {
     setActiveThreadId(threadId);
     setIsThreadOpen(true);
-    if (selectedAgent) {
-      selectThread(selectedAgent.agent.agent_id, threadId);
+    // Find the thread to get its agent_id for loading messages
+    const threadInfo = threads.find(t => t.id === threadId);
+    const agentId = threadInfo?.agent_id;
+    if (agentId) {
+      // Auto-associate the agent if not already selected
+      const agentForThread = allAgents.find(a => a.agent.agent_id === agentId);
+      if (agentForThread && agentForThread.agent.agent_id !== selectedAgent?.agent.agent_id) {
+        setSelectedAgent(agentForThread);
+        setActiveChannel(null);
+      }
+      selectThread(agentId, threadId);
     }
     setActiveTab('CHAT');
   };
@@ -93,12 +95,14 @@ export default function App() {
   };
 
   /** Handle new thread creation from sidebar */
-  const handleCreateThread = async () => {
-    if (!selectedAgent) return;
+  const handleCreateThread = async (agentId?: string) => {
+    const targetAgentId = agentId || selectedAgent?.agent.agent_id;
+    if (!targetAgentId) return;
     try {
-      const thread = await createNewThread(selectedAgent.agent.agent_id, selectedAgent.agent.name);
+      const thread = await createNewThread(targetAgentId, '');
       setActiveThreadId(thread.id);
       setActiveTab('CHAT');
+      loadAllThreads();
     } catch (err) {
       console.error('Failed to create thread:', err);
     }
@@ -138,13 +142,16 @@ export default function App() {
 
   /** Handle thread deletion */
   const handleDeleteThread = async (threadId: string) => {
-    if (!selectedAgent) return;
+    const threadInfo = threads.find(t => t.id === threadId);
+    const agentId = threadInfo?.agent_id || selectedAgent?.agent.agent_id;
+    if (!agentId) return;
     try {
-      await removeThread(selectedAgent.agent.agent_id, threadId);
+      await removeThread(agentId, threadId);
       if (activeThreadId === threadId) {
         setActiveThreadId(null);
         setIsThreadOpen(false);
       }
+      loadAllThreads();
     } catch (err) {
       console.error('Failed to delete thread:', err);
     }
@@ -181,10 +188,9 @@ export default function App() {
       // Channel mode: reload channel data
       await selectChannel(activeChannel);
       await loadChannels();
-    } else if (selectedAgent) {
-      // Agent/Thread mode: reload threads list
-      await loadThreads(selectedAgent.agent.agent_id);
     }
+    // Always refresh global thread list
+    await loadAllThreads();
   };
 
   /** Handle stop session: stop the current agent runtime session */
@@ -207,7 +213,9 @@ export default function App() {
         threads={threads}
         activeThreadId={activeThreadId}
         onThreadSelect={handleThreadSelect}
-        onCreateThread={handleCreateThread}
+        onCreateThread={() => handleCreateThread()}
+        onCreateThreadWithAgent={(agentId: string) => handleCreateThread(agentId)}
+        onRenameThread={renameThreadAction}
         channels={channels}
         onCreateChannel={handleCreateChannel}
         agents={allAgents}
@@ -246,6 +254,7 @@ export default function App() {
         agent={selectedAgent}
         onSend={handleSendThreadMessage}
         onClose={() => setIsThreadOpen(false)}
+        onRenameThread={renameThreadAction}
         style={threadResize.style}
         resizeHandleRef={threadResize.handleRef}
       />

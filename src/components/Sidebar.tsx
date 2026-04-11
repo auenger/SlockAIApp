@@ -29,14 +29,18 @@ interface SidebarProps {
   selectedAgentId: string | null;
   /** Callback when user clicks an agent */
   onAgentSelect: (agent: AgentWithRuntime) => void;
-  /** Thread list for the selected agent */
+  /** Global thread list (all agents) */
   threads?: ThreadInfo[];
   /** Currently active thread ID */
   activeThreadId?: string | null;
   /** Callback when user clicks a thread */
   onThreadSelect?: (threadId: string) => void;
-  /** Callback when user wants to create a new thread */
+  /** Callback when user wants to create a new thread (selected agent or first agent) */
   onCreateThread?: () => void;
+  /** Callback when user wants to create a new thread for a specific agent */
+  onCreateThreadWithAgent?: (agentId: string) => void;
+  /** Callback when user renames a thread */
+  onRenameThread?: (threadId: string, newTitle: string) => Promise<ThreadInfo | null>;
   /** Channel list */
   channels?: ChannelInfo[];
   /** Callback when user wants to create a new channel */
@@ -66,6 +70,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeThreadId,
   onThreadSelect,
   onCreateThread,
+  onCreateThreadWithAgent,
+  onRenameThread,
   channels = [],
   onCreateChannel,
   agents: propAgents,
@@ -85,6 +91,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [showApiKeyManager, setShowApiKeyManager] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  // Thread rename inline edit state
+  const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  // New thread agent picker state
+  const [showNewThreadPicker, setShowNewThreadPicker] = useState(false);
 
   // Delete confirmation state: { type, id, name } or null
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'channel' | 'thread' | 'agent'; id: string; name: string } | null>(null);
@@ -252,16 +263,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </section>
 
-        {/* Threads - real data from backend */}
+        {/* Threads - global list (all agents) */}
         <section>
           <div className="flex items-center justify-between px-2 mb-2">
             <h3 className="font-black text-xs uppercase tracking-wider flex items-center gap-1">
               <ChevronDown size={14} /> Threads{' '}
               <span className="text-gray-600">{threads.length}</span>
             </h3>
-            {selectedAgentId && onCreateThread && (
+            {(selectedAgentId || agents.length > 0) && (
               <button
-                onClick={onCreateThread}
+                onClick={() => {
+                  if (selectedAgentId) {
+                    onCreateThread?.();
+                  } else {
+                    setShowNewThreadPicker(true);
+                  }
+                }}
                 className="brutal-border bg-white p-0.5 hover:bg-gray-100"
                 title="New Thread"
               >
@@ -282,26 +299,65 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         : "hover:bg-white/50"
                     )}
                   >
-                    <MessageSquare size={12} className="mt-0.5 shrink-0" />
+                    <AgentIcon
+                      icon={thread.agent_icon ?? null}
+                      emoji={thread.agent_emoji || 'B'}
+                      size="sm"
+                      bgColor="bg-brutal-cyan"
+                    />
                     <div className="flex-1 min-w-0">
-                      <div className={cn(
-                        "font-bold text-[11px] truncate",
-                        activeThreadId === thread.id ? "text-white" : "text-gray-800"
-                      )}>
-                        {thread.title}
-                      </div>
-                      {thread.preview && (
-                        <div className={cn(
-                          "truncate text-[10px]",
-                          activeThreadId === thread.id ? "text-white/80" : "text-gray-500"
-                        )}>
-                          {thread.preview}
+                      {editingThreadId === thread.id ? (
+                        <input
+                          type="text"
+                          value={editingTitle}
+                          onChange={(e) => setEditingTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const newTitle = editingTitle.trim();
+                              if (newTitle && newTitle !== thread.title) {
+                                onRenameThread?.(thread.id, newTitle);
+                              }
+                              setEditingThreadId(null);
+                            } else if (e.key === 'Escape') {
+                              setEditingThreadId(null);
+                            }
+                          }}
+                          onBlur={() => {
+                            const newTitle = editingTitle.trim();
+                            if (newTitle && newTitle !== thread.title) {
+                              onRenameThread?.(thread.id, newTitle);
+                            }
+                            setEditingThreadId(null);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className={cn(
+                            "w-full px-1 text-[11px] font-bold brutal-border focus:outline-none focus:bg-brutal-bg",
+                            activeThreadId === thread.id ? "bg-brutal-pink text-white" : "bg-white text-gray-800"
+                          )}
+                          autoFocus
+                        />
+                      ) : (
+                        <div
+                          className={cn(
+                            "font-bold text-[11px] truncate",
+                            activeThreadId === thread.id ? "text-white" : "text-gray-800"
+                          )}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            setEditingThreadId(thread.id);
+                            setEditingTitle(thread.title);
+                          }}
+                        >
+                          {thread.title}
                         </div>
                       )}
+                      {/* Agent name label */}
                       <div className={cn(
-                        "text-[9px] mt-0.5 flex items-center gap-1",
+                        "text-[9px] flex items-center gap-1",
                         activeThreadId === thread.id ? "text-white/60" : "text-gray-400"
                       )}>
+                        <span className="font-medium">{thread.agent_name || thread.agent_id}</span>
                         <Clock size={8} />
                         {thread.updated_at && new Date(thread.updated_at).toLocaleDateString(undefined, {
                           month: 'short',
@@ -327,10 +383,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
               ))
             ) : (
               <div className="text-[10px] text-gray-500 italic px-2 py-1">
-                {selectedAgentId ? 'No threads yet' : 'Select an agent'}
+                No threads yet
               </div>
             )}
           </div>
+
+          {/* New Thread Agent Picker */}
+          {showNewThreadPicker && (
+            <div className="mt-2 p-2 bg-white brutal-border space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase">New Thread — Select Agent</span>
+                <button
+                  onClick={() => setShowNewThreadPicker(false)}
+                  className="p-0.5 hover:bg-gray-100"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {agents.map((awr) => (
+                  <button
+                    key={awr.agent.agent_id}
+                    onClick={() => {
+                      onCreateThreadWithAgent?.(awr.agent.agent_id);
+                      setShowNewThreadPicker(false);
+                    }}
+                    className="w-full text-left flex items-center gap-2 px-2 py-1 hover:bg-gray-50 brutal-border border-transparent hover:border-black transition-colors"
+                  >
+                    <AgentIcon
+                      icon={awr.agent.icon}
+                      emoji={awr.agent.emoji}
+                      size="sm"
+                      bgColor="bg-brutal-cyan"
+                    />
+                    <span className="text-[10px] font-bold">{awr.agent.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Agents */}

@@ -170,6 +170,9 @@ pub fn list_threads(
                         message_count: r.message_count as usize,
                         created_at: r.created_at,
                         updated_at: r.updated_at,
+                        agent_name: String::new(),
+                        agent_emoji: String::new(),
+                        agent_icon: None,
                     }
                 }).collect();
                 return Ok(thread_infos);
@@ -302,6 +305,134 @@ pub fn delete_thread(
     }
 
     Ok(())
+}
+
+/// List all threads across all agents, ordered by updated_at desc.
+///
+/// Returns ThreadInfo with agent identification (agent_name, agent_emoji, agent_icon)
+/// for the global thread list view.
+#[tauri::command]
+pub fn list_all_threads(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<ThreadInfo>, String> {
+    let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
+    let rows = db_helpers::list_all_threads(&db_conn)
+        .map_err(|e| format!("query failed: {e}"))?;
+
+    // Build a lookup map for agent info (name, emoji, icon) from the agents table
+    let agents = db_helpers::list_agents(&db_conn).unwrap_or_default();
+    let agent_map: std::collections::HashMap<String, (String, String, Option<String>)> = agents
+        .iter()
+        .map(|a| (a.id.clone(), (a.name.clone(), a.emoji.clone(), a.avatar_path.clone())))
+        .collect();
+
+    let thread_infos: Vec<ThreadInfo> = rows.into_iter().map(|r| {
+        let (agent_name, agent_emoji, agent_icon) = agent_map
+            .get(&r.agent_id)
+            .cloned()
+            .unwrap_or_else(|| (r.agent_id.clone(), String::new(), None));
+        ThreadInfo {
+            id: r.id,
+            agent_id: r.agent_id,
+            title: r.title,
+            preview: String::new(),
+            message_count: r.message_count as usize,
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+            agent_name,
+            agent_emoji,
+            agent_icon,
+        }
+    }).collect();
+
+    Ok(thread_infos)
+}
+
+/// Rename a thread by updating its title in both SQLite and the JSON file.
+///
+/// Parameters:
+/// - `thread_id`: The thread to rename
+/// - `new_title`: The new display title
+#[tauri::command]
+pub fn rename_thread(
+    state: tauri::State<'_, AppState>,
+    thread_id: String,
+    new_title: String,
+) -> Result<ThreadInfo, String> {
+    let title_trimmed = new_title.trim();
+    if title_trimmed.is_empty() {
+        return Err("title cannot be empty".to_string());
+    }
+
+    // 1. Update SQLite metadata
+    {
+        let db_conn = state.db_conn.lock().map_err(|e| format!("lock error: {e}"))?;
+        let thread_row = db_helpers::get_thread(&db_conn, &thread_id)
+            .map_err(|e| format!("query failed: {e}"))?
+            .ok_or_else(|| format!("thread not found: {thread_id}"))?;
+
+        // Update the title in SQLite
+        db_conn.execute(
+            "UPDATE threads SET title = ?1 WHERE id = ?2",
+            rusqlite::params![title_trimmed, thread_id],
+        ).map_err(|e| format!("update failed: {e}"))?;
+
+        // Get agent info for the response
+        let agents = db_helpers::list_agents(&db_conn).unwrap_or_default();
+        let agent_map: std::collections::HashMap<String, (String, String, Option<String>)> = agents
+            .iter()
+            .map(|a| (a.id.clone(), (a.name.clone(), a.emoji.clone(), a.avatar_path.clone())))
+            .collect();
+
+        let (agent_name, agent_emoji, agent_icon) = agent_map
+            .get(&thread_row.agent_id)
+            .cloned()
+            .unwrap_or_else(|| (thread_row.agent_id.clone(), String::new(), None));
+
+        let updated_at = crate::workspace::thread::now_iso();
+
+        // Update updated_at as well
+        db_conn.execute(
+            "UPDATE threads SET updated_at = ?1 WHERE id = ?2",
+            rusqlite::params![&updated_at, &thread_id],
+        ).map_err(|e| format!("update timestamp failed: {e}"))?;
+
+        // 2. Also update the Thread JSON file
+        let agent_id = thread_row.agent_id.clone();
+        drop(db_conn); // Release DB lock before acquiring manager lock
+
+        let manager = state
+            .agent_manager
+            .lock()
+            .map_err(|e| format!("lock error: {e}"))?;
+
+        if let Some(workspace) = manager.get_workspace(&agent_id) {
+            let conv_dir = workspace.conversations_dir();
+            let store = ThreadStore::new(&conv_dir);
+            if let Ok(mut thread) = store.load(&thread_id) {
+                thread.title = title_trimmed.to_string();
+                thread.updated_at = updated_at.clone();
+                if let Err(e) = store.save(&thread) {
+                    log::warn!("[rename_thread] Failed to update thread JSON: {}", e);
+                }
+            }
+        }
+
+        log::info!("[rename_thread] thread_id={}, new_title={}", thread_id, title_trimmed);
+
+        return Ok(ThreadInfo {
+            id: thread_id.clone(),
+            agent_id: thread_row.agent_id,
+            title: title_trimmed.to_string(),
+            preview: String::new(),
+            message_count: thread_row.message_count as usize,
+            created_at: thread_row.created_at,
+            updated_at,
+            agent_name,
+            agent_emoji,
+            agent_icon,
+        });
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -227,6 +227,19 @@ export async function loadThreadMessages(
   return invoke<ThreadMessageData[]>("load_thread_messages", { agentId, threadId, limit: limit ?? null });
 }
 
+/** List all threads across all agents (global thread list). */
+export async function listAllThreads(): Promise<ThreadInfo[]> {
+  return invoke<ThreadInfo[]>("list_all_threads");
+}
+
+/** Rename a thread by updating its title. */
+export async function renameThread(
+  threadId: string,
+  newTitle: string
+): Promise<ThreadInfo> {
+  return invoke<ThreadInfo>("rename_thread", { threadId, newTitle });
+}
+
 // ---------------------------------------------------------------------------
 // Channel commands
 // ---------------------------------------------------------------------------

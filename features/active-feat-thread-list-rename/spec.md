@@ -49,7 +49,30 @@
 - feat-conversation-store (已完成) — 对话持久化
 
 ## Technical Solution
-<!-- To be filled during implementation -->
+
+### Backend Changes
+
+1. **`ThreadInfo` struct** (`workspace/thread.rs`): Extended with `agent_name`, `agent_emoji`, `agent_icon` fields (all optional via `#[serde(default)]`) to carry agent identity in the global list.
+
+2. **`list_all_threads` command** (`commands/thread.rs`): New Tauri IPC command that queries all threads from SQLite via `db_helpers::list_all_threads()`, joins with agent info from the `agents` table, and returns `Vec<ThreadInfo>` sorted by `updated_at DESC`.
+
+3. **`rename_thread` command** (`commands/thread.rs`): New Tauri IPC command accepting `thread_id` and `new_title`. Updates both the SQLite `threads` table and the thread's JSON file on disk. Returns updated `ThreadInfo`.
+
+4. **Command registration** (`lib.rs`): Added `list_all_threads` and `rename_thread` to `invoke_handler`.
+
+### Frontend Changes
+
+5. **IPC layer** (`lib/ipc.ts`): Added `listAllThreads()` and `renameThread(threadId, newTitle)` wrappers.
+
+6. **Types** (`types.ts`): Extended `ThreadInfo` with optional `agent_name`, `agent_emoji`, `agent_icon` fields.
+
+7. **useThreadChat hook** (`lib/useThreadChat.ts`): Added `loadAllThreads()` and `renameThreadAction()` methods.
+
+8. **App.tsx**: Changed from per-agent thread loading to global `loadAllThreads()` on mount. Thread selection auto-associates the correct agent. Thread deletion and creation work from global context.
+
+9. **Sidebar.tsx**: Thread section now shows all threads with `AgentIcon` + agent name. "New Thread" button opens an agent picker when no agent is selected. Thread items support double-click inline rename (Enter/Escape/Blur).
+
+10. **ThreadPanel.tsx**: Thread title in header supports double-click to rename inline.
 
 ## Acceptance Criteria (Gherkin)
 
