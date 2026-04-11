@@ -1,8 +1,8 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-12T00:30:00+08:00"
-  version: 25
-  total_completed: 25
+  last_updated: "2026-04-12T01:30:00+08:00"
+  version: 26
+  total_completed: 26
 
 records:
   - id: feat-project-init
@@ -592,3 +592,26 @@ records:
       duration: "~30min"
       commits: 1
       files_changed: 5
+
+  - id: fix-channel-msg-render
+    name: "Channel 消息即时渲染 & Agent Thinking 状态清理"
+    completed: "2026-04-12T01:30:00+08:00"
+    tag: fix-channel-msg-render-20260412
+    merge_commit: "2d553d7"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/fix-channel-msg-render
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-fix-channel-msg-render
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-12T01:00:00+08:00"
+      duration: "~30min"
+      commits: 1
+      files_changed: 2

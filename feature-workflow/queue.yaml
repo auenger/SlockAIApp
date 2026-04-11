@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-12T01:00:00+08:00"
-  version: 85
+  last_updated: "2026-04-12T01:30:00+08:00"
+  version: 86
 
 parents:
   - id: feat-agent-runtime-select
@@ -16,14 +16,7 @@ parents:
     children:
       - feat-channel-zone-protocol
       - feat-agent-a2a-trigger
-active:
-  - id: fix-channel-msg-render
-    name: "Channel 消息即时渲染 & Agent Thinking 状态清理"
-    priority: 85
-    created_at: "2026-04-11T21:00:00+08:00"
-    started_at: "2026-04-12T01:00:00+08:00"
-    branch: feature/fix-channel-msg-render
-    worktree: ../AgentsZone-fix-channel-msg-render
+active: []
 pending:
   - id: feat-header-actions
     name: "Header 操作按钮（暂停/刷新/删除）逻辑实现"
@@ -171,3 +164,7 @@ completed:
     name: "Agent 创建流程修复（Icon 保存 + 列表刷新）"
     completed_at: "2026-04-12T00:30:00+08:00"
     tag: fix-agent-create-bugs-20260412
+  - id: fix-channel-msg-render
+    name: "Channel 消息即时渲染 & Agent Thinking 状态清理"
+    completed_at: "2026-04-12T01:30:00+08:00"
+    tag: fix-channel-msg-render-20260412
