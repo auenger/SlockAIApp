@@ -163,6 +163,7 @@ impl AgentManager {
                 "helpful",
                 "robot",
                 None,
+                None,
                 RuntimeType::ClaudeCode,
             )?;
             true
@@ -264,6 +265,7 @@ impl AgentManager {
         vibe: &str,
         emoji: &str,
         avatar: Option<&str>,
+        icon: Option<&str>,
         runtime_type: RuntimeType,
     ) -> Result<&Agent, ManagerError> {
         let agent_id = name_to_id(name);
@@ -275,7 +277,8 @@ impl AgentManager {
         }
 
         let avatar_str = avatar.map(|s| s.to_string());
-        self.create_agent_internal(&agent_id, name, creature, vibe, emoji, avatar_str, runtime_type)?;
+        let icon_str = icon.map(|s| s.to_string());
+        self.create_agent_internal(&agent_id, name, creature, vibe, emoji, avatar_str, icon_str, runtime_type)?;
 
         let identity = self.load_identity(&agent_id)?;
         let agent = Agent {
@@ -303,6 +306,7 @@ impl AgentManager {
         vibe: &str,
         emoji: &str,
         avatar: Option<String>,
+        icon: Option<String>,
         runtime_type: RuntimeType,
     ) -> Result<(), ManagerError> {
         let agent_dir = self.agents_dir.join(agent_id);
@@ -314,6 +318,7 @@ impl AgentManager {
         // Create identity with runtime type
         let mut identity = AgentIdentity::with_runtime_type(agent_id, name, creature, vibe, emoji, runtime_type);
         identity.avatar = avatar;
+        identity.icon = icon;
         identity
             .write_to_file(&workspace.identity_file())
             .map_err(|e| ManagerError::IdentityError {
@@ -682,8 +687,8 @@ mod tests {
         manager.initialize_workspace().unwrap();
         manager.load().unwrap();
 
-        manager.create_agent("Claude", "AI", "sharp", "sparkles", None, RuntimeType::ClaudeCode).unwrap();
-        manager.create_agent("Codex", "AI", "calm", "code", None, RuntimeType::Codex).unwrap();
+        manager.create_agent("Claude", "AI", "sharp", "sparkles", None, None, RuntimeType::ClaudeCode).unwrap();
+        manager.create_agent("Codex", "AI", "calm", "code", None, None, RuntimeType::Codex).unwrap();
 
         let agents = manager.list_agents();
         assert_eq!(agents.len(), 3); // default + claude + codex
@@ -696,7 +701,7 @@ mod tests {
         manager.initialize_workspace().unwrap();
         manager.load().unwrap();
 
-        manager.create_agent("Claude", "AI", "sharp", "sparkles", None, RuntimeType::ClaudeCode).unwrap();
+        manager.create_agent("Claude", "AI", "sharp", "sparkles", None, None, RuntimeType::ClaudeCode).unwrap();
 
         let agent = manager.switch_agent("claude").unwrap();
         assert_eq!(agent.agent_id, "claude");
@@ -710,7 +715,7 @@ mod tests {
         manager.initialize_workspace().unwrap();
         manager.load().unwrap();
 
-        manager.create_agent("ToDelete", "AI", "calm", "x", None, RuntimeType::ClaudeCode).unwrap();
+        manager.create_agent("ToDelete", "AI", "calm", "x", None, None, RuntimeType::ClaudeCode).unwrap();
 
         // Switch away first so it's not active
         manager.switch_agent("default").unwrap();
@@ -739,7 +744,7 @@ mod tests {
         manager.load().unwrap();
 
         // Try to create "Default" which normalizes to "default"
-        let result = manager.create_agent("Default", "AI", "helpful", "robot", None, RuntimeType::ClaudeCode);
+        let result = manager.create_agent("Default", "AI", "helpful", "robot", None, None, RuntimeType::ClaudeCode);
         assert!(result.is_err());
     }
 
@@ -751,7 +756,7 @@ mod tests {
         let mut m1 = AgentManager::new(dir.path());
         m1.initialize_workspace().unwrap();
         m1.load().unwrap();
-        m1.create_agent("Claude", "AI", "sharp", "sparkles", None, RuntimeType::ClaudeCode).unwrap();
+        m1.create_agent("Claude", "AI", "sharp", "sparkles", None, None, RuntimeType::ClaudeCode).unwrap();
 
         // Second manager: should load existing agents
         let mut m2 = AgentManager::new(dir.path());

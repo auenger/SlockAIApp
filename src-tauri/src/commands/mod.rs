@@ -216,6 +216,9 @@ pub struct CreateAgentRequest {
     #[serde(default = "default_emoji")]
     pub emoji: String,
     pub avatar: Option<String>,
+    /// SVG icon name from the icon registry (e.g. "Bot", "Rocket").
+    #[serde(default)]
+    pub icon: Option<String>,
     /// Runtime type for the agent (defaults to claude_code).
     #[serde(default)]
     pub runtime_type: Option<RuntimeType>,
@@ -249,6 +252,7 @@ pub fn create_agent(
             &request.vibe,
             &request.emoji,
             request.avatar.as_deref(),
+            request.icon.as_deref(),
             request.runtime_type.clone().unwrap_or_default(),
         )
         .map_err(|e| format!("create failed: {e}"))?;
