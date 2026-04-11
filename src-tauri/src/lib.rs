@@ -10,17 +10,13 @@ use std::sync::Mutex;
 use tauri::Manager;
 use workspace::manager::AgentManager;
 
-/// Default workspace directory name.
-const DEFAULT_WORKSPACE_DIR: &str = "workspaces";
-
 /// Resolve the workspace root path.
 ///
-/// Uses the app's data directory (managed by Tauri) to store workspace data.
-fn resolve_workspace_root(app: &tauri::AppHandle) -> std::path::PathBuf {
-    app.path()
-        .app_data_dir()
-        .unwrap_or_else(|_| std::path::PathBuf::from("."))
-        .join(DEFAULT_WORKSPACE_DIR)
+/// Uses `~/.agentszone/` as the unified data directory across all platforms.
+fn resolve_workspace_root() -> std::path::PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".agentszone")
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -37,8 +33,8 @@ pub fn run() {
                 )?;
             }
 
-            // Initialize workspace root from app data dir
-            let workspace_root = resolve_workspace_root(app.handle());
+            // Initialize workspace root from ~/.agentszone/
+            let workspace_root = resolve_workspace_root();
             let mut agent_manager = AgentManager::new(&workspace_root);
 
             // Ensure workspace directory structure exists
