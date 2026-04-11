@@ -1,8 +1,8 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-11T23:45:00+08:00"
-  version: 24
-  total_completed: 24
+  last_updated: "2026-04-12T00:30:00+08:00"
+  version: 25
+  total_completed: 25
 
 records:
   - id: feat-project-init
@@ -569,3 +569,26 @@ records:
       duration: "~15min"
       commits: 2
       files_changed: 7
+
+  - id: fix-agent-create-bugs
+    name: "Agent 创建流程修复（Icon 保存 + 列表刷新）"
+    completed: "2026-04-12T00:30:00+08:00"
+    tag: fix-agent-create-bugs-20260412
+    merge_commit: "264d277"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/fix-agent-create-bugs
+    worktree_deleted: true
+    worktree_path: ../SlockAI-fix-agent-create-bugs
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 3
+      scenarios_passed: 3
+    stats:
+      started: "2026-04-12T00:00:00+08:00"
+      duration: "~30min"
+      commits: 1
+      files_changed: 5

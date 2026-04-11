@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-12T00:00:00+08:00"
-  version: 83
+  last_updated: "2026-04-12T00:30:00+08:00"
+  version: 84
 
 parents:
   - id: feat-agent-runtime-select
@@ -16,14 +16,7 @@ parents:
     children:
       - feat-channel-zone-protocol
       - feat-agent-a2a-trigger
-active:
-  - id: fix-agent-create-bugs
-    name: "Agent 创建流程修复（Icon 保存 + 列表刷新）"
-    priority: 90
-    created_at: "2026-04-11T20:30:00+08:00"
-    started_at: "2026-04-12T00:00:00+08:00"
-    branch: feature/fix-agent-create-bugs
-    worktree: ../SlockAI-fix-agent-create-bugs
+active: []
 pending:
   - id: fix-channel-msg-render
     name: "Channel 消息即时渲染 & Agent Thinking 状态清理"
@@ -171,3 +164,7 @@ completed:
     name: "统一应用数据目录至 ~/.agentszone"
     completed_at: "2026-04-11T23:45:00+08:00"
     tag: fix-unify-data-path-20260411
+  - id: fix-agent-create-bugs
+    name: "Agent 创建流程修复（Icon 保存 + 列表刷新）"
+    completed_at: "2026-04-12T00:30:00+08:00"
+    tag: fix-agent-create-bugs-20260412

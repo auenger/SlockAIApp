@@ -95,7 +95,17 @@ And 创建成功后列表正常刷新
 - 无需 reload 即可对新 Agent 进行操作
 
 ### General Checklist
-- [ ] Rust 端 `CreateAgentRequest` 包含 icon 字段
-- [ ] 创建流程完整传递 icon 到存储层
-- [ ] `scan` 函数能正确刷新 agent 列表
-- [ ] 不影响已有的 Agent 编辑功能
+- [x] Rust 端 `CreateAgentRequest` 包含 icon 字段
+- [x] 创建流程完整传递 icon 到存储层
+- [x] `scan` 函数能正确刷新 agent 列表
+- [x] 不影响已有的 Agent 编辑功能
+
+## Merge Record
+
+- **Completed**: 2026-04-12
+- **Merged branch**: feature/fix-agent-create-bugs
+- **Merge commit**: 264d277
+- **Archive tag**: fix-agent-create-bugs-20260412
+- **Conflicts**: none
+- **Verification**: passed (93/93 Rust tests, TypeScript type check pass, 3/3 Gherkin scenarios)
+- **Stats**: 1 commit, 5 files changed
