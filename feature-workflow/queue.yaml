@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-11T23:30:00+08:00"
-  version: 81
+  last_updated: "2026-04-11T23:45:00+08:00"
+  version: 82
 
 parents:
   - id: feat-agent-runtime-select
@@ -16,14 +16,7 @@ parents:
     children:
       - feat-channel-zone-protocol
       - feat-agent-a2a-trigger
-active:
-  - id: fix-unify-data-path
-    name: "统一应用数据目录至 ~/.agentszone"
-    priority: 95
-    created_at: "2026-04-11T22:00:00+08:00"
-    started_at: "2026-04-11T23:30:00+08:00"
-    branch: feature/fix-unify-data-path
-    worktree: ../AgentsZone-fix-unify-data-path
+active: []
 pending:
   - id: fix-agent-create-bugs
     name: "Agent 创建流程修复（Icon 保存 + 列表刷新）"
@@ -171,3 +164,7 @@ completed:
     name: "Agent-to-Agent @{agent} 触发机制"
     completed_at: "2026-04-11T19:30:00+08:00"
     tag: feat-agent-a2a-trigger-20260411
+  - id: fix-unify-data-path
+    name: "统一应用数据目录至 ~/.agentszone"
+    completed_at: "2026-04-11T23:45:00+08:00"
+    tag: fix-unify-data-path-20260411

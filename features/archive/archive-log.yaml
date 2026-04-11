@@ -1,8 +1,8 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-11T19:30:00+08:00"
-  version: 23
-  total_completed: 23
+  last_updated: "2026-04-11T23:45:00+08:00"
+  version: 24
+  total_completed: 24
 
 records:
   - id: feat-project-init
@@ -546,3 +546,26 @@ records:
       duration: "~30min"
       commits: 1
       files_changed: 13
+
+  - id: fix-unify-data-path
+    name: "统一应用数据目录至 ~/.agentszone"
+    completed: "2026-04-11T23:45:00+08:00"
+    tag: fix-unify-data-path-20260411
+    merge_commit: "933b614"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/fix-unify-data-path
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-fix-unify-data-path
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 3
+      scenarios_passed: 3
+    stats:
+      started: "2026-04-11T23:30:00+08:00"
+      duration: "~15min"
+      commits: 2
+      files_changed: 7

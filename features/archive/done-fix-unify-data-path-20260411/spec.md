@@ -98,7 +98,16 @@ Scenario: 已有数据路径正常运行
 ```
 
 ### General Checklist
-- [ ] `resolve_workspace_root` 使用 `~/.agentszone/`
-- [ ] 日志输出正确显示新路径
-- [ ] 所有子模块通过 workspace root 参数正常工作
-- [ ] 前端 mock 路径与实际路径一致
+- [x] `resolve_workspace_root` 使用 `~/.agentszone/`
+- [x] 日志输出正确显示新路径
+- [x] 所有子模块通过 workspace root 参数正常工作
+- [x] 前端 mock 路径与实际路径一致
+
+## Merge Record
+- **Completed**: 2026-04-11
+- **Branch**: feature/fix-unify-data-path
+- **Merge Commit**: 933b614
+- **Archive Tag**: fix-unify-data-path-20260411
+- **Conflicts**: None
+- **Verification**: 93 tests passed, 3/3 Gherkin scenarios validated
+- **Files Changed**: 7 (lib.rs, Cargo.toml, Cargo.lock, useAgentProfile.ts, task.md, checklist.md, evidence/)
