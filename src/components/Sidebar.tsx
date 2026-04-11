@@ -49,6 +49,8 @@ interface SidebarProps {
   onDeleteThread?: (threadId: string) => void;
   /** Callback when user wants to delete an agent */
   onDeleteAgent?: (agentId: string) => void;
+  /** Callback to refresh the agent list from the parent */
+  onRefreshAgents?: () => Promise<void>;
   /** Resizable width style from parent */
   style?: React.CSSProperties;
   /** Resize handle ref from parent */
@@ -70,10 +72,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onDeleteChannel,
   onDeleteThread,
   onDeleteAgent,
+  onRefreshAgents,
   style,
   resizeHandleRef,
 }) => {
-  const { agents: statusAgents, loading, scan } = useAgentStatus();
+  const { agents: statusAgents, loading, scan: localScan } = useAgentStatus();
   const { profile } = useUserProfile();
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showCreateAgent, setShowCreateAgent] = useState(false);
@@ -88,6 +91,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Use prop agents if provided (they have runtime status), otherwise use status agents
   const agents = propAgents ?? statusAgents;
+
+  /** Refresh agent list: use parent callback if available, otherwise local scan */
+  const refreshAgents = onRefreshAgents ?? localScan;
 
   /** Handle channel creation */
   const handleCreateChannel = () => {
@@ -452,7 +458,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <CreateAgentModal
         isOpen={showCreateAgent}
         onClose={() => setShowCreateAgent(false)}
-        onSuccess={scan}
+        onSuccess={refreshAgents}
       />
 
       {/* Edit Agent Modal */}
@@ -462,7 +468,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           setShowEditAgent(false);
           setEditingAgentId(null);
         }}
-        onSuccess={scan}
+        onSuccess={refreshAgents}
         agentId={editingAgentId}
       />
 

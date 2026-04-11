@@ -193,6 +193,7 @@ export default function App() {
         onDeleteChannel={handleDeleteChannel}
         onDeleteThread={handleDeleteThread}
         onDeleteAgent={handleDeleteAgent}
+        onRefreshAgents={scan}
         style={sidebarResize.style}
         resizeHandleRef={sidebarResize.handleRef}
       />
