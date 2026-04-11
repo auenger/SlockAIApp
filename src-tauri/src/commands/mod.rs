@@ -714,6 +714,64 @@ pub fn read_workspace_file(
 }
 
 // ---------------------------------------------------------------------------
+// Open in Finder command
+// ---------------------------------------------------------------------------
+
+/// Open an agent's workspace directory in the system file manager.
+///
+/// Resolves the agent's workspace path and opens it using the OS-native
+/// file manager (Finder on macOS, Explorer on Windows).
+#[tauri::command]
+pub fn open_in_finder(
+    state: tauri::State<'_, AppState>,
+    agent_id: String,
+) -> Result<(), String> {
+    let manager = state
+        .agent_manager
+        .lock()
+        .map_err(|e| format!("lock error: {e}"))?;
+
+    let workspace = manager
+        .get_workspace(&agent_id)
+        .ok_or_else(|| format!("agent not found: {agent_id}"))?;
+
+    let path = workspace.base_path().to_path_buf();
+
+    if !path.exists() {
+        return Err("Workspace directory not found".to_string());
+    }
+
+    // Use Tauri's shell open to launch the system file manager
+    // This is cross-platform: macOS Finder, Windows Explorer, Linux file manager
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("failed to open Finder: {e}"))?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("failed to open Explorer: {e}"))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("failed to open file manager: {e}"))?;
+    }
+
+    log::info!("[OpenInFinder] Opened workspace for agent '{}': {}", agent_id, path.display());
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Original test command
 // ---------------------------------------------------------------------------
 

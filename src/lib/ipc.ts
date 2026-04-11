@@ -175,6 +175,11 @@ export async function readWorkspaceFile(
   return invoke<FileContent>("read_workspace_file", { agentId, filePath });
 }
 
+/** Open an agent's workspace directory in the system file manager (Finder/Explorer). */
+export async function openWorkspaceInFinder(agentId: string): Promise<void> {
+  return invoke<void>("open_in_finder", { agentId });
+}
+
 // ---------------------------------------------------------------------------
 // Thread commands
 // ---------------------------------------------------------------------------
