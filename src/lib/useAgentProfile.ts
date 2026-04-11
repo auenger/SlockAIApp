@@ -40,7 +40,7 @@ const MOCK_WORKSPACE: ManagerStatus = {
   total_agents: 1,
   enabled_agents: 1,
   active_agent_id: "default",
-  workspace_root: "/Users/ryan/AgentsZone/workspaces/default",
+  workspace_root: "~/.agentszone",
   agents_health: [],
 };
 

@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-11T23:00:00+08:00"
-  version: 80
+  last_updated: "2026-04-11T23:30:00+08:00"
+  version: 81
 
 parents:
   - id: feat-agent-runtime-select
@@ -16,12 +16,15 @@ parents:
     children:
       - feat-channel-zone-protocol
       - feat-agent-a2a-trigger
-active: []
-pending:
+active:
   - id: fix-unify-data-path
     name: "统一应用数据目录至 ~/.agentszone"
     priority: 95
     created_at: "2026-04-11T22:00:00+08:00"
+    started_at: "2026-04-11T23:30:00+08:00"
+    branch: feature/fix-unify-data-path
+    worktree: ../AgentsZone-fix-unify-data-path
+pending:
   - id: fix-agent-create-bugs
     name: "Agent 创建流程修复（Icon 保存 + 列表刷新）"
     priority: 90
