@@ -7,7 +7,7 @@ import { useThreadChat } from './lib/useThreadChat';
 import { useChannel } from './lib/useChannel';
 import { useAgentStatus } from './lib/useAgentStatus';
 import { useResizable } from './lib/useResizable';
-import { deleteAgent } from './lib/ipc';
+import { deleteAgent, invoke } from './lib/ipc';
 
 export default function App() {
   const [activeChannel, setActiveChannel] = useState<string | null>(null);
@@ -175,6 +175,27 @@ export default function App() {
     setActiveTab('CHAT');
   };
 
+  /** Handle refresh: reload current view data */
+  const handleRefresh = async () => {
+    if (activeChannel) {
+      // Channel mode: reload channel data
+      await selectChannel(activeChannel);
+      await loadChannels();
+    } else if (selectedAgent) {
+      // Agent/Thread mode: reload threads list
+      await loadThreads(selectedAgent.agent.agent_id);
+    }
+  };
+
+  /** Handle stop session: stop the current agent runtime session */
+  const handleStopSession = async () => {
+    try {
+      await invoke('runtime_session_stop');
+    } catch (err) {
+      console.error('Failed to stop session:', err);
+    }
+  };
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-brutal-bg">
       {/* Left Sidebar */}
@@ -212,6 +233,10 @@ export default function App() {
         channelIsThinking={channelIsThinking}
         channelStreamingText={channelStreamingText}
         channelAgentStreams={channelAgentStreams}
+        onDeleteChannel={handleDeleteChannel}
+        onDeleteAgent={handleDeleteAgent}
+        onRefresh={handleRefresh}
+        onStopSession={handleStopSession}
       />
 
       {/* Right Thread Panel */}

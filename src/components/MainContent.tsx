@@ -160,6 +160,14 @@ interface MainContentProps {
   channelStreamingText?: string;
   /** Per-agent streaming states for multi-Agent responses */
   channelAgentStreams?: AgentStreamState[];
+  /** Delete the currently active channel */
+  onDeleteChannel?: (channelId: string) => void;
+  /** Delete an agent by ID */
+  onDeleteAgent?: (agentId: string) => void;
+  /** Refresh the current view data (channel or thread) */
+  onRefresh?: () => void;
+  /** Stop the currently running agent session */
+  onStopSession?: () => void;
 }
 
 export const MainContent: React.FC<MainContentProps> = ({
@@ -175,10 +183,16 @@ export const MainContent: React.FC<MainContentProps> = ({
   channelIsThinking = false,
   channelStreamingText = '',
   channelAgentStreams = [],
+  onDeleteChannel,
+  onDeleteAgent,
+  onRefresh,
+  onStopSession,
 }) => {
   const [taskFilter, setTaskFilter] = useState('All');
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'channel' | 'agent'; id: string; name: string } | null>(null);
 
   // Skills management state
   const {
@@ -479,17 +493,97 @@ export const MainContent: React.FC<MainContentProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button className="p-2 brutal-border hover:bg-gray-100">
+          {/* Stop/Pause button: stop the current agent session */}
+          <button
+            onClick={onStopSession}
+            disabled={!channelIsStreaming && !channelIsThinking && !isStreaming && !isThinking}
+            className={cn(
+              "p-2 brutal-border",
+              (channelIsStreaming || channelIsThinking || isStreaming || isThinking)
+                ? "hover:bg-red-50 bg-brutal-pink text-white"
+                : "opacity-40 cursor-not-allowed"
+            )}
+            title="Stop current session"
+          >
             <Square size={18} />
           </button>
-          <button className="p-2 brutal-border hover:bg-gray-100">
-            <RotateCcw size={18} />
+          {/* Refresh button: reload current view data */}
+          <button
+            onClick={async () => {
+              if (!onRefresh || refreshing) return;
+              setRefreshing(true);
+              try {
+                await onRefresh();
+                // Re-select thread in thread mode to reload messages
+                if (!isChannelMode && selectedAgent && activeThreadId) {
+                  selectThread(selectedAgent.agent.agent_id, activeThreadId);
+                }
+              } finally {
+                // Brief animation delay
+                setTimeout(() => setRefreshing(false), 600);
+              }
+            }}
+            disabled={!onRefresh}
+            className={cn(
+              "p-2 brutal-border hover:bg-gray-100",
+              !onRefresh && "opacity-40 cursor-not-allowed"
+            )}
+            title="Refresh current view"
+          >
+            <RotateCcw size={18} className={refreshing ? "animate-spin" : ""} />
           </button>
-          <button className="p-2 brutal-border bg-brutal-yellow hover:bg-yellow-400">
+          {/* Delete button: delete channel or agent */}
+          <button
+            onClick={() => {
+              if (isChannelMode && activeChannel) {
+                setDeleteConfirm({ type: 'channel', id: activeChannel.id, name: activeChannel.name });
+              } else if (selectedAgent) {
+                setDeleteConfirm({ type: 'agent', id: selectedAgent.agent.agent_id, name: selectedAgent.agent.name });
+              }
+            }}
+            disabled={!activeChannel && !selectedAgent}
+            className={cn(
+              "p-2 brutal-border bg-brutal-yellow hover:bg-yellow-400",
+              !activeChannel && !selectedAgent && "opacity-40 cursor-not-allowed"
+            )}
+            title="Delete"
+          >
             <Trash2 size={18} />
           </button>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog (matches Sidebar pattern) */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setDeleteConfirm(null)}>
+          <div className="bg-white brutal-border brutal-shadow p-4 w-72 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="font-black text-sm uppercase">Confirm Delete</div>
+            <div className="text-xs text-gray-600">
+              Are you sure you want to delete <span className="font-bold">{deleteConfirm.name}</span>?
+              This action cannot be undone.
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="px-3 py-1 brutal-border bg-gray-200 text-xs font-black hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (!deleteConfirm) return;
+                  if (deleteConfirm.type === 'channel') onDeleteChannel?.(deleteConfirm.id);
+                  else if (deleteConfirm.type === 'agent') onDeleteAgent?.(deleteConfirm.id);
+                  setDeleteConfirm(null);
+                }}
+                className="px-3 py-1 brutal-border bg-brutal-pink text-white text-xs font-black hover:bg-red-500"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex brutal-border-b bg-gray-50">
