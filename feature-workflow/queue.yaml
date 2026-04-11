@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-12T02:00:00+08:00"
-  version: 87
+  last_updated: "2026-04-12T03:00:00+08:00"
+  version: 88
 
 parents:
   - id: feat-agent-runtime-select
@@ -16,14 +16,7 @@ parents:
     children:
       - feat-channel-zone-protocol
       - feat-agent-a2a-trigger
-active:
-  - id: feat-header-actions
-    name: "Header 操作按钮（暂停/刷新/删除）逻辑实现"
-    priority: 80
-    created_at: "2026-04-11T20:00:00+08:00"
-    branch: feature/feat-header-actions
-    worktree: ../AgentsZone-feat-header-actions
-    started_at: "2026-04-12T02:00:00+08:00"
+active: []
 pending:
   - id: feat-thread-list-rename
     name: "Thread 全局展示 & 重命名"
@@ -31,6 +24,10 @@ pending:
     created_at: "2026-04-11T23:00:00+08:00"
 blocked: []
 completed:
+  - id: feat-header-actions
+    name: "Header 操作按钮（暂停/刷新/删除）逻辑实现"
+    completed_at: "2026-04-12T03:00:00+08:00"
+    tag: feat-header-actions-20260412
   - id: feat-project-init
     name: "Project Init (Tauri V2 + React 19)"
     completed_at: "2026-04-08T13:20:00Z"

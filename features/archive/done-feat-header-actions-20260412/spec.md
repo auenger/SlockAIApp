@@ -153,6 +153,16 @@ Then 暂停按钮呈 disabled 状态
 - 三个按钮 hover 效果保持现有样式
 
 ### General Checklist
-- [ ] 不引入新的 Rust backend 代码（使用现有 IPC）
-- [ ] 删除逻辑复用 App.tsx 中已有的 handlers
-- [ ] 暂停功能使用 `runtime_session_stop` 现有命令
+- [x] 不引入新的 Rust backend 代码（使用现有 IPC）
+- [x] 删除逻辑复用 App.tsx 中已有的 handlers
+- [x] 暂停功能使用 `runtime_session_stop` 现有命令
+
+## Merge Record
+- **Completed**: 2026-04-12T03:00:00+08:00
+- **Branch**: feature/feat-header-actions
+- **Merge Commit**: 8cb80d4
+- **Archive Tag**: feat-header-actions-20260412
+- **Conflicts**: none
+- **Verification**: passed (7/7 Gherkin scenarios validated)
+- **Commits**: 2
+- **Files Changed**: 5
