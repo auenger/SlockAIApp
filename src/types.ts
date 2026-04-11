@@ -89,6 +89,12 @@ export interface ThreadInfo {
   message_count: number;
   created_at: string;
   updated_at: string;
+  /** Agent display name (for global thread list) */
+  agent_name?: string;
+  /** Agent emoji (for global thread list) */
+  agent_emoji?: string;
+  /** Agent icon name (for global thread list) */
+  agent_icon?: string | null;
 }
 
 export interface Task {

@@ -124,6 +124,8 @@ pub fn run() {
             commands::thread::send_message,
             commands::thread::save_agent_response,
             commands::thread::load_thread_messages,
+            commands::thread::list_all_threads,
+            commands::thread::rename_thread,
             commands::channel::create_channel,
             commands::channel::list_channels,
             commands::channel::get_channel,

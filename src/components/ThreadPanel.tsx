@@ -10,6 +10,8 @@ interface ThreadPanelProps {
   agent: AgentWithRuntime | null;
   onSend: (message: string) => void;
   onClose: () => void;
+  /** Callback when user renames the thread */
+  onRenameThread?: (threadId: string, newTitle: string) => Promise<import('../types').ThreadInfo | null>;
   /** Resizable width style from parent */
   style?: React.CSSProperties;
   /** Resize handle ref from parent */
@@ -22,11 +24,14 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
   agent,
   onSend,
   onClose,
+  onRenameThread,
   style,
   resizeHandleRef,
 }) => {
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -89,9 +94,47 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
       />
       {/* Header */}
       <div className="p-3 brutal-border-b flex items-center justify-between bg-gray-50">
-        <div className="font-black text-sm truncate flex-1 mr-2">
-          <span className="text-gray-500">Thread — </span>
-          <span className="truncate">{thread.title || 'Untitled'}</span>
+        <div className="font-black text-sm truncate flex-1 mr-2 flex items-center gap-1">
+          <span className="text-gray-500 shrink-0">Thread — </span>
+          {isEditingTitle ? (
+            <input
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const newTitle = editTitle.trim();
+                  if (newTitle && newTitle !== thread.title && thread.id) {
+                    onRenameThread?.(thread.id, newTitle);
+                  }
+                  setIsEditingTitle(false);
+                } else if (e.key === 'Escape') {
+                  setIsEditingTitle(false);
+                }
+              }}
+              onBlur={() => {
+                const newTitle = editTitle.trim();
+                if (newTitle && newTitle !== thread.title && thread.id) {
+                  onRenameThread?.(thread.id, newTitle);
+                }
+                setIsEditingTitle(false);
+              }}
+              className="flex-1 min-w-0 px-1 text-sm font-black brutal-border focus:outline-none focus:bg-brutal-bg bg-white"
+              autoFocus
+            />
+          ) : (
+            <span
+              className="truncate cursor-pointer hover:underline decoration-dashed underline-offset-2"
+              onDoubleClick={() => {
+                setEditTitle(thread.title || '');
+                setIsEditingTitle(true);
+              }}
+              title="Double-click to rename"
+            >
+              {thread.title || 'Untitled'}
+            </span>
+          )}
         </div>
         <button onClick={onClose} className="p-1 brutal-border hover:bg-gray-200 shrink-0">
           <X size={16} />

@@ -246,11 +246,8 @@ export const MainContent: React.FC<MainContentProps> = ({
   }, [activeThread?.messages, activeChannel?.messages, isThinking, streamingText, channelIsThinking, channelStreamingText, channelAgentStreams]);
 
   // When activeThreadId changes (from sidebar), load the thread
-  useEffect(() => {
-    if (activeThreadId && selectedAgent) {
-      selectThread(selectedAgent.agent.agent_id, activeThreadId);
-    }
-  }, [activeThreadId, selectedAgent]);
+  // The thread selection is now handled by App.tsx which also sets the agent
+  // We only need to react to changes in selectedAgent for profile loading etc.
 
   // Profile data loading
   const { data: profileData, loading: profileLoading, loadProfile } = useAgentProfile();

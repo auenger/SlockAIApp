@@ -54,6 +54,15 @@ pub struct ThreadInfo {
     pub message_count: usize,
     pub created_at: String,
     pub updated_at: String,
+    /// Agent display name (for global thread list).
+    #[serde(default)]
+    pub agent_name: String,
+    /// Agent emoji (for global thread list).
+    #[serde(default)]
+    pub agent_emoji: String,
+    /// Agent icon name (for global thread list).
+    #[serde(default)]
+    pub agent_icon: Option<String>,
 }
 
 // ===========================================================================
@@ -171,6 +180,9 @@ impl<'a> ThreadStore<'a> {
                                 message_count: thread.messages.len(),
                                 created_at: thread.created_at,
                                 updated_at: thread.updated_at,
+                                agent_name: String::new(),
+                                agent_emoji: String::new(),
+                                agent_icon: None,
                             });
                         }
                         Err(_) => continue,

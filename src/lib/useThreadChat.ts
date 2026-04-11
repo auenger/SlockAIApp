@@ -17,6 +17,8 @@ import {
   deleteThread,
   sendMessage,
   saveAgentResponse,
+  listAllThreads,
+  renameThread,
 } from "./ipc";
 
 // ---------------------------------------------------------------------------
@@ -50,10 +52,14 @@ export interface ThreadChatState {
   createNewThread: (agentId: string, agentName: string) => Promise<Thread>;
   /** Load threads list for an agent */
   loadThreads: (agentId: string) => Promise<void>;
+  /** Load all threads across all agents */
+  loadAllThreads: () => Promise<void>;
   /** Select a thread (loads its data) */
   selectThread: (agentId: string, threadId: string) => Promise<void>;
   /** Delete a thread */
   removeThread: (agentId: string, threadId: string) => Promise<void>;
+  /** Rename a thread */
+  renameThreadAction: (threadId: string, newTitle: string) => Promise<ThreadInfo | null>;
   /** Send a message in the active thread */
   send: (agentId: string, threadId: string, message: string) => Promise<void>;
   /** Clear the active thread */
@@ -136,6 +142,25 @@ export function useThreadChat(): ThreadChatState {
     }
   }, []);
 
+  /** Load all threads across all agents (global list) */
+  const loadAllThreads = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (!isTauri) {
+        setThreads([]);
+        return;
+      }
+      const list = await listAllThreads();
+      setThreads(list);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   /** Select a thread */
   const selectThread = useCallback(async (agentId: string, threadId: string) => {
     setLoading(true);
@@ -181,6 +206,26 @@ export function useThreadChat(): ThreadChatState {
       setError(msg);
     }
   }, [activeThread, loadThreads]);
+
+  /** Rename a thread */
+  const renameThreadAction = useCallback(async (threadId: string, newTitle: string): Promise<ThreadInfo | null> => {
+    try {
+      if (!isTauri) return null;
+      const updated = await renameThread(threadId, newTitle);
+      // Update the thread in the local list
+      setThreads((prev) => prev.map((t) => t.id === threadId ? { ...t, title: updated.title, updated_at: updated.updated_at } : t));
+      // If this is the active thread, update its title too
+      setActiveThread((prev) => {
+        if (!prev || prev.id !== threadId) return prev;
+        return { ...prev, title: updated.title, updated_at: updated.updated_at };
+      });
+      return updated;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      return null;
+    }
+  }, []);
 
   /** Send a message in a thread */
   const send = useCallback(async (agentId: string, threadId: string, message: string) => {
@@ -375,8 +420,10 @@ export function useThreadChat(): ThreadChatState {
     error,
     createNewThread,
     loadThreads,
+    loadAllThreads,
     selectThread,
     removeThread,
+    renameThreadAction,
     send,
     clearActive,
   };
