@@ -1,8 +1,8 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-12T03:00:00+08:00"
-  version: 27
-  total_completed: 27
+  last_updated: "2026-04-12T04:30:00+08:00"
+  version: 28
+  total_completed: 28
 
 records:
   - id: feat-project-init
@@ -638,3 +638,26 @@ records:
       duration: "~1h"
       commits: 2
       files_changed: 5
+
+  - id: feat-thread-list-rename
+    name: "Thread 全局展示 & 重命名"
+    completed: "2026-04-12T04:30:00+08:00"
+    tag: feat-thread-list-rename-20260412
+    merge_commit: "22f4f09"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-thread-list-rename
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-thread-list-rename
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 6
+      scenarios_passed: 6
+    stats:
+      started: "2026-04-12T04:00:00+08:00"
+      duration: "~30min"
+      commits: 3
+      files_changed: 16

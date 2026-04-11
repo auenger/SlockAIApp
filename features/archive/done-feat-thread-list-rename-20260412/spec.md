@@ -74,6 +74,17 @@
 
 10. **ThreadPanel.tsx**: Thread title in header supports double-click to rename inline.
 
+## Merge Record
+
+- **Completed**: 2026-04-12T04:30:00+08:00
+- **Merged Branch**: feature/feat-thread-list-rename
+- **Merge Commit**: 22f4f09
+- **Archive Tag**: feat-thread-list-rename-20260412
+- **Conflicts**: None (clean rebase)
+- **Verification**: 6/6 Gherkin scenarios passed, 93/93 Rust tests, 0 TS errors
+- **Commits**: 3 (activate + implement + evidence)
+- **Files Changed**: 16
+
 ## Acceptance Criteria (Gherkin)
 
 ### User Story

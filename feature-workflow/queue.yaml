@@ -1,6 +1,6 @@
 meta:
-  last_updated: "2026-04-12T04:00:00+08:00"
-  version: 89
+  last_updated: "2026-04-12T04:30:00+08:00"
+  version: 90
 
 parents:
   - id: feat-agent-runtime-select
@@ -16,17 +16,14 @@ parents:
     children:
       - feat-channel-zone-protocol
       - feat-agent-a2a-trigger
-active:
-  - id: feat-thread-list-rename
-    name: "Thread 全局展示 & 重命名"
-    priority: 75
-    created_at: "2026-04-11T23:00:00+08:00"
-    started_at: "2026-04-12T04:00:00+08:00"
-    branch: feature/feat-thread-list-rename
-    worktree: ../AgentsZone-feat-thread-list-rename
+active: []
 pending: []
 blocked: []
 completed:
+  - id: feat-thread-list-rename
+    name: "Thread 全局展示 & 重命名"
+    completed_at: "2026-04-12T04:30:00+08:00"
+    tag: feat-thread-list-rename-20260412
   - id: feat-header-actions
     name: "Header 操作按钮（暂停/刷新/删除）逻辑实现"
     completed_at: "2026-04-12T03:00:00+08:00"
