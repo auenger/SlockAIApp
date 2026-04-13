@@ -155,6 +155,21 @@ export interface AgentRuntimeInfo {
   binary_name?: string;
 }
 
+/** A structured content block from agent runtime output (tool_use or tool_result). */
+export interface ContentBlock {
+  type: "tool_use" | "tool_result";
+  /** tool_use: unique id for matching with tool_result */
+  id?: string;
+  /** tool_use: tool name (e.g. "Read", "Write", "Bash") */
+  name?: string;
+  /** tool_use: tool input parameters */
+  input?: Record<string, unknown>;
+  /** tool_result: reference to the matching tool_use id */
+  tool_use_id?: string;
+  /** tool_result: result content (string or array of content items) */
+  content?: string | unknown[];
+}
+
 /** Streaming event from an agent runtime execution */
 export interface StreamEvent {
   text: string;
@@ -163,7 +178,7 @@ export interface StreamEvent {
   type?: string;
   session_id?: string;
   /** Structured content blocks (tool_use, tool_result) from verbose JSON output */
-  content_blocks?: unknown[];
+  content_blocks?: ContentBlock[];
 }
 
 /** Channel streaming chunk event (wraps StreamEvent with agent context) */

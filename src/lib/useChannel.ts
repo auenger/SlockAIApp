@@ -10,7 +10,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { Channel, ChannelInfo, ChannelMessage, AgentWithRuntime, ChannelChunkEvent, ChannelResponseEvent, ChannelA2aStartEvent, ChannelA2aDepthExceededEvent } from "../types";
+import type { Channel, ChannelInfo, ChannelMessage, AgentWithRuntime, ChannelChunkEvent, ChannelResponseEvent, ChannelA2aStartEvent, ChannelA2aDepthExceededEvent, ContentBlock } from "../types";
 import {
   createChannel,
   listChannels,
@@ -50,6 +50,8 @@ export interface AgentStreamState {
   triggered_by?: string;
   /** Depth in the A2A trigger chain (0 = user-triggered, 1+ = A2A) */
   a2a_depth?: number;
+  /** Structured content blocks (tool_use / tool_result) collected during streaming. Cleared on done. */
+  contentBlocks: ContentBlock[];
 }
 
 // ---------------------------------------------------------------------------
@@ -418,6 +420,7 @@ export function useChannel(): ChannelState {
               thinking: true,
               text: "",
               done: false,
+              contentBlocks: [],
             },
           ]);
         }
@@ -466,6 +469,7 @@ export function useChannel(): ChannelState {
               is_a2a: true,
               triggered_by: payload.triggered_by,
               a2a_depth: payload.depth,
+              contentBlocks: [],
             },
           ]);
         }
@@ -506,11 +510,14 @@ export function useChannel(): ChannelState {
             const newText = prev + streamEvent.text;
             agentTexts.set(agentId, newText);
 
+            // Accumulate content_blocks if present
+            const newBlocks = streamEvent.content_blocks ?? [];
+
             // Update per-agent stream state
             setAgentStreams((prev) =>
               prev.map((s) =>
                 s.agent_id === agentId
-                  ? { ...s, thinking: false, text: newText }
+                  ? { ...s, thinking: false, text: newText, contentBlocks: [...s.contentBlocks, ...newBlocks] }
                   : s
               )
             );
@@ -521,10 +528,11 @@ export function useChannel(): ChannelState {
           }
 
           if (streamEvent.is_done) {
+            // Clear contentBlocks on done (not persisted)
             setAgentStreams((prev) =>
               prev.map((s) =>
                 s.agent_id === agentId
-                  ? { ...s, streaming: false, thinking: false, done: true, error: streamEvent.error }
+                  ? { ...s, streaming: false, thinking: false, done: true, error: streamEvent.error, contentBlocks: [] }
                   : s
               )
             );

@@ -11,6 +11,8 @@ import {
   Users,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
+  ChevronUp,
   Bot,
   Circle,
   Square,
@@ -30,9 +32,10 @@ import {
   Filter,
   Pencil,
   FolderOpen,
+  Wrench,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { TabType, Task, Message, AgentWithRuntime, Channel, ChannelMessage } from '../types';
+import { TabType, Task, Message, AgentWithRuntime, Channel, ChannelMessage, ContentBlock } from '../types';
 import { getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
 import { useAgentProfile } from '../lib/useAgentProfile';
 import { useThreadChat } from '../lib/useThreadChat';
@@ -77,6 +80,126 @@ function formatFileSize(bytes: number): string {
 }
 
 // ---------------------------------------------------------------------------
+// Tool icon mapping
+// ---------------------------------------------------------------------------
+
+const TOOL_ICONS: Record<string, React.ElementType> = {
+  Read: FileText,
+  Write: Pencil,
+  Bash: Terminal,
+  Edit: Code,
+  Glob: Folder,
+  Grep: Filter,
+};
+
+function getToolIcon(name: string): React.ElementType {
+  return TOOL_ICONS[name] || Wrench;
+}
+
+// ---------------------------------------------------------------------------
+// ContentBlockCard — renders a single tool_use / tool_result block
+// ---------------------------------------------------------------------------
+
+interface ContentBlockCardProps {
+  block: ContentBlock;
+}
+
+/** Truncate a string to a max length with ellipsis */
+function truncate(str: string, maxLen: number): string {
+  if (str.length <= maxLen) return str;
+  return str.slice(0, maxLen) + '...';
+}
+
+/** Format the input params for a tool_use preview */
+function formatInputPreview(input?: Record<string, unknown>): string {
+  if (!input) return '';
+  // Show the most relevant param depending on tool
+  if (input.file_path) return String(input.file_path);
+  if (input.command) return truncate(String(input.command), 60);
+  if (input.pattern) return String(input.pattern);
+  // Fallback: first value
+  const vals = Object.values(input);
+  if (vals.length > 0) return truncate(String(vals[0]), 60);
+  return '';
+}
+
+/** Format tool_result content for preview */
+function formatResultPreview(content?: string | unknown[]): string {
+  if (!content) return '';
+  if (typeof content === 'string') return truncate(content, 80);
+  // Array of content items — extract text
+  if (Array.isArray(content)) {
+    const textParts = content
+      .filter((c): c is Record<string, unknown> => typeof c === 'object' && c !== null)
+      .filter((c) => c.type === 'text')
+      .map((c) => String(c.text ?? ''));
+    if (textParts.length > 0) return truncate(textParts.join(' '), 80);
+  }
+  return '';
+}
+
+const ContentBlockCard: React.FC<ContentBlockCardProps> = ({ block }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  if (block.type === 'tool_use') {
+    const Icon = getToolIcon(block.name || '');
+    const preview = formatInputPreview(block.input);
+    const detail = block.input ? JSON.stringify(block.input, null, 2) : '';
+
+    return (
+      <div className="brutal-border bg-gray-50 my-1 text-xs">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center gap-1.5 px-2 py-1.5 hover:bg-gray-100 transition-colors text-left"
+        >
+          {expanded ? <ChevronUp size={10} className="shrink-0" /> : <ChevronDown size={10} className="shrink-0" />}
+          <Icon size={11} className="shrink-0 text-brutal-cyan" />
+          <span className="font-black uppercase text-[10px] px-1 bg-brutal-cyan text-white">
+            {block.name || 'tool'}
+          </span>
+          {preview && (
+            <span className="text-gray-600 font-mono truncate text-[10px]">{preview}</span>
+          )}
+        </button>
+        {expanded && detail && (
+          <pre className="px-2 pb-2 text-[10px] font-mono text-gray-700 whitespace-pre-wrap break-all overflow-hidden max-h-48 overflow-y-auto">
+            {detail}
+          </pre>
+        )}
+      </div>
+    );
+  }
+
+  // tool_result
+  const preview = formatResultPreview(block.content);
+  const detail = typeof block.content === 'string'
+    ? block.content
+    : JSON.stringify(block.content, null, 2);
+
+  return (
+    <div className="brutal-border bg-gray-50/50 my-1 text-xs">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-1.5 px-2 py-1.5 hover:bg-gray-100 transition-colors text-left"
+      >
+        {expanded ? <ChevronUp size={10} className="shrink-0" /> : <ChevronDown size={10} className="shrink-0" />}
+        <span className="font-black uppercase text-[10px] px-1 bg-brutal-green text-white">
+          result
+        </span>
+        {preview && (
+          <span className="text-gray-500 font-mono truncate text-[10px]">{preview}</span>
+        )}
+      </button>
+      {expanded && detail && (
+        <pre className="px-2 pb-2 text-[10px] font-mono text-gray-600 whitespace-pre-wrap break-all overflow-hidden max-h-48 overflow-y-auto">
+          {detail}
+        </pre>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Agent Streaming Bubble
 // ---------------------------------------------------------------------------
 
@@ -93,6 +216,7 @@ const AgentStreamBubble: React.FC<AgentStreamBubbleProps> = ({
 }) => {
   const agentName = agentInfo?.agent.name || stream.agent_id;
   const bgColor = getAgentColor(colorIndex);
+  const hasContentBlocks = stream.contentBlocks && stream.contentBlocks.length > 0;
 
   return (
     <div className="flex gap-3 px-2">
@@ -120,15 +244,25 @@ const AgentStreamBubble: React.FC<AgentStreamBubbleProps> = ({
             </span>
           )}
         </div>
-        {stream.thinking && !stream.text ? (
+        {stream.thinking && !stream.text && !hasContentBlocks ? (
           <div className="h-4 bg-gray-200 w-2/3 brutal-border-b animate-pulse" />
         ) : (
-          <div className="text-sm leading-relaxed">
-            <MarkdownRenderer content={stream.text || ''} />
-            {stream.streaming && (
-              <span className="inline-block w-1.5 h-4 bg-brutal-cyan ml-0.5 animate-pulse" />
+          <>
+            <div className="text-sm leading-relaxed">
+              <MarkdownRenderer content={stream.text || ''} />
+              {stream.streaming && (
+                <span className="inline-block w-1.5 h-4 bg-brutal-cyan ml-0.5 animate-pulse" />
+              )}
+            </div>
+            {/* Tool call cards — only shown during streaming */}
+            {hasContentBlocks && (
+              <div className="mt-2 space-y-1">
+                {stream.contentBlocks.slice(-10).map((block, idx) => (
+                  <ContentBlockCard key={`${block.type}-${block.id || block.tool_use_id || idx}`} block={block} />
+                ))}
+              </div>
             )}
-          </div>
+          </>
         )}
       </div>
     </div>
