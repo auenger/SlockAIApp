@@ -64,6 +64,14 @@ export interface ChannelInfo {
   updated_at: string;
 }
 
+/** Response from send_channel_message IPC. */
+export interface SendChannelMessageResponse {
+  /** The channel (with user message already persisted). */
+  channel: Channel;
+  /** Number of agents triggered by @mentions (0 = no agents). */
+  agents_triggered: number;
+}
+
 export interface Thread {
   id: string;
   agent_id: string;

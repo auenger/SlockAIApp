@@ -77,18 +77,10 @@ pub fn extract_agent_triggers(response: &str, members: &[ChannelMember]) -> Vec<
 /// Resolve agent IDs from mentions.
 ///
 /// Returns the list of agent IDs for matched mentions, in order.
-/// If no mentions are found, returns the default agent ID (first member).
-pub fn resolve_agents(mentions: &[Mention], members: &[ChannelMember]) -> Vec<String> {
-    if mentions.is_empty() {
-        // Default: return the first member
-        members
-            .first()
-            .map(|m| m.agent_id.clone())
-            .into_iter()
-            .collect()
-    } else {
-        mentions.iter().map(|m| m.agent_id.clone()).collect()
-    }
+/// Returns an empty Vec if no @mentions are found — the caller should
+/// save the user message without triggering any agent.
+pub fn resolve_agents(mentions: &[Mention], _members: &[ChannelMember]) -> Vec<String> {
+    mentions.iter().map(|m| m.agent_id.clone()).collect()
 }
 
 // ===========================================================================
@@ -349,13 +341,13 @@ mod tests {
     }
 
     #[test]
-    fn test_no_mentions_returns_default() {
+    fn test_no_mentions_returns_empty() {
         let members = make_members(&["claude", "alice"]);
         let result = parse_mentions("hello everyone", &members);
         assert!(result.mentions.is_empty());
 
         let agents = resolve_agents(&result.mentions, &members);
-        assert_eq!(agents, vec!["claude".to_string()]); // first member as default
+        assert!(agents.is_empty()); // no mentions → no agents
     }
 
     #[test]

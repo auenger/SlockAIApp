@@ -302,8 +302,8 @@ export async function removeChannelMember(
 export async function sendChannelMessage(
   channelId: string,
   message: string
-): Promise<Channel> {
-  return invoke<Channel>("send_channel_message", { channelId, message });
+): Promise<import("../types").SendChannelMessageResponse> {
+  return invoke<import("../types").SendChannelMessageResponse>("send_channel_message", { channelId, message });
 }
 
 /** Save an agent response to a channel (after streaming completes). */

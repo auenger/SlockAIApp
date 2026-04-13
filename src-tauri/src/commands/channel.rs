@@ -16,7 +16,7 @@ use crate::workspace::mention;
 use crate::context::a2a_trigger::{self, TriggerContext};
 use crate::storage::activity::{ActivityStore, ActivityType, create_entry};
 use crate::storage::db_helpers;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 // ---------------------------------------------------------------------------
 // Channel CRUD
@@ -93,6 +93,27 @@ pub fn create_channel(
         };
         if let Err(e) = db_helpers::insert_channel(&db_conn, &channel_row) {
             log::warn!("[create_channel] Failed to insert channel into SQLite: {}", e);
+        }
+
+        // Ensure agents exist in SQLite (upsert) before inserting members
+        // to satisfy the foreign key constraint on channel_members.agent_id
+        for member in &new_channel.members {
+            if let Some(agent) = manager.get_agent(&member.agent_id) {
+                let agent_row = db_helpers::AgentRow {
+                    id: agent.identity.agent_id.clone(),
+                    name: agent.identity.name.clone(),
+                    emoji: agent.identity.emoji.clone(),
+                    avatar_path: None,
+                    enabled: true,
+                    runtime_type: agent.identity.runtime_type.runtime_id().to_string(),
+                    description: agent.identity.vibe.clone(),
+                    created_at: new_channel.created_at.clone(),
+                    updated_at: new_channel.updated_at.clone(),
+                };
+                if let Err(e) = db_helpers::insert_agent(&db_conn, &agent_row) {
+                    log::warn!("[create_channel] Failed to upsert agent into SQLite: {}", e);
+                }
+            }
         }
 
         // Insert channel members into SQLite
@@ -451,9 +472,10 @@ const CHANNEL_CONTEXT_HISTORY_LIMIT: usize = 20;
 /// Execute a single agent in a channel context, streaming events to the frontend.
 ///
 /// Returns the full response text on success, or an error string on failure.
-async fn execute_single_agent(
+/// This function is synchronous — all async work happens inside the spawned CLI thread.
+fn execute_single_agent_inner(
     app: &AppHandle,
-    state: &tauri::State<'_, crate::AppState>,
+    state: &crate::AppState,
     channel_id: &str,
     agent_id: &str,
     message: &str,
@@ -673,8 +695,26 @@ async fn execute_single_agent(
         let mut full_response = String::new();
         let mut result_session_id: Option<String> = None;
         let mut had_error = false;
+        let mut first_chunk_received = false;
+
+        log::info!(
+            "[response-thread] agent={}, channel={}: started collecting response",
+            agent_id_clone,
+            channel_id_clone
+        );
 
         while let Ok(event) = receiver.recv() {
+            if !first_chunk_received {
+                first_chunk_received = true;
+                log::info!(
+                    "[response-thread] agent={}, channel={}: first chunk received, type={:?}, is_done={}",
+                    agent_id_clone,
+                    channel_id_clone,
+                    event.msg_type,
+                    event.is_done
+                );
+            }
+
             if event.is_done {
                 result_session_id = event.session_id.clone();
             }
@@ -695,6 +735,14 @@ async fn execute_single_agent(
             );
 
             if event.is_done {
+                log::info!(
+                    "[response-thread] agent={}, channel={}: is_done received, collected {} chars, session_id={:?}, error={:?}",
+                    agent_id_clone,
+                    channel_id_clone,
+                    full_response.len(),
+                    result_session_id,
+                    event.error
+                );
                 if event.error.is_some() {
                     had_error = true;
                     log::warn!(
@@ -711,18 +759,45 @@ async fn execute_single_agent(
         if !full_response.is_empty() && !had_error {
             let channels_dir = agent_manager_ptr.join("channels");
             let store = ChannelStore::new(&channels_dir);
-            if let Ok(mut ch) = store.load(&channel_id_clone) {
-                let agent_msg = ChannelMessage {
-                    id: crate::workspace::thread::generate_id(),
-                    channel_id: channel_id_clone.clone(),
-                    sender_type: "agent".to_string(),
-                    sender_id: agent_id_clone.clone(),
-                    content: full_response.clone(),
-                    timestamp: channel::now_iso(),
-                };
-                ch.messages.push(agent_msg);
-                ch.updated_at = channel::now_iso();
-                let _ = store.save(&ch);
+            match store.load(&channel_id_clone) {
+                Ok(mut ch) => {
+                    let agent_msg = ChannelMessage {
+                        id: crate::workspace::thread::generate_id(),
+                        channel_id: channel_id_clone.clone(),
+                        sender_type: "agent".to_string(),
+                        sender_id: agent_id_clone.clone(),
+                        content: full_response.clone(),
+                        timestamp: channel::now_iso(),
+                    };
+                    ch.messages.push(agent_msg);
+                    ch.updated_at = channel::now_iso();
+                    match store.save(&ch) {
+                        Ok(()) => {
+                            log::info!(
+                                "[response-thread] agent={}, channel={}: response saved to channel store ({} total messages)",
+                                agent_id_clone,
+                                channel_id_clone,
+                                ch.messages.len()
+                            );
+                        }
+                        Err(e) => {
+                            log::error!(
+                                "[response-thread] agent={}, channel={}: FAILED to save response to channel store: {}",
+                                agent_id_clone,
+                                channel_id_clone,
+                                e
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::error!(
+                        "[response-thread] agent={}, channel={}: FAILED to load channel for saving response: {}",
+                        agent_id_clone,
+                        channel_id_clone,
+                        e
+                    );
+                }
             }
 
             // Emit response event for frontend
@@ -734,6 +809,19 @@ async fn execute_single_agent(
                     "content": full_response.clone(),
                     "session_id": result_session_id,
                 }),
+            );
+            log::info!(
+                "[response-thread] agent={}, channel={}: emitted channel-response event",
+                agent_id_clone,
+                channel_id_clone
+            );
+        } else {
+            log::warn!(
+                "[response-thread] agent={}, channel={}: skipping save (empty={}, error={})",
+                agent_id_clone,
+                channel_id_clone,
+                full_response.is_empty(),
+                had_error
             );
         }
 
@@ -774,13 +862,25 @@ async fn execute_single_agent(
 ///    in the response) and recursively execute those agents (with depth
 ///    limit and deduplication to prevent runaway chains).
 /// 5. Each agent's response is saved independently
+
+/// Response from `send_channel_message`: the updated channel plus metadata
+/// about how many agents were triggered (so the frontend knows whether to
+/// expect streaming events).
+#[derive(Debug, serde::Serialize)]
+pub struct SendChannelMessageResponse {
+    /// The channel (with the user message already persisted).
+    pub channel: Channel,
+    /// Number of agents triggered by @mentions (0 = no agents, clean up streaming state).
+    pub agents_triggered: usize,
+}
+
 #[tauri::command]
 pub async fn send_channel_message(
     app: AppHandle,
     state: tauri::State<'_, crate::AppState>,
     channel_id: String,
     message: String,
-) -> Result<Channel, String> {
+) -> Result<SendChannelMessageResponse, String> {
     // ---- Phase 1: Load channel, add user message, parse mentions ----
     let (_channel, target_agents, workspace_root, channel_members) = {
         let manager = state
@@ -808,8 +908,19 @@ pub async fn send_channel_message(
         let mention_result = mention::parse_mentions(&message, &channel.members);
         let target_agents = mention::resolve_agents(&mention_result.mentions, &channel.members);
 
+        // Save channel with user message (always, regardless of mentions)
+        store.save(&channel).map_err(|e| format!("save failed: {e}"))?;
+
         if target_agents.is_empty() {
-            return Err("channel has no agent members".to_string());
+            // No @mentions — save user message but don't trigger any agent
+            log::info!(
+                "[send_channel_message] channel_id={}, no @mentions, skipping agent execution",
+                channel_id
+            );
+            return Ok(SendChannelMessageResponse {
+                channel,
+                agents_triggered: 0,
+            });
         }
 
         log::info!(
@@ -819,21 +930,21 @@ pub async fn send_channel_message(
             target_agents
         );
 
-        // Save channel with user message
-        store.save(&channel).map_err(|e| format!("save failed: {e}"))?;
-
         let workspace_root = manager.workspace_root().to_path_buf();
         let channel_members = channel.members.clone();
 
         (channel, target_agents, workspace_root, channel_members)
     };
 
-    // ---- Phase 2: Execute each mentioned agent serially, with A2A chain support ----
+    // ---- Phase 2: Execute agents in background, return immediately ----
     //
-    // We use an iterative queue-based approach to avoid async recursion issues.
-    // Each entry in the queue represents an agent execution task. After an agent
-    // completes, its response is scanned for @{agent} mentions, and any valid
-    // A2A triggers are appended to the queue.
+    // CRITICAL: The IPC must return immediately so the frontend's event listeners
+    // can receive streaming events (agent-start, channel-chunk, channel-response).
+    // If we block the IPC until all agents complete, the WebView event loop is
+    // stalled and events won't be delivered until after the invoke resolves.
+    //
+    // We spawn a background thread that runs the agent execution loop and emits
+    // events. The frontend tracks progress via these events.
 
     /// A pending agent execution task.
     struct PendingAgentTask {
@@ -848,7 +959,6 @@ pub async fn send_channel_message(
     let max_depth = a2a_trigger::DEFAULT_MAX_DEPTH;
     let mut triggered_set: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-    // Initialize the queue with user-targeted agents
     let mut task_queue: std::collections::VecDeque<PendingAgentTask> = std::collections::VecDeque::new();
     for agent_id in &target_agents {
         triggered_set.insert(agent_id.clone());
@@ -861,107 +971,125 @@ pub async fn send_channel_message(
         });
     }
 
-    let mut agent_idx = 0;
-    while let Some(task) = task_queue.pop_front() {
-        let response_result = execute_single_agent(
-            &app,
-            &state,
-            &channel_id,
-            &task.agent_id,
-            &task.message,
-            agent_idx,
-            total_agents + task_queue.len(),
-            &workspace_root,
-            task.is_a2a,
-            task.triggered_by.as_deref(),
-            task.depth,
-        ).await;
+    // Spawn background thread — accesses AppState through AppHandle
+    let bg_app = app.clone();
+    let bg_channel_id = channel_id.clone();
+    let bg_workspace_root = workspace_root.clone();
+    let bg_channel_members = channel_members.clone();
 
-        agent_idx += 1;
+    std::thread::spawn(move || {
+        // Access AppState through the AppHandle (valid for the thread's lifetime)
+        let app_state = bg_app.state::<crate::AppState>();
+        let state: &crate::AppState = app_state.inner();
 
-        // If the agent responded successfully, check for A2A triggers
-        if let Ok(response) = response_result {
-            let current_depth = task.depth;
+        let mut agent_idx = 0usize;
+        let mut triggered = triggered_set;
 
-            // Only process A2A triggers if we haven't exceeded max depth
-            if current_depth < max_depth {
-                let next_triggers = a2a_trigger::extract_valid_triggers(
-                    &response,
-                    &channel_members,
-                    &TriggerContext {
-                        depth: current_depth,
-                        max_depth,
-                        triggered_agents: triggered_set.clone(),
-                    },
-                );
+        while let Some(task) = task_queue.pop_front() {
+            let response_result = execute_single_agent_inner(
+                &bg_app,
+                state,
+                &bg_channel_id,
+                &task.agent_id,
+                &task.message,
+                agent_idx,
+                total_agents + task_queue.len(),
+                &bg_workspace_root,
+                task.is_a2a,
+                task.triggered_by.as_deref(),
+                task.depth,
+            );
 
-                for triggered_agent_id in next_triggers {
-                    let triggered_by = task.agent_id.clone();
-                    log::info!(
-                        "[send_channel_message] A2A trigger: {} → {} (depth={})",
-                        triggered_by,
-                        triggered_agent_id,
-                        current_depth + 1,
+            agent_idx += 1;
+
+            // If the agent responded successfully, check for A2A triggers
+            if let Ok(response) = response_result {
+                let current_depth = task.depth;
+
+                if current_depth < max_depth {
+                    let next_triggers = a2a_trigger::extract_valid_triggers(
+                        &response,
+                        &bg_channel_members,
+                        &TriggerContext {
+                            depth: current_depth,
+                            max_depth,
+                            triggered_agents: triggered.clone(),
+                        },
                     );
 
-                    triggered_set.insert(triggered_agent_id.clone());
+                    for triggered_agent_id in next_triggers {
+                        let triggered_by = task.agent_id.clone();
+                        log::info!(
+                            "[send_channel_message:bg] A2A trigger: {} → {} (depth={})",
+                            triggered_by,
+                            triggered_agent_id,
+                            current_depth + 1,
+                        );
 
-                    let a2a_message = format!(
-                        "[A2A Trigger] {} mentioned you in their response. Here is what they said:\n\n{}\n\nPlease respond to the relevant request above.",
-                        triggered_by, response
-                    );
+                        triggered.insert(triggered_agent_id.clone());
 
-                    task_queue.push_back(PendingAgentTask {
-                        agent_id: triggered_agent_id,
-                        message: a2a_message,
-                        is_a2a: true,
-                        triggered_by: Some(triggered_by),
-                        depth: current_depth + 1,
-                    });
+                        let a2a_message = format!(
+                            "[A2A Trigger] {} mentioned you in their response. Here is what they said:\n\n{}\n\nPlease respond to the relevant request above.",
+                            triggered_by, response
+                        );
+
+                        task_queue.push_back(PendingAgentTask {
+                            agent_id: triggered_agent_id,
+                            message: a2a_message,
+                            is_a2a: true,
+                            triggered_by: Some(triggered_by),
+                            depth: current_depth + 1,
+                        });
+                    }
+                } else {
+                    let mentioned = mention::extract_agent_triggers(&response, &bg_channel_members);
+                    let would_trigger: Vec<String> = mentioned
+                        .into_iter()
+                        .filter(|id| !triggered.contains(id))
+                        .collect();
+
+                    if !would_trigger.is_empty() {
+                        log::info!(
+                            "[send_channel_message:bg] A2A depth limit reached, skipping: {:?}",
+                            would_trigger
+                        );
+                        let _ = bg_app.emit(
+                            "agent://channel-a2a-depth-exceeded",
+                            serde_json::json!({
+                                "channel_id": bg_channel_id,
+                                "agents": would_trigger,
+                                "triggered_by": task.agent_id,
+                                "depth": current_depth,
+                                "max_depth": max_depth,
+                            }),
+                        );
+                    }
                 }
-            } else {
-                // Depth exceeded: check if there would have been triggers
-                let mentioned = mention::extract_agent_triggers(&response, &channel_members);
-                let would_trigger: Vec<String> = mentioned
-                    .into_iter()
-                    .filter(|id| !triggered_set.contains(id))
-                    .collect();
+            }
+        }
 
-                if !would_trigger.is_empty() {
-                    log::info!(
-                        "[send_channel_message] A2A depth limit reached, skipping: {:?}",
-                        would_trigger
-                    );
-                    let _ = app.emit(
-                        "agent://channel-a2a-depth-exceeded",
-                        serde_json::json!({
-                            "channel_id": channel_id,
-                            "agents": would_trigger,
-                            "triggered_by": task.agent_id,
-                            "depth": current_depth,
-                            "max_depth": max_depth,
-                        }),
+        // Trigger auto-compaction check
+        {
+            let channels_dir = bg_workspace_root.join("channels");
+            let store = ChannelStore::new(&channels_dir);
+            if let Ok(ch) = store.load(&bg_channel_id) {
+                if ch.messages.len() > COMPACT_THRESHOLD {
+                    let _ = bg_app.emit(
+                        "channel://needs-compact",
+                        serde_json::json!({ "channel_id": bg_channel_id }),
                     );
                 }
             }
         }
-    }
+    });
 
-    // Reload and return the final channel state
-    let final_channel = {
-        let manager = state
-            .agent_manager
-            .lock()
-            .map_err(|e| format!("lock error: {e}"))?;
-        let channels_dir = manager.channels_dir();
-        let store = ChannelStore::new(&channels_dir);
-        store.load(&channel_id).map_err(|e| format!("load failed: {e}"))?
-    };
-
-    // Trigger auto-compaction check (runs asynchronously, does not block response)
-    maybe_auto_compact(app, state, channel_id.clone());
-
-    Ok(final_channel)
+    // Return the channel immediately (with just the user message)
+    // plus the count of triggered agents so the frontend knows to keep listeners open.
+    let agents_count = target_agents.len();
+    Ok(SendChannelMessageResponse {
+        channel: _channel,
+        agents_triggered: agents_count,
+    })
 }
 
 /// Save an agent response to a channel (called after streaming completes).
