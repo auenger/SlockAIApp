@@ -289,7 +289,7 @@ impl AgentRuntime for ClaudeCodeRuntime {
                                     }
                                 }
 
-                                let content_val = if msg_type == "assistant" {
+                                let content_val = if msg_type == "assistant" || msg_type == "user" {
                                     // --verbose: content is nested under "message" key
                                     if let Some(msg_obj) = json_obj.get("message") {
                                         msg_obj.get("content")
@@ -303,8 +303,27 @@ impl AgentRuntime for ClaudeCodeRuntime {
                                 let text = content_val
                                     .map(extract_text_content)
                                     .unwrap_or_else(|| {
-                                        if is_result || msg_type == "system" {
+                                        if is_result {
                                             String::new()
+                                        } else if msg_type == "system" {
+                                            // Produce a meaningful status string for system events
+                                            let subtype = json_obj
+                                                .get("subtype")
+                                                .and_then(|s| s.as_str())
+                                                .unwrap_or("");
+                                            if subtype == "init" {
+                                                let model = json_obj
+                                                    .get("model")
+                                                    .and_then(|m| m.as_str())
+                                                    .unwrap_or("");
+                                                if model.is_empty() {
+                                                    "Session initialized".to_string()
+                                                } else {
+                                                    format!("Session initialized · {}", model)
+                                                }
+                                            } else {
+                                                format!("System: {}", subtype)
+                                            }
                                         } else {
                                             trimmed.to_string()
                                         }

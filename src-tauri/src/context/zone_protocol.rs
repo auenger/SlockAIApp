@@ -130,7 +130,9 @@ impl ChannelZoneProtocol {
         out.push_str("1. You can mention other Agents with @{AgentName} in your reply -- the system will automatically trigger that Agent to respond.\n");
         out.push_str("2. If a task requires another Agent's expertise, proactively @mention them.\n");
         out.push_str("3. Be collaborative: if a question is better suited for another Agent, suggest that the user @mention that Agent.\n");
-        out.push_str("4. Start each reply with your name so the conversation context stays clear.\n");
+        // Rule 4 removed: agent name is rendered by the UI above each message bubble,
+        // so the agent no longer needs to prefix its own name in the response text.
+        // out.push_str("4. Start each reply with your name so the conversation context stays clear.\n");
         out.push('\n');
 
         // @mention format

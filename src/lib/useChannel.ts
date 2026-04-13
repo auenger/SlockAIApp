@@ -20,7 +20,6 @@ import {
   addChannelMember,
   removeChannelMember,
   sendChannelMessage,
-  saveChannelResponse,
   compactChannel,
 } from "./ipc";
 
@@ -52,6 +51,8 @@ export interface AgentStreamState {
   a2a_depth?: number;
   /** Structured content blocks (tool_use / tool_result) collected during streaming. Cleared on done. */
   contentBlocks: ContentBlock[];
+  /** Status message from system events (e.g., "Session initialized · claude-sonnet-4") */
+  statusMessage?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -119,6 +120,9 @@ export function useChannel(): ChannelState {
   const unlistenRuntimeErrorRef = useRef<(() => void) | null>(null);
   const unlistenA2aStartRef = useRef<(() => void) | null>(null);
   const unlistenA2aDepthRef = useRef<(() => void) | null>(null);
+
+  // Ref guard to prevent concurrent send calls
+  const isSendingRef = useRef(false);
 
   // Clean up listeners on unmount
   useEffect(() => {
@@ -298,42 +302,26 @@ export function useChannel(): ChannelState {
 
   /** Send a message in a channel */
   const send = useCallback(async (channelId: string, message: string, _agents: AgentWithRuntime[]) => {
-    setIsThinking(true);
-    setIsStreaming(true);
-    setStreamingText("");
-    setAgentStreams([]);
+    // Prevent concurrent sends — ref guard is synchronous, unlike React state
+    if (isSendingRef.current) return;
+    isSendingRef.current = true;
     setError(null);
 
     try {
       // Clean up previous listeners
-      if (unlistenChunkRef.current) {
-        unlistenChunkRef.current();
-        unlistenChunkRef.current = null;
-      }
-      if (unlistenResponseRef.current) {
-        unlistenResponseRef.current();
-        unlistenResponseRef.current = null;
-      }
-      if (unlistenAgentStartRef.current) {
-        unlistenAgentStartRef.current();
-        unlistenAgentStartRef.current = null;
-      }
-      if (unlistenRuntimeErrorRef.current) {
-        unlistenRuntimeErrorRef.current();
-        unlistenRuntimeErrorRef.current = null;
-      }
-      if (unlistenA2aStartRef.current) {
-        unlistenA2aStartRef.current();
-        unlistenA2aStartRef.current = null;
-      }
-      if (unlistenA2aDepthRef.current) {
-        unlistenA2aDepthRef.current();
-        unlistenA2aDepthRef.current = null;
-      }
+      if (unlistenChunkRef.current) { unlistenChunkRef.current(); unlistenChunkRef.current = null; }
+      if (unlistenResponseRef.current) { unlistenResponseRef.current(); unlistenResponseRef.current = null; }
+      if (unlistenAgentStartRef.current) { unlistenAgentStartRef.current(); unlistenAgentStartRef.current = null; }
+      if (unlistenRuntimeErrorRef.current) { unlistenRuntimeErrorRef.current(); unlistenRuntimeErrorRef.current = null; }
+      if (unlistenA2aStartRef.current) { unlistenA2aStartRef.current(); unlistenA2aStartRef.current = null; }
+      if (unlistenA2aDepthRef.current) { unlistenA2aDepthRef.current(); unlistenA2aDepthRef.current = null; }
 
       if (!isTauri) {
         // Dev fallback: simulate streaming
         setIsThinking(false);
+        setIsStreaming(true);
+        setStreamingText("");
+        setAgentStreams([]);
 
         setActiveChannel((prev) => {
           if (!prev || prev.id !== channelId) return prev;
@@ -382,27 +370,87 @@ export function useChannel(): ChannelState {
         return;
       }
 
+      // =====================================================================
       // Real Tauri flow
-      // Optimistic update: insert user message immediately before IPC call
-      const optimisticUserMsg: ChannelMessage = {
-        id: `msg-pending-${Date.now()}`,
-        channel_id: channelId,
-        sender_type: "user",
-        sender_id: "user",
-        content: message,
-        timestamp: new Date().toISOString(),
-      };
-      setActiveChannel((prev) => {
-        if (!prev || prev.id !== channelId) return prev;
-        return { ...prev, messages: [...prev.messages, optimisticUserMsg] };
-      });
+      // =====================================================================
+      //
+      // CRITICAL: Event listeners MUST be set up BEFORE the IPC call.
+      // The backend emits events during agent execution, and if listeners
+      // aren't registered yet, those events are lost (no real-time rendering).
+      //
+      // Flow:
+      // 1. Set up all event listeners
+      // 2. Set streaming UI state + optimistic user message
+      // 3. Call IPC (backend executes agents, emits events → listeners handle)
+      // 4. On IPC return, replace state with final backend data
+      // 5. If no agents triggered → clean up streaming state immediately
 
-      // IPC call to backend — on return, replace optimistic data with real data
-      const updatedChannel = await sendChannelMessage(channelId, message);
-      setActiveChannel(updatedChannel);
-
-      // Listen for agent-start events (multi-agent coordination)
       const { listen } = await import("@tauri-apps/api/event");
+
+      // Per-agent accumulated text
+      const agentTexts = new Map<string, string>();
+
+      // Track expected agent count and completion to avoid vacuous-truth bugs.
+      // Updated when IPC returns (initial agents) and when A2A agents are detected.
+      let expectedAgentCount = 0;
+      let completedAgentCount = 0;
+
+      // Helper to check completion and clean up listeners
+      const tryCompleteAll = (
+        unlistenAgentStart: () => void,
+        unlistenChunk: () => void,
+        unlistenResponse: () => void,
+        unlistenRuntimeError: () => void,
+        unlistenA2aStart: () => void,
+        unlistenA2aDepth: () => void,
+      ) => {
+        if (expectedAgentCount > 0 && completedAgentCount >= expectedAgentCount) {
+          setStreamingText("");
+          setIsStreaming(false);
+          setIsThinking(false);
+
+          unlistenAgentStart();
+          unlistenChunk();
+          unlistenResponse();
+          unlistenRuntimeError();
+          unlistenA2aStart();
+          unlistenA2aDepth();
+          unlistenChunkRef.current = null;
+          unlistenResponseRef.current = null;
+          unlistenAgentStartRef.current = null;
+          unlistenRuntimeErrorRef.current = null;
+          unlistenA2aStartRef.current = null;
+          unlistenA2aDepthRef.current = null;
+
+          setAgentStreams([]);
+          loadChannels();
+        }
+      };
+
+      // Helper to clean up all listeners and reset refs
+      const cleanupAllListeners = (
+        unlistenAgentStart: () => void,
+        unlistenChunk: () => void,
+        unlistenResponse: () => void,
+        unlistenRuntimeError: () => void,
+        unlistenA2aStart: () => void,
+        unlistenA2aDepth: () => void,
+      ) => {
+        unlistenAgentStart();
+        unlistenChunk();
+        unlistenResponse();
+        unlistenRuntimeError();
+        unlistenA2aStart();
+        unlistenA2aDepth();
+        unlistenChunkRef.current = null;
+        unlistenResponseRef.current = null;
+        unlistenAgentStartRef.current = null;
+        unlistenRuntimeErrorRef.current = null;
+        unlistenA2aStartRef.current = null;
+        unlistenA2aDepthRef.current = null;
+      };
+
+      // --- Step 1: Set up listeners BEFORE IPC call ---
 
       const unlistenAgentStart = await listen(
         "agent://channel-agent-start",
@@ -427,7 +475,6 @@ export function useChannel(): ChannelState {
       );
       unlistenAgentStartRef.current = unlistenAgentStart;
 
-      // Listen for runtime unavailability events (rich error with install hint)
       const unlistenRuntimeError = await listen<{
         channel_id: string;
         agent_id: string;
@@ -448,42 +495,61 @@ export function useChannel(): ChannelState {
       });
       unlistenRuntimeErrorRef.current = unlistenRuntimeError;
 
-      // Listen for A2A trigger start events (Agent triggers another Agent)
       const unlistenA2aStart = await listen(
         "agent://channel-a2a-start",
         (event: { payload: ChannelA2aStartEvent }) => {
           const payload = event.payload;
           if (payload.channel_id !== channelId) return;
 
-          // Add a new agent stream entry marked as A2A-triggered
-          setAgentStreams((prev) => [
-            ...prev,
-            {
-              agent_id: payload.agent_id,
-              agent_index: prev.length,
-              total_agents: prev.length + 1,
-              streaming: true,
-              thinking: true,
-              text: "",
-              done: false,
-              is_a2a: true,
-              triggered_by: payload.triggered_by,
-              a2a_depth: payload.depth,
-              contentBlocks: [],
-            },
-          ]);
+          // Increment expected count — this A2A agent was not counted in the
+          // initial agents_triggered from IPC response.
+          expectedAgentCount += 1;
+
+          // Update the existing entry created by agent://channel-agent-start
+          // instead of creating a duplicate.
+          setAgentStreams((prev) => {
+            const existing = prev.findIndex((s) => s.agent_id === payload.agent_id);
+            if (existing >= 0) {
+              // Entry already exists from agent-start — update with A2A metadata
+              return prev.map((s, i) =>
+                i === existing
+                  ? {
+                      ...s,
+                      is_a2a: true,
+                      triggered_by: payload.triggered_by,
+                      a2a_depth: payload.depth,
+                    }
+                  : s
+              );
+            }
+            // Fallback: entry doesn't exist yet (unlikely, but safe)
+            return [
+              ...prev,
+              {
+                agent_id: payload.agent_id,
+                agent_index: prev.length,
+                total_agents: prev.length + 1,
+                streaming: true,
+                thinking: true,
+                text: "",
+                done: false,
+                is_a2a: true,
+                triggered_by: payload.triggered_by,
+                a2a_depth: payload.depth,
+                contentBlocks: [],
+              },
+            ];
+          });
         }
       );
       unlistenA2aStartRef.current = unlistenA2aStart;
 
-      // Listen for A2A depth exceeded events
       const unlistenA2aDepth = await listen(
         "agent://channel-a2a-depth-exceeded",
         (event: { payload: ChannelA2aDepthExceededEvent }) => {
           const payload = event.payload;
           if (payload.channel_id !== channelId) return;
 
-          // Log a warning -- the UI can optionally show a system message
           console.warn(
             `[useChannel] A2A trigger chain depth exceeded: ${payload.triggered_by} -> @${payload.agent_id} at depth ${payload.depth}/${payload.max_depth}`
           );
@@ -491,10 +557,6 @@ export function useChannel(): ChannelState {
       );
       unlistenA2aDepthRef.current = unlistenA2aDepth;
 
-      // Per-agent accumulated text
-      const agentTexts = new Map<string, string>();
-
-      // Listen for streaming chunk events
       const unlistenChunk = await listen(
         "agent://channel-chunk",
         (event: { payload: ChannelChunkEvent }) => {
@@ -504,27 +566,60 @@ export function useChannel(): ChannelState {
           const streamEvent = payload.event;
           const agentId = payload.agent_id;
 
-          if ((streamEvent as unknown as Record<string, unknown>).type === "assistant" && streamEvent.text) {
-            // Update per-agent text
-            const prev = agentTexts.get(agentId) || "";
-            const newText = prev + streamEvent.text;
-            agentTexts.set(agentId, newText);
+          const eventType = (streamEvent as unknown as Record<string, unknown>).type as string;
+          const newBlocks: ContentBlock[] = streamEvent.content_blocks ?? [];
 
-            // Accumulate content_blocks if present
-            const newBlocks = streamEvent.content_blocks ?? [];
+          if (eventType === "assistant") {
+            if (streamEvent.text) {
+              // Assistant event with text content — append to accumulated text
+              const prev = agentTexts.get(agentId) || "";
+              const newText = prev + streamEvent.text;
+              agentTexts.set(agentId, newText);
 
-            // Update per-agent stream state
-            setAgentStreams((prev) =>
-              prev.map((s) =>
-                s.agent_id === agentId
-                  ? { ...s, thinking: false, text: newText, contentBlocks: [...s.contentBlocks, ...newBlocks] }
-                  : s
-              )
-            );
+              // Update per-agent stream state
+              setAgentStreams((prev) =>
+                prev.map((s) =>
+                  s.agent_id === agentId
+                    ? { ...s, thinking: false, text: newText, contentBlocks: [...s.contentBlocks, ...newBlocks], statusMessage: undefined }
+                    : s
+                )
+              );
 
-            // Also update single-agent compat streaming text
-            setStreamingText(newText);
-            setIsThinking(false);
+              setStreamingText(newText);
+              setIsThinking(false);
+            } else if (newBlocks.length > 0) {
+              // Assistant event with content_blocks but no text (e.g. tool_use only).
+              // Update content blocks so the user can see tool calls during thinking.
+              setAgentStreams((prev) =>
+                prev.map((s) =>
+                  s.agent_id === agentId
+                    ? { ...s, contentBlocks: [...s.contentBlocks, ...newBlocks] }
+                    : s
+                )
+              );
+            }
+          } else if (eventType === "user") {
+            // User events carry tool_result blocks from CLI tool execution.
+            if (newBlocks.length > 0) {
+              setAgentStreams((prev) =>
+                prev.map((s) =>
+                  s.agent_id === agentId
+                    ? { ...s, contentBlocks: [...s.contentBlocks, ...newBlocks] }
+                    : s
+                )
+              );
+            }
+          } else if (eventType === "system") {
+            // System events carry initialization status.
+            if (streamEvent.text) {
+              setAgentStreams((prev) =>
+                prev.map((s) =>
+                  s.agent_id === agentId
+                    ? { ...s, statusMessage: streamEvent.text }
+                    : s
+                )
+              );
+            }
           }
 
           if (streamEvent.is_done) {
@@ -532,7 +627,7 @@ export function useChannel(): ChannelState {
             setAgentStreams((prev) =>
               prev.map((s) =>
                 s.agent_id === agentId
-                  ? { ...s, streaming: false, thinking: false, done: true, error: streamEvent.error, contentBlocks: [] }
+                  ? { ...s, streaming: false, thinking: false, done: true, error: streamEvent.error, contentBlocks: [], statusMessage: undefined }
                   : s
               )
             );
@@ -541,23 +636,39 @@ export function useChannel(): ChannelState {
       );
       unlistenChunkRef.current = unlistenChunk;
 
-      // Listen for the channel-response event
+      // channel-response: update UI with completed agent message.
+      // Do NOT call saveChannelResponse — the backend already saves in execute_single_agent.
       const unlistenResponse = await listen(
         "agent://channel-response",
         async (event: { payload: ChannelResponseEvent }) => {
-          const { channel_id, agent_id, content } = event.payload;
+          const { channel_id, agent_id, content, content_blocks } = event.payload;
           if (channel_id !== channelId) return;
 
-          try {
-            const finalChannel = await saveChannelResponse(channel_id, agent_id, content);
-            setActiveChannel(finalChannel);
-          } catch (err) {
-            console.error("[useChannel] save_channel_response failed:", err);
-          }
+          // Add agent message to UI state (backend already persisted it)
+          setActiveChannel((prev) => {
+            if (!prev || prev.id !== channel_id) return prev;
+            const exists = prev.messages.some(
+              (m) => m.sender_type === "agent" && m.sender_id === agent_id && m.content === content
+            );
+            if (exists) return prev;
+            return {
+              ...prev,
+              messages: [
+                ...prev.messages,
+                {
+                  id: `msg-${Date.now()}`,
+                  channel_id,
+                  sender_type: "agent" as const,
+                  sender_id: agent_id,
+                  content,
+                  content_blocks,
+                  timestamp: new Date().toISOString(),
+                },
+              ],
+            };
+          });
 
-          // Fix: Mark this agent as done immediately in channel-response,
-          // independent of whether channel-chunk(is_done) has fired yet.
-          // This eliminates the race condition where response arrives before chunk's is_done.
+          // Mark this agent as done
           setAgentStreams((prev) =>
             prev.map((s) =>
               s.agent_id === agent_id
@@ -566,61 +677,81 @@ export function useChannel(): ChannelState {
             )
           );
 
-          // Now check if all agents are done (including the one we just marked)
-          setAgentStreams((prev) => {
-            const allDone = prev.every((s) => s.done);
-            if (allDone) {
-              setStreamingText("");
-              setIsStreaming(false);
-              setIsThinking(false);
-
-              // Clean up listeners
-              unlistenAgentStart();
-              unlistenChunk();
-              unlistenResponse();
-              unlistenRuntimeError();
-              unlistenA2aStart();
-              unlistenA2aDepth();
-              unlistenChunkRef.current = null;
-              unlistenResponseRef.current = null;
-              unlistenAgentStartRef.current = null;
-              unlistenRuntimeErrorRef.current = null;
-              unlistenA2aStartRef.current = null;
-              unlistenA2aDepthRef.current = null;
-
-              // Refresh channel list
-              loadChannels();
-            }
-            return allDone ? [] : prev;
-          });
+          // Use counter-based completion check instead of agentStreams.every()
+          // to avoid vacuous truth on empty arrays (after timeout cleanup)
+          completedAgentCount += 1;
+          tryCompleteAll(
+            unlistenAgentStart, unlistenChunk, unlistenResponse,
+            unlistenRuntimeError, unlistenA2aStart, unlistenA2aDepth,
+          );
         }
       );
       unlistenResponseRef.current = unlistenResponse;
 
-      // Fallback timeout: if streams are still active after 30s, force cleanup
-      setTimeout(() => {
-        setAgentStreams((prev) => {
-          if (prev.length > 0) {
-            // Residual streams — force cleanup
-            setIsStreaming(false);
-            setIsThinking(false);
-            setStreamingText("");
-            return [];
-          }
-          if (prev.length === 0 && isStreaming) {
-            // No agent-start events received — single-agent fallback
-            setIsStreaming(false);
-            setIsThinking(false);
-            setStreamingText("");
-          }
-          return prev;
-        });
-      }, 30000);
+      // --- Step 2: Set streaming UI state + optimistic user message ---
+
+      setIsThinking(true);
+      setIsStreaming(true);
+      setStreamingText("");
+      setAgentStreams([]);
+
+      const optimisticUserMsg: ChannelMessage = {
+        id: `msg-pending-${Date.now()}`,
+        channel_id: channelId,
+        sender_type: "user",
+        sender_id: "user",
+        content: message,
+        timestamp: new Date().toISOString(),
+      };
+      setActiveChannel((prev) => {
+        if (!prev || prev.id !== channelId) return prev;
+        return { ...prev, messages: [...prev.messages, optimisticUserMsg] };
+      });
+
+      // --- Step 3: IPC call — returns immediately with user message saved ---
+
+      const response = await sendChannelMessage(channelId, message);
+
+      // --- Step 4: Replace optimistic data with real backend data ---
+      // Backend now returns immediately (agent execution runs in background).
+      // The channel only has the user message; agent responses arrive via events.
+
+      setActiveChannel(response.channel);
+
+      // --- Step 5: Handle no-agent-triggered case ---
+      // The backend tells us how many agents were triggered.
+      // If 0 (no @mentions), clean up streaming state immediately.
+
+      if (response.agents_triggered === 0) {
+        // No @mentions → no agents were triggered. Clean up streaming state.
+        expectedAgentCount = 0;
+        setIsStreaming(false);
+        setIsThinking(false);
+        setStreamingText("");
+        setAgentStreams([]);
+        cleanupAllListeners(
+          unlistenAgentStart, unlistenChunk, unlistenResponse,
+          unlistenRuntimeError, unlistenA2aStart, unlistenA2aDepth,
+        );
+        loadChannels();
+      } else {
+        // Initialize expected agent count from IPC response.
+        // A2A agents will increment this later via the a2a-start listener.
+        expectedAgentCount = response.agents_triggered;
+      }
+
+      // No timeout — state is driven entirely by events:
+      // - channel-response → marks agent done, triggers cleanup when all complete
+      // - runtime://unavailable → handles runtime crashes
+      // - Stop button → user can manually interrupt a stuck session
+      // As long as the runtime is alive, the UI reflects it.
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
       setIsStreaming(false);
       setIsThinking(false);
+    } finally {
+      isSendingRef.current = false;
     }
   }, [loadChannels]);
 

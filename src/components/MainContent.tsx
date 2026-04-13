@@ -232,7 +232,14 @@ const AgentStreamBubble: React.FC<AgentStreamBubbleProps> = ({
             {agentName}
           </span>
           {stream.thinking ? (
-            <span className="text-[8px] text-gray-500 uppercase italic">Thinking...</span>
+            <span className="text-[8px] text-gray-500 uppercase italic flex items-center gap-1">
+              Thinking
+              <span className="inline-flex gap-[2px]">
+                <span className="w-[3px] h-[3px] bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-[3px] h-[3px] bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-[3px] h-[3px] bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </span>
+            </span>
           ) : stream.streaming ? (
             <span className="text-[8px] text-gray-500 uppercase italic">Streaming...</span>
           ) : stream.done ? (
@@ -245,16 +252,32 @@ const AgentStreamBubble: React.FC<AgentStreamBubbleProps> = ({
           )}
         </div>
         {stream.thinking && !stream.text && !hasContentBlocks ? (
-          <div className="h-4 bg-gray-200 w-2/3 brutal-border-b animate-pulse" />
+          <div>
+            {stream.statusMessage && (
+              <div className="text-[10px] text-gray-500 font-mono italic mb-1">
+                {stream.statusMessage}
+              </div>
+            )}
+          </div>
         ) : (
           <>
             <div className="text-sm leading-relaxed">
               <MarkdownRenderer content={stream.text || ''} />
               {stream.streaming && (
-                <span className="inline-block w-1.5 h-4 bg-brutal-cyan ml-0.5 animate-pulse" />
+                <span className="inline-flex gap-[2px] ml-1">
+                  <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </span>
               )}
             </div>
-            {/* Tool call cards — only shown during streaming */}
+            {/* Status message during thinking with tool activity */}
+            {stream.thinking && stream.statusMessage && !stream.text && (
+              <div className="text-[10px] text-gray-500 font-mono italic mb-1">
+                {stream.statusMessage}
+              </div>
+            )}
+            {/* Tool call cards — shown during streaming */}
             {hasContentBlocks && (
               <div className="mt-2 space-y-1">
                 {stream.contentBlocks.slice(-10).map((block, idx) => (
@@ -479,7 +502,7 @@ export const MainContent: React.FC<MainContentProps> = ({
   })();
 
   // Convert channel messages to display format with per-agent colors
-  const channelDisplayMessages: (Message & { agentColor?: string; agentEmoji?: string })[] = (() => {
+  const channelDisplayMessages: (Message & { agentColor?: string; agentEmoji?: string; contentBlocks?: ContentBlock[] })[] = (() => {
     if (!activeChannel) return [];
     return activeChannel.messages.map((msg: ChannelMessage) => {
       const isAgent = msg.sender_type === 'agent';
@@ -496,6 +519,7 @@ export const MainContent: React.FC<MainContentProps> = ({
         timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         agentColor: isAgent ? getAgentColor(cIdx) : undefined,
         agentEmoji: isAgent ? agentInfo?.agent.emoji : undefined,
+        contentBlocks: msg.content_blocks,
       };
     });
   })();
@@ -943,7 +967,8 @@ export const MainContent: React.FC<MainContentProps> = ({
                 )}
 
                 {(isChannelMode ? channelDisplayMessages : displayMessages).map((msgRaw) => {
-                  const msg = msgRaw as (Message & { agentColor?: string; agentEmoji?: string });
+                  const msg = msgRaw as (Message & { agentColor?: string; agentEmoji?: string; contentBlocks?: ContentBlock[] });
+                  const hasBlocks = msg.contentBlocks && msg.contentBlocks.length > 0;
                   return (
                   <div key={msg.id} className="flex gap-3 px-2">
                     {msg.sender.isAgent ? (
@@ -975,6 +1000,14 @@ export const MainContent: React.FC<MainContentProps> = ({
                           <span className="whitespace-pre-wrap">{msg.content}</span>
                         )}
                       </div>
+                      {/* Persisted content_blocks for historical agent messages */}
+                      {isChannelMode && msg.sender.isAgent && hasBlocks && (
+                        <div className="mt-2 space-y-1">
+                          {msg.contentBlocks!.map((block, idx) => (
+                            <ContentBlockCard key={`hist-${msg.id}-${block.type}-${block.id || block.tool_use_id || idx}`} block={block} />
+                          ))}
+                        </div>
+                      )}
                       {/* Context info badge for agent messages in channels */}
                       {isChannelMode && msg.sender.isAgent && (
                         <div className="mt-1 flex items-center gap-2 text-[8px] text-gray-400">
@@ -1018,7 +1051,11 @@ export const MainContent: React.FC<MainContentProps> = ({
                       </div>
                       <div className="text-sm leading-relaxed">
                         <MarkdownRenderer content={channelStreamingText || ''} />
-                        <span className="inline-block w-1.5 h-4 bg-brutal-cyan ml-0.5 animate-pulse" />
+                        <span className="inline-flex gap-[2px] ml-1">
+                          <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1040,7 +1077,11 @@ export const MainContent: React.FC<MainContentProps> = ({
                       </div>
                       <div className="text-sm leading-relaxed">
                         <MarkdownRenderer content={streamingText || ''} />
-                        <span className="inline-block w-1.5 h-4 bg-brutal-cyan ml-0.5 animate-pulse" />
+                        <span className="inline-flex gap-[2px] ml-1">
+                          <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </span>
                       </div>
                     </div>
                   </div>

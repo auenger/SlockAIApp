@@ -696,6 +696,7 @@ fn execute_single_agent_inner(
         let mut result_session_id: Option<String> = None;
         let mut had_error = false;
         let mut first_chunk_received = false;
+        let mut collected_blocks: Vec<serde_json::Value> = Vec::new();
 
         log::info!(
             "[response-thread] agent={}, channel={}: started collecting response",
@@ -722,6 +723,15 @@ fn execute_single_agent_inner(
                 full_response.push_str(&event.text);
             }
 
+            // Collect content_blocks from assistant and user events
+            if let Some(ref blocks_val) = event.content_blocks {
+                if let Some(arr) = blocks_val.as_array() {
+                    for block in arr {
+                        collected_blocks.push(block.clone());
+                    }
+                }
+            }
+
             // Forward event to frontend with agent_id context
             let _ = app_clone.emit(
                 "agent://channel-chunk",
@@ -736,10 +746,11 @@ fn execute_single_agent_inner(
 
             if event.is_done {
                 log::info!(
-                    "[response-thread] agent={}, channel={}: is_done received, collected {} chars, session_id={:?}, error={:?}",
+                    "[response-thread] agent={}, channel={}: is_done received, collected {} chars, {} content_blocks, session_id={:?}, error={:?}",
                     agent_id_clone,
                     channel_id_clone,
                     full_response.len(),
+                    collected_blocks.len(),
                     result_session_id,
                     event.error
                 );
@@ -761,12 +772,18 @@ fn execute_single_agent_inner(
             let store = ChannelStore::new(&channels_dir);
             match store.load(&channel_id_clone) {
                 Ok(mut ch) => {
+                    let content_blocks = if collected_blocks.is_empty() {
+                        None
+                    } else {
+                        Some(collected_blocks.clone())
+                    };
                     let agent_msg = ChannelMessage {
                         id: crate::workspace::thread::generate_id(),
                         channel_id: channel_id_clone.clone(),
                         sender_type: "agent".to_string(),
                         sender_id: agent_id_clone.clone(),
                         content: full_response.clone(),
+                        content_blocks,
                         timestamp: channel::now_iso(),
                     };
                     ch.messages.push(agent_msg);
@@ -800,13 +817,19 @@ fn execute_single_agent_inner(
                 }
             }
 
-            // Emit response event for frontend
+            // Emit response event for frontend (with content_blocks)
+            let content_blocks_val = if collected_blocks.is_empty() {
+                serde_json::Value::Null
+            } else {
+                serde_json::Value::Array(collected_blocks)
+            };
             let _ = app_clone.emit(
                 "agent://channel-response",
                 serde_json::json!({
                     "channel_id": channel_id_clone,
                     "agent_id": agent_id_clone,
                     "content": full_response.clone(),
+                    "content_blocks": content_blocks_val,
                     "session_id": result_session_id,
                 }),
             );
@@ -899,6 +922,7 @@ pub async fn send_channel_message(
             sender_type: "user".to_string(),
             sender_id: "user".to_string(),
             content: message.clone(),
+            content_blocks: None,
             timestamp: channel::now_iso(),
         };
         channel.messages.push(user_msg);
@@ -1115,6 +1139,7 @@ pub fn save_channel_response(
         sender_type: "agent".to_string(),
         sender_id: agent_id,
         content,
+        content_blocks: None,
         timestamp: channel::now_iso(),
     };
     channel.messages.push(agent_msg);

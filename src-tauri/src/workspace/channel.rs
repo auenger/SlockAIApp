@@ -65,6 +65,10 @@ pub struct ChannelMessage {
     pub sender_id: String,
     /// Message text content.
     pub content: String,
+    /// Structured content blocks (tool_use / tool_result) collected during agent execution.
+    /// Only present for agent messages that produced tool calls.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub content_blocks: Option<Vec<serde_json::Value>>,
     /// Timestamp (ISO 8601).
     pub timestamp: String,
 }
