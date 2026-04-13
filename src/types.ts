@@ -49,6 +49,8 @@ export interface ChannelMessage {
   sender_type: "user" | "agent";
   sender_id: string;
   content: string;
+  /** Structured content blocks (tool_use / tool_result) collected during agent execution. */
+  content_blocks?: ContentBlock[];
   timestamp: string;
 }
 
@@ -211,6 +213,8 @@ export interface ChannelResponseEvent {
   channel_id: string;
   agent_id: string;
   content: string;
+  /** Structured content blocks (tool_use / tool_result) collected during execution. */
+  content_blocks?: ContentBlock[];
   session_id: string | null;
 }
 
