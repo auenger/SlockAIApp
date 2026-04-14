@@ -134,6 +134,11 @@ fn migrations() -> Vec<Migration> {
             description: "data import marker",
             sql: include_str!("migrations/V003__data_import.sql"),
         },
+        Migration {
+            version: 4,
+            description: "tasks v2 full data model",
+            sql: include_str!("migrations/V004__tasks_v2.sql"),
+        },
     ]
 }
 

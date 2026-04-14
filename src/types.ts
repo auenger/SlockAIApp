@@ -107,11 +107,89 @@ export interface ThreadInfo {
   agent_icon?: string | null;
 }
 
+// ===========================================================================
+// Task types
+// ===========================================================================
+
+/** Task status enum */
+export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'blocked' | 'cancelled';
+
+/** Task priority (1=critical, 5=trivial) */
+export type TaskPriority = 1 | 2 | 3 | 4 | 5;
+
+/** Task execution mode */
+export type TaskExecutionMode = 'realtime' | 'async';
+
+/** Task creation source */
+export type TaskSource = 'manual' | 'conversation' | 'agent_created' | 'subtask';
+
+/** A Task in the system */
 export interface Task {
-  id: number;
+  id: string;                    // UUID (TEXT), consistent with DB
   title: string;
-  status: 'TODO' | 'IN PROGRESS' | 'IN REVIEW' | 'DONE';
-  assignee?: string;
+  description: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  creatorType: 'user' | 'agent';
+  creatorId: string;            // Always populated: user_id or agent_id
+  assigneeId?: string;          // agent_id
+  channelId?: string;           // bound channel
+  threadId?: string;            // bound thread
+  parentTaskId?: string;        // parent task
+  executionMode: TaskExecutionMode;
+  source: TaskSource;
+  sourceMessageId?: string;
+  result?: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+  // Joined / computed fields
+  childTaskCount: number;
+  dependencyCount: number;
+}
+
+/** Task dependency relationship */
+export interface TaskDependency {
+  taskId: string;
+  dependsOnId: string;
+}
+
+/** Task history entry */
+export interface TaskHistoryEntry {
+  id: number;
+  taskId: string;
+  field: string;
+  oldValue?: string;
+  newValue?: string;
+  changedBy: string;
+  changedAt: string;
+}
+
+/** Input for creating a new Task */
+export interface CreateTaskInput {
+  title: string;
+  description?: string;
+  priority?: TaskPriority;
+  creatorId: string;             // Required: creator identifier
+  creatorType?: 'user' | 'agent';
+  assigneeId?: string;
+  channelId?: string;
+  threadId?: string;
+  parentTaskId?: string;
+  executionMode?: TaskExecutionMode;
+  source?: TaskSource;
+  sourceMessageId?: string;
+}
+
+/** Input for updating an existing Task */
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  assigneeId?: string | null;
+  executionMode?: TaskExecutionMode;
+  result?: string | null;
 }
 
 export interface Message {

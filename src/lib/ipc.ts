@@ -28,6 +28,10 @@ import type {
   SkillInfo,
   ActivityLogEntry,
   ListActivitiesResult,
+  Task,
+  TaskHistoryEntry,
+  CreateTaskInput,
+  UpdateTaskInput,
 } from "../types";
 
 /**
@@ -443,4 +447,116 @@ export async function listActivities(params?: {
 /** Clear all activity entries. */
 export async function clearActivities(): Promise<void> {
   return invoke<void>("clear_activities");
+}
+
+// ---------------------------------------------------------------------------
+// Task commands
+// ---------------------------------------------------------------------------
+
+/** Create a new Task. */
+export async function createTask(input: CreateTaskInput): Promise<Task> {
+  return invoke<Task>("create_task", {
+    request: {
+      title: input.title,
+      description: input.description ?? "",
+      priority: input.priority ?? 3,
+      creator_id: input.creatorId,
+      creator_type: input.creatorType ?? "user",
+      assignee_id: input.assigneeId ?? null,
+      channel_id: input.channelId ?? null,
+      thread_id: input.threadId ?? null,
+      parent_task_id: input.parentTaskId ?? null,
+      execution_mode: input.executionMode ?? "realtime",
+      source: input.source ?? "manual",
+      source_message_id: input.sourceMessageId ?? null,
+    },
+  });
+}
+
+/** List tasks with optional filters. */
+export async function listTasks(params?: {
+  statusFilter?: string;
+  channelId?: string;
+  assigneeId?: string;
+  parentTaskId?: string;
+}): Promise<Task[]> {
+  return invoke<Task[]>("list_tasks", {
+    statusFilter: params?.statusFilter ?? null,
+    channelId: params?.channelId ?? null,
+    assigneeId: params?.assigneeId ?? null,
+    parentTaskId: params?.parentTaskId ?? null,
+  });
+}
+
+/** Get a single task by ID. */
+export async function getTask(taskId: string): Promise<Task> {
+  return invoke<Task>("get_task", { taskId });
+}
+
+/** Update an existing task. */
+export async function updateTask(
+  taskId: string,
+  input: UpdateTaskInput
+): Promise<Task> {
+  return invoke<Task>("update_task", {
+    taskId,
+    request: {
+      title: input.title ?? null,
+      description: input.description ?? null,
+      status: input.status ?? null,
+      priority: input.priority ?? null,
+      assignee_id: input.assigneeId !== undefined ? input.assigneeId : null,
+      execution_mode: input.executionMode ?? null,
+      result: input.result !== undefined ? input.result : null,
+    },
+  });
+}
+
+/** Delete a task by ID. */
+export async function deleteTask(taskId: string): Promise<void> {
+  return invoke<void>("delete_task", { taskId });
+}
+
+/** Update only the status of a task (for drag-and-drop). */
+export async function updateTaskStatus(
+  taskId: string,
+  status: string
+): Promise<Task> {
+  return invoke<Task>("update_task_status", { taskId, status });
+}
+
+/** Assign or reassign a task to an agent. */
+export async function assignTask(
+  taskId: string,
+  agentId: string | null
+): Promise<Task> {
+  return invoke<Task>("assign_task", { taskId, agentId });
+}
+
+/** Cancel a task (sets status to 'cancelled'). */
+export async function cancelTask(taskId: string): Promise<Task> {
+  return invoke<Task>("cancel_task", { taskId });
+}
+
+/** Add a dependency: task_id depends on depends_on_id. */
+export async function addTaskDependency(
+  taskId: string,
+  dependsOnId: string
+): Promise<void> {
+  return invoke<void>("add_task_dependency", { taskId, dependsOnId });
+}
+
+/** Remove a dependency. */
+export async function removeTaskDependency(
+  taskId: string,
+  dependsOnId: string
+): Promise<void> {
+  return invoke<void>("remove_task_dependency", { taskId, dependsOnId });
+}
+
+/** Get the history entries for a task. */
+export async function getTaskHistory(
+  taskId: string
+): Promise<TaskHistoryEntry[]> {
+  return invoke<TaskHistoryEntry[]>("get_task_history", { taskId });
 }
