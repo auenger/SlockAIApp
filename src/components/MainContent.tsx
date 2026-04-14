@@ -905,16 +905,16 @@ export const MainContent: React.FC<MainContentProps> = ({
                     <span className="text-gray-400 font-mono text-xs">#{task.id}</span>
                     <span className={cn(
                       "px-1.5 py-0.5 brutal-border text-[8px] font-black",
-                      task.status === 'TODO' ? "bg-brutal-yellow" : "bg-brutal-cyan"
+                      task.status === 'todo' ? "bg-brutal-yellow" : "bg-brutal-cyan"
                     )}>
                       {task.status}
                     </span>
                     <span className="font-bold text-sm">{task.title}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {task.assignee && (
+                    {task.assigneeId && (
                       <div className="flex items-center gap-1 px-1.5 py-0.5 brutal-border bg-gray-50 text-[10px] font-bold">
-                        <span className="text-gray-500">@</span>{task.assignee}
+                        <span className="text-gray-500">@</span>{task.assigneeId}
                       </div>
                     )}
                     <div className="flex gap-1">

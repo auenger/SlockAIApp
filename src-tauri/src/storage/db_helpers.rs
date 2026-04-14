@@ -324,30 +324,50 @@ pub fn delete_thread(conn: &Connection, thread_id: &str) -> Result<(), DbError> 
 // Task queries
 // ===========================================================================
 
-/// Task row from the database.
+/// Task row from the database (V004 schema).
 #[derive(Debug, Clone)]
 pub struct TaskRow {
     pub id: String,
     pub title: String,
-    pub status: String,
-    pub assignee: Option<String>,
-    pub thread_id: Option<String>,
     pub description: String,
+    pub status: String,
+    pub priority: i64,
+    pub creator_type: String,
+    pub creator_id: String,
+    pub assignee_id: Option<String>,
+    pub channel_id: Option<String>,
+    pub thread_id: Option<String>,
+    pub parent_task_id: Option<String>,
+    pub execution_mode: String,
+    pub source: String,
+    pub source_message_id: Option<String>,
+    pub result: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    pub completed_at: Option<String>,
 }
 
 impl TaskRow {
-    fn from_row(row: &Row<'_>) -> Result<Self, rusqlite::Error> {
+    pub fn from_row(row: &Row<'_>) -> Result<Self, rusqlite::Error> {
         Ok(Self {
             id: row.get("id")?,
             title: row.get("title")?,
-            status: row.get("status")?,
-            assignee: row.get("assignee")?,
-            thread_id: row.get("thread_id")?,
             description: row.get("description")?,
+            status: row.get("status")?,
+            priority: row.get("priority")?,
+            creator_type: row.get("creator_type")?,
+            creator_id: row.get("creator_id")?,
+            assignee_id: row.get("assignee_id")?,
+            channel_id: row.get("channel_id")?,
+            thread_id: row.get("thread_id")?,
+            parent_task_id: row.get("parent_task_id")?,
+            execution_mode: row.get("execution_mode")?,
+            source: row.get("source")?,
+            source_message_id: row.get("source_message_id")?,
+            result: row.get("result")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
+            completed_at: row.get("completed_at")?,
         })
     }
 }
@@ -355,53 +375,222 @@ impl TaskRow {
 /// Insert a task into the database.
 pub fn insert_task(conn: &Connection, task: &TaskRow) -> Result<(), DbError> {
     conn.execute(
-        "INSERT OR REPLACE INTO tasks (id, title, status, assignee, thread_id, description, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO tasks (
+            id, title, description, status, priority,
+            creator_type, creator_id, assignee_id, channel_id,
+            thread_id, parent_task_id, execution_mode, source,
+            source_message_id, result, created_at, updated_at, completed_at
+        ) VALUES (
+            ?1, ?2, ?3, ?4, ?5,
+            ?6, ?7, ?8, ?9,
+            ?10, ?11, ?12, ?13,
+            ?14, ?15, ?16, ?17, ?18
+        )",
         params![
             task.id,
             task.title,
-            task.status,
-            task.assignee,
-            task.thread_id,
             task.description,
+            task.status,
+            task.priority,
+            task.creator_type,
+            task.creator_id,
+            task.assignee_id,
+            task.channel_id,
+            task.thread_id,
+            task.parent_task_id,
+            task.execution_mode,
+            task.source,
+            task.source_message_id,
+            task.result,
             task.created_at,
             task.updated_at,
+            task.completed_at,
         ],
     )?;
     Ok(())
 }
 
-/// List tasks with optional status filter, ordered by created_at.
-pub fn list_tasks(conn: &Connection, status_filter: Option<&str>) -> Result<Vec<TaskRow>, DbError> {
-    let tasks = match status_filter {
-        Some(status) => {
-            let mut stmt = conn.prepare(
-                "SELECT * FROM tasks WHERE status = ?1 ORDER BY created_at ASC"
-            )?;
-            let rows = stmt.query_map(params![status], TaskRow::from_row)?;
-            rows.filter_map(|r| r.ok()).collect()
-        }
-        None => {
-            let mut stmt = conn.prepare(
-                "SELECT * FROM tasks ORDER BY created_at ASC"
-            )?;
-            let rows = stmt.query_map([], TaskRow::from_row)?;
-            rows.filter_map(|r| r.ok()).collect()
-        }
-    };
-    Ok(tasks)
+/// Get a single task by ID.
+pub fn get_task(conn: &Connection, task_id: &str) -> Result<Option<TaskRow>, DbError> {
+    let mut stmt = conn.prepare("SELECT * FROM tasks WHERE id = ?1")?;
+    let mut rows = stmt.query_map(params![task_id], TaskRow::from_row)?;
+    match rows.next() {
+        Some(row) => Ok(Some(row?)),
+        None => Ok(None),
+    }
 }
 
-/// Update task status.
+/// List tasks with flexible filters, ordered by created_at.
+pub fn list_tasks_filtered(
+    conn: &Connection,
+    status_filter: Option<&str>,
+    channel_id: Option<&str>,
+    assignee_id: Option<&str>,
+    parent_task_id: Option<&str>,
+) -> Result<Vec<TaskRow>, DbError> {
+    let mut sql = String::from("SELECT * FROM tasks WHERE 1=1");
+    let mut param_idx = 1u32;
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(status) = status_filter {
+        sql.push_str(&format!(" AND status = ?{}", param_idx));
+        param_values.push(Box::new(status.to_string()));
+        param_idx += 1;
+    }
+    if let Some(cid) = channel_id {
+        sql.push_str(&format!(" AND channel_id = ?{}", param_idx));
+        param_values.push(Box::new(cid.to_string()));
+        param_idx += 1;
+    }
+    if let Some(aid) = assignee_id {
+        sql.push_str(&format!(" AND assignee_id = ?{}", param_idx));
+        param_values.push(Box::new(aid.to_string()));
+        param_idx += 1;
+    }
+    if let Some(pid) = parent_task_id {
+        sql.push_str(&format!(" AND parent_task_id = ?{}", param_idx));
+        param_values.push(Box::new(pid.to_string()));
+        param_idx += 1;
+    }
+
+    sql.push_str(" ORDER BY created_at ASC");
+
+    let mut stmt = conn.prepare(&sql)?;
+    let params: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    let rows = stmt.query_map(params.as_slice(), TaskRow::from_row)?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+/// List tasks with optional status filter (simplified), ordered by created_at.
+pub fn list_tasks(conn: &Connection, status_filter: Option<&str>) -> Result<Vec<TaskRow>, DbError> {
+    list_tasks_filtered(conn, status_filter, None, None, None)
+}
+
+/// Update a task's mutable fields.
+pub fn update_task(
+    conn: &Connection,
+    task_id: &str,
+    title: Option<&str>,
+    description: Option<&str>,
+    status: Option<&str>,
+    priority: Option<i64>,
+    assignee_id: Option<Option<&str>>,
+    execution_mode: Option<&str>,
+    result: Option<Option<&str>>,
+    updated_at: &str,
+) -> Result<(), DbError> {
+    let mut set_clauses = Vec::new();
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    let mut param_idx = 1u32;
+
+    if let Some(v) = title {
+        set_clauses.push(format!("title = ?{}", param_idx));
+        param_values.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = description {
+        set_clauses.push(format!("description = ?{}", param_idx));
+        param_values.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = status {
+        set_clauses.push(format!("status = ?{}", param_idx));
+        param_values.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = priority {
+        set_clauses.push(format!("priority = ?{}", param_idx));
+        param_values.push(Box::new(v));
+        param_idx += 1;
+    }
+    if let Some(v) = assignee_id {
+        set_clauses.push(format!("assignee_id = ?{}", param_idx));
+        param_values.push(Box::new(v.map(|s| s.to_string())));
+        param_idx += 1;
+    }
+    if let Some(v) = execution_mode {
+        set_clauses.push(format!("execution_mode = ?{}", param_idx));
+        param_values.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = result {
+        set_clauses.push(format!("result = ?{}", param_idx));
+        param_values.push(Box::new(v.map(|s| s.to_string())));
+        param_idx += 1;
+    }
+
+    if set_clauses.is_empty() {
+        return Ok(());
+    }
+
+    // always update updated_at
+    set_clauses.push(format!("updated_at = ?{}", param_idx));
+    param_values.push(Box::new(updated_at.to_string()));
+    param_idx += 1;
+
+    // WHERE id = ?
+    let where_param = format!("id = ?{}", param_idx);
+    param_values.push(Box::new(task_id.to_string()));
+
+    let sql = format!("UPDATE tasks SET {} WHERE {}", set_clauses.join(", "), where_param);
+    let params: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    conn.execute(&sql, params.as_slice())?;
+    Ok(())
+}
+
+/// Update task status (convenience wrapper).
 pub fn update_task_status(
     conn: &Connection,
     task_id: &str,
     status: &str,
     updated_at: &str,
 ) -> Result<(), DbError> {
+    update_task(conn, task_id, None, None, Some(status), None, None, None, None, updated_at)
+}
+
+/// Update task status with completed_at timestamp.
+pub fn update_task_status_with_completed(
+    conn: &Connection,
+    task_id: &str,
+    status: &str,
+    completed_at: Option<&str>,
+    updated_at: &str,
+) -> Result<(), DbError> {
+    let mut set_parts = vec![
+        "status = ?1".to_string(),
+        format!("updated_at = ?2"),
+    ];
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![
+        Box::new(status.to_string()),
+        Box::new(updated_at.to_string()),
+    ];
+    let mut param_idx = 3u32;
+
+    if let Some(ca) = completed_at {
+        set_parts.push(format!("completed_at = ?{}", param_idx));
+        param_values.push(Box::new(ca.to_string()));
+        param_idx += 1;
+    }
+
+    let where_clause = format!("id = ?{}", param_idx);
+    param_values.push(Box::new(task_id.to_string()));
+
+    let sql = format!("UPDATE tasks SET {} WHERE {}", set_parts.join(", "), where_clause);
+    let params: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    conn.execute(&sql, params.as_slice())?;
+    Ok(())
+}
+
+/// Assign/reassign a task to an agent.
+pub fn assign_task(
+    conn: &Connection,
+    task_id: &str,
+    assignee_id: Option<&str>,
+    updated_at: &str,
+) -> Result<(), DbError> {
     conn.execute(
-        "UPDATE tasks SET status = ?1, updated_at = ?2 WHERE id = ?3",
-        params![status, updated_at, task_id],
+        "UPDATE tasks SET assignee_id = ?1, updated_at = ?2 WHERE id = ?3",
+        params![assignee_id, updated_at, task_id],
     )?;
     Ok(())
 }
@@ -410,6 +599,214 @@ pub fn update_task_status(
 pub fn delete_task(conn: &Connection, task_id: &str) -> Result<(), DbError> {
     conn.execute("DELETE FROM tasks WHERE id = ?1", params![task_id])?;
     Ok(())
+}
+
+/// Count child tasks for a parent task.
+pub fn count_child_tasks(conn: &Connection, parent_task_id: &str) -> Result<i64, DbError> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM tasks WHERE parent_task_id = ?1",
+        params![parent_task_id],
+        |row| row.get(0),
+    )?;
+    Ok(count)
+}
+
+/// Count dependencies for a task.
+pub fn count_dependencies(conn: &Connection, task_id: &str) -> Result<i64, DbError> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM task_dependencies WHERE task_id = ?1",
+        params![task_id],
+        |row| row.get(0),
+    )?;
+    Ok(count)
+}
+
+// ===========================================================================
+// Task dependency queries
+// ===========================================================================
+
+/// Task dependency row from the database.
+#[derive(Debug, Clone)]
+pub struct TaskDependencyRow {
+    pub task_id: String,
+    pub depends_on_id: String,
+    pub created_at: String,
+}
+
+impl TaskDependencyRow {
+    pub fn from_row(row: &Row<'_>) -> Result<Self, rusqlite::Error> {
+        Ok(Self {
+            task_id: row.get("task_id")?,
+            depends_on_id: row.get("depends_on_id")?,
+            created_at: row.get("created_at")?,
+        })
+    }
+}
+
+/// Add a task dependency.
+pub fn add_task_dependency(
+    conn: &Connection,
+    task_id: &str,
+    depends_on_id: &str,
+) -> Result<(), DbError> {
+    let now = chrono_now_iso();
+    conn.execute(
+        "INSERT OR IGNORE INTO task_dependencies (task_id, depends_on_id, created_at)
+         VALUES (?1, ?2, ?3)",
+        params![task_id, depends_on_id, now],
+    )?;
+    Ok(())
+}
+
+/// Remove a task dependency.
+pub fn remove_task_dependency(
+    conn: &Connection,
+    task_id: &str,
+    depends_on_id: &str,
+) -> Result<(), DbError> {
+    conn.execute(
+        "DELETE FROM task_dependencies WHERE task_id = ?1 AND depends_on_id = ?2",
+        params![task_id, depends_on_id],
+    )?;
+    Ok(())
+}
+
+/// Get all dependencies for a task.
+pub fn get_task_dependencies(conn: &Connection, task_id: &str) -> Result<Vec<TaskDependencyRow>, DbError> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM task_dependencies WHERE task_id = ?1"
+    )?;
+    let rows = stmt.query_map(params![task_id], TaskDependencyRow::from_row)?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+/// Get all tasks that depend on a given task.
+pub fn get_dependent_tasks(conn: &Connection, depends_on_id: &str) -> Result<Vec<TaskDependencyRow>, DbError> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM task_dependencies WHERE depends_on_id = ?1"
+    )?;
+    let rows = stmt.query_map(params![depends_on_id], TaskDependencyRow::from_row)?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+/// Check if adding a dependency would create a cycle (BFS from depends_on_id to task_id).
+pub fn would_create_cycle(conn: &Connection, task_id: &str, depends_on_id: &str) -> Result<bool, DbError> {
+    use std::collections::{HashSet, VecDeque};
+    let mut visited = HashSet::new();
+    let mut queue = VecDeque::new();
+    queue.push_back(depends_on_id.to_string());
+
+    while let Some(current) = queue.pop_front() {
+        if current == task_id {
+            return Ok(true); // cycle detected
+        }
+        if visited.contains(&current) {
+            continue;
+        }
+        visited.insert(current.clone());
+
+        // Find all tasks that current depends on
+        let deps = get_task_dependencies(conn, &current)?;
+        for dep in deps {
+            queue.push_back(dep.depends_on_id);
+        }
+    }
+    Ok(false)
+}
+
+// ===========================================================================
+// Task history queries
+// ===========================================================================
+
+/// Task history row from the database.
+#[derive(Debug, Clone)]
+pub struct TaskHistoryRow {
+    pub id: i64,
+    pub task_id: String,
+    pub field: String,
+    pub old_value: Option<String>,
+    pub new_value: Option<String>,
+    pub changed_by: String,
+    pub changed_at: String,
+}
+
+impl TaskHistoryRow {
+    pub fn from_row(row: &Row<'_>) -> Result<Self, rusqlite::Error> {
+        Ok(Self {
+            id: row.get("id")?,
+            task_id: row.get("task_id")?,
+            field: row.get("field")?,
+            old_value: row.get("old_value")?,
+            new_value: row.get("new_value")?,
+            changed_by: row.get("changed_by")?,
+            changed_at: row.get("changed_at")?,
+        })
+    }
+}
+
+/// Record a task history entry.
+pub fn insert_task_history(
+    conn: &Connection,
+    task_id: &str,
+    field: &str,
+    old_value: Option<&str>,
+    new_value: Option<&str>,
+    changed_by: &str,
+) -> Result<(), DbError> {
+    conn.execute(
+        "INSERT INTO task_history (task_id, field, old_value, new_value, changed_by)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![task_id, field, old_value, new_value, changed_by],
+    )?;
+    Ok(())
+}
+
+/// Get history entries for a task, newest first.
+pub fn get_task_history(conn: &Connection, task_id: &str) -> Result<Vec<TaskHistoryRow>, DbError> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM task_history WHERE task_id = ?1 ORDER BY changed_at DESC"
+    )?;
+    let rows = stmt.query_map(params![task_id], TaskHistoryRow::from_row)?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+// ===========================================================================
+// Utility
+// ===========================================================================
+
+/// Get current ISO 8601 timestamp (used for DB timestamps).
+pub fn chrono_now_iso() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let days = secs / 86400;
+    let time_secs = secs % 86400;
+    let hours = time_secs / 3600;
+    let minutes = (time_secs % 3600) / 60;
+    let seconds = time_secs % 60;
+    let (year, month, day) = days_to_ymd(days);
+    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", year, month, day, hours, minutes, seconds)
+}
+
+fn days_to_ymd(mut days: u64) -> (u64, u64, u64) {
+    let mut year = 1970u64;
+    loop {
+        let diy = if is_leap(year) { 366 } else { 365 };
+        if days < diy { break; }
+        days -= diy;
+        year += 1;
+    }
+    let leap = is_leap(year);
+    let md: [u64; 12] = if leap { [31,29,31,30,31,30,31,31,30,31,30,31] } else { [31,28,31,30,31,30,31,31,30,31,30,31] };
+    let mut month = 1u64;
+    for &x in &md { if days < x { break; } days -= x; month += 1; }
+    (year, month, days + 1)
+}
+
+fn is_leap(year: u64) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
 }
 
 // ===========================================================================
