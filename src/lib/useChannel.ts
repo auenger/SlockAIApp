@@ -56,6 +56,18 @@ export interface AgentStreamState {
 }
 
 // ---------------------------------------------------------------------------
+// Per-channel streaming state
+// ---------------------------------------------------------------------------
+
+/** Streaming state for a single channel — stored in a Map keyed by channelId. */
+export interface ChannelStreamState {
+  isStreaming: boolean;
+  isThinking: boolean;
+  streamingText: string;
+  agentStreams: AgentStreamState[];
+}
+
+// ---------------------------------------------------------------------------
 // Hook return type
 // ---------------------------------------------------------------------------
 
@@ -107,12 +119,70 @@ export interface ChannelState {
 export function useChannel(): ChannelState {
   const [channels, setChannels] = useState<ChannelInfo[]>([]);
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [isThinking, setIsThinking] = useState(false);
-  const [streamingText, setStreamingText] = useState("");
-  const [agentStreams, setAgentStreams] = useState<AgentStreamState[]>([]);
+  const [channelStreamStates, setChannelStreamStates] = useState<Map<string, ChannelStreamState>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // Per-channel state helpers
+  // ---------------------------------------------------------------------------
+
+  /** Get the streaming state for a specific channel (defaults to idle). */
+  const getStreamState = useCallback((channelId: string): ChannelStreamState => {
+    return channelStreamStates.get(channelId) ?? {
+      isStreaming: false,
+      isThinking: false,
+      streamingText: "",
+      agentStreams: [],
+    };
+  }, [channelStreamStates]);
+
+  /** Merge partial state into a specific channel's Map entry. */
+  const setStreamState = useCallback((channelId: string, partial: Partial<ChannelStreamState>) => {
+    setChannelStreamStates((prev) => {
+      const next = new Map(prev);
+      const current = next.get(channelId) ?? {
+        isStreaming: false,
+        isThinking: false,
+        streamingText: "",
+        agentStreams: [],
+      };
+      next.set(channelId, { ...current, ...partial });
+      return next;
+    });
+  }, []);
+
+  /** Update agentStreams for a specific channel via transformer function. */
+  const setChannelAgentStreams = useCallback((channelId: string, updater: (prev: AgentStreamState[]) => AgentStreamState[]) => {
+    setChannelStreamStates((prev) => {
+      const next = new Map(prev);
+      const current = next.get(channelId) ?? {
+        isStreaming: false,
+        isThinking: false,
+        streamingText: "",
+        agentStreams: [],
+      };
+      next.set(channelId, { ...current, agentStreams: updater(current.agentStreams) });
+      return next;
+    });
+  }, []);
+
+  /** Clear the streaming state for a specific channel (on session complete). */
+  const clearStreamState = useCallback((channelId: string) => {
+    setChannelStreamStates((prev) => {
+      const next = new Map(prev);
+      next.delete(channelId);
+      return next;
+    });
+  }, []);
+
+  // Derive the active channel's streaming state for the hook's return value
+  const activeChannelId = activeChannel?.id ?? null;
+  const activeStreamState = activeChannelId ? getStreamState(activeChannelId) : null;
+  const isStreaming = activeStreamState?.isStreaming ?? false;
+  const isThinking = activeStreamState?.isThinking ?? false;
+  const streamingText = activeStreamState?.streamingText ?? "";
+  const agentStreams = activeStreamState?.agentStreams ?? [];
 
   const unlistenChunkRef = useRef<(() => void) | null>(null);
   const unlistenResponseRef = useRef<(() => void) | null>(null);
@@ -320,10 +390,7 @@ export function useChannel(): ChannelState {
 
       if (!isTauri) {
         // Dev fallback: simulate streaming
-        setIsThinking(false);
-        setIsStreaming(true);
-        setStreamingText("");
-        setAgentStreams([]);
+        setStreamState(channelId, { isThinking: false, isStreaming: true, streamingText: "", agentStreams: [] });
 
         setActiveChannel((prev) => {
           if (!prev || prev.id !== channelId) return prev;
@@ -346,7 +413,7 @@ export function useChannel(): ChannelState {
         const mockResponse = `[Dev Mode] Channel received: "${message}". This is a simulated channel response.`;
         for (let i = 0; i < mockResponse.length; i++) {
           await new Promise((r) => setTimeout(r, 20));
-          setStreamingText(mockResponse.substring(0, i + 1));
+          setStreamState(channelId, { streamingText: mockResponse.substring(0, i + 1) });
         }
 
         setActiveChannel((prev) => {
@@ -366,9 +433,7 @@ export function useChannel(): ChannelState {
             ],
           };
         });
-        setStreamingText("");
-        setIsStreaming(false);
-        setIsThinking(false);
+        clearStreamState(channelId);
         return;
       }
 
@@ -411,9 +476,8 @@ export function useChannel(): ChannelState {
         if (sessionCompleteFired) return; // Guard against double-cleanup
         sessionCompleteFired = true;
 
-        setStreamingText("");
-        setIsStreaming(false);
-        setIsThinking(false);
+        // Clear only this channel's streaming state
+        clearStreamState(channelId);
 
         unlistenAgentStart();
         unlistenChunk();
@@ -430,7 +494,6 @@ export function useChannel(): ChannelState {
         unlistenA2aDepthRef.current = null;
         unlistenSessionCompleteRef.current = null;
 
-        setAgentStreams([]);
         loadChannels();
       };
 
@@ -442,7 +505,7 @@ export function useChannel(): ChannelState {
           const payload = event.payload;
           if (payload.channel_id !== channelId) return;
 
-          setAgentStreams((prev) => [
+          setChannelAgentStreams(channelId, (prev) => [
             ...prev,
             {
               agent_id: payload.agent_id,
@@ -471,8 +534,7 @@ export function useChannel(): ChannelState {
         if (evtChannelId !== channelId) return;
 
         setError(`${runtime_name}: ${runtimeError}${install_hint ? `\nInstall: ${install_hint}` : ""}`);
-        setIsStreaming(false);
-        setIsThinking(false);
+        setStreamState(channelId, { isStreaming: false, isThinking: false });
 
         unlistenRuntimeError();
         unlistenRuntimeErrorRef.current = null;
@@ -491,7 +553,7 @@ export function useChannel(): ChannelState {
 
           // Update the existing entry created by agent://channel-agent-start
           // instead of creating a duplicate.
-          setAgentStreams((prev) => {
+          setChannelAgentStreams(channelId, (prev) => {
             const existing = prev.findIndex((s) => s.agent_id === payload.agent_id);
             if (existing >= 0) {
               // Entry already exists from agent-start — update with A2A metadata
@@ -561,7 +623,7 @@ export function useChannel(): ChannelState {
               agentTexts.set(agentId, newText);
 
               // Update per-agent stream state
-              setAgentStreams((prev) =>
+              setChannelAgentStreams(channelId, (prev) =>
                 prev.map((s) =>
                   s.agent_id === agentId
                     ? { ...s, thinking: false, text: newText, contentBlocks: [...s.contentBlocks, ...newBlocks], statusMessage: undefined }
@@ -569,12 +631,11 @@ export function useChannel(): ChannelState {
                 )
               );
 
-              setStreamingText(newText);
-              setIsThinking(false);
+              setStreamState(channelId, { streamingText: newText, isThinking: false });
             } else if (newBlocks.length > 0) {
               // Assistant event with content_blocks but no text (e.g. tool_use only).
               // Update content blocks so the user can see tool calls during thinking.
-              setAgentStreams((prev) =>
+              setChannelAgentStreams(channelId, (prev) =>
                 prev.map((s) =>
                   s.agent_id === agentId
                     ? { ...s, contentBlocks: [...s.contentBlocks, ...newBlocks] }
@@ -585,7 +646,7 @@ export function useChannel(): ChannelState {
           } else if (eventType === "user") {
             // User events carry tool_result blocks from CLI tool execution.
             if (newBlocks.length > 0) {
-              setAgentStreams((prev) =>
+              setChannelAgentStreams(channelId, (prev) =>
                 prev.map((s) =>
                   s.agent_id === agentId
                     ? { ...s, contentBlocks: [...s.contentBlocks, ...newBlocks] }
@@ -596,7 +657,7 @@ export function useChannel(): ChannelState {
           } else if (eventType === "system") {
             // System events carry initialization status.
             if (streamEvent.text) {
-              setAgentStreams((prev) =>
+              setChannelAgentStreams(channelId, (prev) =>
                 prev.map((s) =>
                   s.agent_id === agentId
                     ? { ...s, statusMessage: streamEvent.text }
@@ -608,7 +669,7 @@ export function useChannel(): ChannelState {
 
           if (streamEvent.is_done) {
             // Clear contentBlocks on done (not persisted)
-            setAgentStreams((prev) =>
+            setChannelAgentStreams(channelId, (prev) =>
               prev.map((s) =>
                 s.agent_id === agentId
                   ? { ...s, streaming: false, thinking: false, done: true, error: streamEvent.error, contentBlocks: [], statusMessage: undefined }
@@ -653,7 +714,7 @@ export function useChannel(): ChannelState {
           });
 
           // Mark this agent as done (session cleanup is deferred to session-complete event)
-          setAgentStreams((prev) =>
+          setChannelAgentStreams(channelId, (prev) =>
             prev.map((s) =>
               s.agent_id === agent_id
                 ? { ...s, streaming: false, thinking: false, done: true }
@@ -681,10 +742,7 @@ export function useChannel(): ChannelState {
 
       // --- Step 2: Set streaming UI state + optimistic user message ---
 
-      setIsThinking(true);
-      setIsStreaming(true);
-      setStreamingText("");
-      setAgentStreams([]);
+      setStreamState(channelId, { isThinking: true, isStreaming: true, streamingText: "", agentStreams: [] });
 
       const optimisticUserMsg: ChannelMessage = {
         id: `msg-pending-${Date.now()}`,
@@ -734,21 +792,19 @@ export function useChannel(): ChannelState {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
-      setIsStreaming(false);
-      setIsThinking(false);
+      setStreamState(channelId, { isStreaming: false, isThinking: false });
     } finally {
       isSendingRef.current = false;
     }
-  }, [loadChannels]);
+  }, [loadChannels, setStreamState, clearStreamState, setChannelAgentStreams]);
 
   /** Clear the active channel */
   const clearActive = useCallback(() => {
+    if (activeChannelId) {
+      clearStreamState(activeChannelId);
+    }
     setActiveChannel(null);
-    setStreamingText("");
-    setIsStreaming(false);
-    setIsThinking(false);
-    setAgentStreams([]);
-  }, []);
+  }, [activeChannelId, clearStreamState]);
 
   /** Manually trigger compaction for a channel */
   const compact = useCallback(async (channelId: string) => {
