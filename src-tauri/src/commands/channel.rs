@@ -19,6 +19,39 @@ use crate::storage::db_helpers;
 use tauri::{AppHandle, Emitter, Manager};
 
 // ---------------------------------------------------------------------------
+// Helper: resolve user display name from USER.md
+// ---------------------------------------------------------------------------
+
+/// Extract the user's display name from USER.md.
+/// Looks for `- **Name**: value` pattern. Falls back to "User".
+fn resolve_user_name(workspace_root: &std::path::Path) -> String {
+    let user_md = workspace_root.join("USER.md");
+    if let Ok(content) = std::fs::read_to_string(&user_md) {
+        // Match patterns like: - **Name**: Ryan  or  - **Name**: Ryan_
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("- **Name**") {
+                if let Some(colon_pos) = trimmed.find(':') {
+                    let value = trimmed[colon_pos + 1..].trim();
+                    // Strip markdown italic markers and placeholder
+                    let cleaned = value
+                        .trim_start_matches('_')
+                        .trim_end_matches('_')
+                        .trim();
+                    if !cleaned.is_empty()
+                        && !cleaned.starts_with('(')
+                        && cleaned != "your name"
+                    {
+                        return cleaned.to_string();
+                    }
+                }
+            }
+        }
+    }
+    "User".to_string()
+}
+
+// ---------------------------------------------------------------------------
 // Channel CRUD
 // ---------------------------------------------------------------------------
 
@@ -485,6 +518,7 @@ fn execute_single_agent_inner(
     is_a2a: bool,
     triggered_by: Option<&str>,
     a2a_depth: u32,
+    user_name: Option<&str>,
 ) -> Result<String, String> {
     let channel_id = channel_id.to_string();
     let agent_id = agent_id.to_string();
@@ -511,9 +545,15 @@ fn execute_single_agent_inner(
             .cloned()
             .collect();
 
-        // Build Zone Agent Protocol (L2) from channel members
+        // Build Zone Agent Protocol (L2) from channel members + user name
+        // Prefer the name passed from frontend (Profile setting), fallback to USER.md
+        let effective_user_name: String = user_name
+            .filter(|n| !n.is_empty() && *n != "User")
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| resolve_user_name(&workspace_root));
         let zone_protocol = crate::context::zone_protocol::ChannelZoneProtocol::from_channel(
             &latest_channel,
+            &effective_user_name,
             &channel_agents,
         );
 
@@ -566,7 +606,7 @@ fn execute_single_agent_inner(
             ));
             for msg in &recent {
                 let sender = if msg.sender_type == "user" {
-                    "User".to_string()
+                    resolve_user_name(&workspace_root)
                 } else {
                     manager
                         .get_agent(&msg.sender_id)
@@ -881,7 +921,7 @@ fn execute_single_agent_inner(
 ///    b. Build channel context (recent N messages as conversation history)
 ///    c. Execute via runtime with assembled system prompt
 ///    d. Stream events to frontend with agent_id identifier
-/// 4. After each agent responds, check for A2A triggers (@{agent} mentions
+/// 4. After each agent responds, check for A2A triggers (@agent mentions
 ///    in the response) and recursively execute those agents (with depth
 ///    limit and deduplication to prevent runaway chains).
 /// 5. Each agent's response is saved independently
@@ -903,6 +943,7 @@ pub async fn send_channel_message(
     state: tauri::State<'_, crate::AppState>,
     channel_id: String,
     message: String,
+    user_name: Option<String>,
 ) -> Result<SendChannelMessageResponse, String> {
     // ---- Phase 1: Load channel, add user message, parse mentions ----
     let (_channel, target_agents, workspace_root, channel_members) = {
@@ -1022,6 +1063,7 @@ pub async fn send_channel_message(
                 task.is_a2a,
                 task.triggered_by.as_deref(),
                 task.depth,
+                user_name.as_deref(),
             );
 
             agent_idx += 1;
@@ -1091,6 +1133,14 @@ pub async fn send_channel_message(
                 }
             }
         }
+
+        // Emit session-complete event so the frontend knows ALL agents (including A2A chain) are done.
+        let _ = bg_app.emit(
+            "agent://channel-session-complete",
+            serde_json::json!({
+                "channel_id": bg_channel_id,
+            }),
+        );
 
         // Trigger auto-compaction check
         {
@@ -1176,12 +1226,14 @@ const SUMMARY_PROMPT: &str = r#"你是一个对话摘要助手。请将以下 Ch
 fn format_messages_for_summary(
     messages: &[ChannelMessage],
     manager: &crate::workspace::manager::AgentManager,
+    workspace_root: &std::path::Path,
 ) -> String {
+    let user_name = resolve_user_name(workspace_root);
     messages
         .iter()
         .map(|msg| {
             let sender = if msg.sender_type == "user" {
-                "User".to_string()
+                user_name.clone()
             } else {
                 manager
                     .get_agent(&msg.sender_id)
@@ -1265,7 +1317,7 @@ pub async fn compact_channel(
             .ok_or_else(|| format!("workspace not found for agent: {agent_id}"))?;
         let workspace_path = workspace.base_path().to_string_lossy().to_string();
 
-        let transcript = format_messages_for_summary(&messages_to_summarize, &manager);
+        let transcript = format_messages_for_summary(&messages_to_summarize, &manager, manager.workspace_root());
 
         let full_prompt = match &channel.summary {
             Some(existing) => {

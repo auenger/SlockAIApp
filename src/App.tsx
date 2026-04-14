@@ -12,7 +12,7 @@ import { deleteAgent, invoke } from './lib/ipc';
 export default function App() {
   const [activeChannel, setActiveChannel] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('CHAT');
-  const [isThreadOpen, setIsThreadOpen] = useState(true);
+  const [isThreadOpen, setIsThreadOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<AgentWithRuntime | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
 
@@ -236,7 +236,7 @@ export default function App() {
         onThreadCreated={handleThreadCreated}
         activeChannel={activeChannel ? channelData : null}
         allAgents={allAgents}
-        onSendChannelMessage={(channelId, message) => sendChannelMessage(channelId, message, allAgents)}
+        onSendChannelMessage={(channelId, message, userName) => sendChannelMessage(channelId, message, allAgents, userName)}
         channelIsStreaming={channelIsStreaming}
         channelIsThinking={channelIsThinking}
         channelStreamingText={channelStreamingText}

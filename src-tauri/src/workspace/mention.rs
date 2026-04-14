@@ -1,6 +1,6 @@
 //! @Mention parser for Channel messages.
 //!
-//! Parses `@AgentName` and `@{Agent Name}` patterns from messages
+//! Parses `@AgentName` patterns from messages
 //! and resolves them to Agent IDs based on Channel membership.
 
 use super::channel::ChannelMember;
@@ -12,7 +12,7 @@ use super::channel::ChannelMember;
 /// A parsed mention extracted from a message.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mention {
-    /// The raw text matched (e.g., "@Claude" or "@{Agent Name}").
+    /// The raw text matched (e.g., "@Claude").
     pub raw: String,
     /// The resolved agent_id (lowercase, underscored).
     pub agent_id: String,
@@ -29,24 +29,18 @@ pub struct MentionResult {
 
 /// Parse @mentions from a message and resolve them against Channel members.
 ///
-/// Supports two formats:
-/// - `@AgentName` — word-boundary mention (alphanumeric + underscore + CJK)
-/// - `@{Agent Name}` — braced mention (allows spaces)
+/// Supports `@AgentName` format — word-boundary mention (alphanumeric + underscore + CJK).
 ///
 /// Returns a `MentionResult` with resolved mentions. Mentions that don't
 /// match any channel member are ignored.
 pub fn parse_mentions(message: &str, members: &[ChannelMember]) -> MentionResult {
     let mut mentions = Vec::new();
-    let mut processed = message.to_string();
 
     // Build a lookup: agent_id -> member, and also name-based lookups
     let member_lookup = build_member_lookup(members);
 
-    // First pass: parse @{Name With Spaces} format (greedy, higher priority)
-    processed = parse_braced_mentions(&processed, &member_lookup, &mut mentions);
-
-    // Second pass: parse @WordFormat mentions
-    processed = parse_word_mentions(&processed, &member_lookup, &mut mentions);
+    // Parse @WordFormat mentions
+    let processed = parse_word_mentions(message, &member_lookup, &mut mentions);
 
     // Deduplicate mentions by agent_id while preserving order
     let mut seen = std::collections::HashSet::new();
@@ -61,7 +55,7 @@ pub fn parse_mentions(message: &str, members: &[ChannelMember]) -> MentionResult
 /// Extract agent IDs that are @mentioned in an Agent's response text.
 ///
 /// This is used for Agent-to-Agent (A2A) triggering: after an Agent produces
-/// a response, we parse its output for @{agent} mentions and return the
+/// a response, we parse its output for @agent mentions and return the
 /// corresponding agent IDs (only those that are Channel members).
 ///
 /// Returns an empty Vec if no valid member mentions are found.
@@ -129,49 +123,6 @@ fn id_to_display_name(agent_id: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-/// Parse @{Name With Spaces} mentions from the message.
-fn parse_braced_mentions(
-    message: &str,
-    lookup: &MemberLookup,
-    mentions: &mut Vec<Mention>,
-) -> String {
-    let mut result = message.to_string();
-
-    // Find all @{...} patterns
-    let re = regex_lazy();
-    let mut offset_adjustment = 0i64;
-
-    for cap in re.find_iter(message) {
-        let full_match = cap.as_str();
-        // Extract the name inside braces
-        if let Some(inner) = full_match.strip_prefix("@{").and_then(|s| s.strip_suffix('}')) {
-            let name = inner.trim();
-            if let Some(agent_id) = resolve_name(name, lookup) {
-                let raw_start = cap.start() as i64 + offset_adjustment;
-                let raw_end = cap.end() as i64 + offset_adjustment;
-
-                mentions.push(Mention {
-                    raw: full_match.to_string(),
-                    agent_id: agent_id.clone(),
-                });
-
-                // Replace the @{Name} with just the name in the cleaned message
-                if raw_start >= 0 && raw_end >= 0 {
-                    let start = raw_start as usize;
-                    let end = raw_end as usize;
-                    if start <= result.len() && end <= result.len() {
-                        let replacement = name.to_string();
-                        offset_adjustment += replacement.len() as i64 - (end - start) as i64;
-                        result.replace_range(start..end, &replacement);
-                    }
-                }
-            }
-        }
-    }
-
-    result
 }
 
 /// Parse @WordFormat mentions from the message.
@@ -289,13 +240,6 @@ fn is_cjk(c: char) -> bool {
     )
 }
 
-/// Lazy-initialized regex for @{...} pattern matching.
-fn regex_lazy() -> &'static regex::Regex {
-    use std::sync::OnceLock;
-    static RE: OnceLock<regex::Regex> = OnceLock::new();
-    RE.get_or_init(|| regex::Regex::new(r"@\{[^}]+\}").unwrap())
-}
-
 // ===========================================================================
 // Tests
 // ===========================================================================
@@ -330,14 +274,6 @@ mod tests {
         assert_eq!(result.mentions.len(), 2);
         assert_eq!(result.mentions[0].agent_id, "claude");
         assert_eq!(result.mentions[1].agent_id, "alice");
-    }
-
-    #[test]
-    fn test_parse_braced_mention() {
-        let members = make_members(&["claude"]);
-        let result = parse_mentions("@{claude} please help", &members);
-        assert_eq!(result.mentions.len(), 1);
-        assert_eq!(result.mentions[0].agent_id, "claude");
     }
 
     #[test]
@@ -435,16 +371,6 @@ mod tests {
             &members,
         );
         assert!(triggers.is_empty());
-    }
-
-    #[test]
-    fn test_extract_agent_triggers_braced_format() {
-        let members = make_members(&["claude", "codex"]);
-        let triggers = extract_agent_triggers(
-            "Let me delegate to @{Codex}.",
-            &members,
-        );
-        assert_eq!(triggers, vec!["codex"]);
     }
 
     #[test]

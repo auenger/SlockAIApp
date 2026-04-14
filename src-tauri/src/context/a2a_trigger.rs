@@ -1,6 +1,6 @@
 //! Agent-to-Agent (A2A) trigger chain execution engine.
 //!
-//! When an Agent produces a response that contains @{agent} mentions of other
+//! When an Agent produces a response that contains @agent mentions of other
 //! Channel members, this module manages the recursive execution chain:
 //!
 //! 1. Parse the Agent's response for @mentions of other Channel members.

@@ -5,7 +5,7 @@
 //! - who else is in the Channel (fellow Agent members),
 //! - what each member's role and capabilities are,
 //! - the collaboration rules for multi-Agent interactions,
-//! - and how to use @{agent} mentions to trigger other Agents.
+//! - and how to use @agent mentions to trigger other Agents.
 //!
 //! This layer is **only** injected for Channel conversations, **not** for
 //! Thread (1-on-1) conversations.
@@ -44,6 +44,8 @@ pub struct ChannelZoneProtocol {
     pub channel_name: String,
     /// Optional channel description.
     pub channel_description: Option<String>,
+    /// The human user's display name in this channel.
+    pub user_name: String,
     /// Agent members in this channel.
     pub members: Vec<AgentMemberInfo>,
 }
@@ -53,13 +55,13 @@ pub struct ChannelZoneProtocol {
 // // ===========================================================================
 
 impl ChannelZoneProtocol {
-    /// Build a Zone Protocol from a Channel and a list of Agent records.
+    /// Build a Zone Protocol from a Channel, user name, and Agent records.
     ///
     /// The `agents` slice should contain **all** agents that are members of
     /// the channel.  Any channel member whose `agent_id` is not found in the
     /// agents list is silently skipped (defensive -- should not happen in
     /// normal operation).
-    pub fn from_channel(channel: &Channel, agents: &[Agent]) -> Self {
+    pub fn from_channel(channel: &Channel, user_name: &str, agents: &[Agent]) -> Self {
         let members: Vec<AgentMemberInfo> = channel
             .members
             .iter()
@@ -84,6 +86,7 @@ impl ChannelZoneProtocol {
         Self {
             channel_name: channel.name.clone(),
             channel_description: None,
+            user_name: user_name.to_string(),
             members,
         }
     }
@@ -108,15 +111,22 @@ impl ChannelZoneProtocol {
             out.push_str(&format!("> {}\n\n", desc));
         }
 
-        // Member table
+        // Member table (includes the human user as first row)
         out.push_str("### Current Channel Members\n\n");
-        out.push_str("| Agent | Role | Capabilities | Runtime |\n");
-        out.push_str("|-------|------|-------------|----------|\n");
+        out.push_str("| Member | Type | Role | Capabilities |\n");
+        out.push_str("|--------|------|------|-------------|\n");
 
+        // User row
+        out.push_str(&format!(
+            "| @{} | **User** | Human | The person you are helping |\n",
+            self.user_name
+        ));
+
+        // Agent rows
         for m in &self.members {
             out.push_str(&format!(
-                "| @{} | {} | {} | {} |\n",
-                m.display_name, m.role_description, m.vibe, m.runtime_type
+                "| @{} | Agent | {} | {} |\n",
+                m.display_name, m.role_description, m.vibe
             ));
         }
         out.push('\n');
@@ -127,19 +137,18 @@ impl ChannelZoneProtocol {
             out.push_str("You are currently the only Agent in this Channel. ");
             out.push_str("If other Agents are added later, the rules below will apply.\n\n");
         }
-        out.push_str("1. You can mention other Agents with @{AgentName} in your reply -- the system will automatically trigger that Agent to respond.\n");
-        out.push_str("2. If a task requires another Agent's expertise, proactively @mention them.\n");
-        out.push_str("3. Be collaborative: if a question is better suited for another Agent, suggest that the user @mention that Agent.\n");
-        // Rule 4 removed: agent name is rendered by the UI above each message bubble,
-        // so the agent no longer needs to prefix its own name in the response text.
-        // out.push_str("4. Start each reply with your name so the conversation context stays clear.\n");
+        out.push_str(&format!("1. The user's name is **@{}**. When you need to address or notify the user, ALWAYS use @{} format — this triggers a visual highlight and notification on their end.\n", self.user_name, self.user_name));
+        out.push_str("2. You can mention other Agents with @AgentName in your reply -- the system will automatically trigger that Agent to respond.\n");
+        out.push_str("3. If a task requires another Agent's expertise, proactively @mention them.\n");
+        out.push_str("4. Be collaborative: if a question is better suited for another Agent, suggest that the user @mention that Agent.\n");
         out.push('\n');
 
         // @mention format
         out.push_str("### @Mention Format\n\n");
-        out.push_str("- Simple mention: @AgentName\n");
-        out.push_str("- Name with spaces: @{Agent Name}\n");
+        out.push_str(&format!("- Address the user: @{}\n", self.user_name));
+        out.push_str("- Mention an agent: @AgentName\n");
         out.push_str("- Mention with instruction: @Claude please review this code\n");
+        out.push_str(&format!("- Notify the user of results: @{}, here is what I found...\n", self.user_name));
 
         out
     }
@@ -243,16 +252,16 @@ mod tests {
             make_agent("codex", "Codex", "AI", "calm", RuntimeType::Codex),
         ];
 
-        let zp = ChannelZoneProtocol::from_channel(&channel, &agents);
+        let zp = ChannelZoneProtocol::from_channel(&channel, "Ryan", &agents);
         let rendered = zp.render();
 
         assert!(rendered.contains("## Channel: Dev Team"));
+        assert!(rendered.contains("@Ryan"));
         assert!(rendered.contains("@Claude"));
         assert!(rendered.contains("@Codex"));
         assert!(rendered.contains("Code Expert"));
         assert!(rendered.contains("Research Assistant"));
-        assert!(rendered.contains("Claude Code"));
-        assert!(rendered.contains("OpenAI Codex"));
+        assert!(rendered.contains("**User**"));
         assert!(rendered.contains("Collaboration Rules"));
         assert!(rendered.contains("@Mention Format"));
         // Multi-agent should NOT contain "only" text
@@ -266,7 +275,7 @@ mod tests {
             make_agent("claude", "Claude", "AI", "sharp", RuntimeType::ClaudeCode),
         ];
 
-        let zp = ChannelZoneProtocol::from_channel(&channel, &agents);
+        let zp = ChannelZoneProtocol::from_channel(&channel, "Ryan", &agents);
         let rendered = zp.render();
 
         assert!(rendered.contains("## Channel: Solo"));
@@ -283,7 +292,7 @@ mod tests {
             make_agent("claude", "Claude", "AI", "sharp", RuntimeType::ClaudeCode),
         ];
 
-        let mut zp = ChannelZoneProtocol::from_channel(&channel, &agents);
+        let mut zp = ChannelZoneProtocol::from_channel(&channel, "Ryan", &agents);
         zp.channel_description = Some("A channel for Project X development".to_string());
         let rendered = zp.render();
 
@@ -297,7 +306,7 @@ mod tests {
             make_agent("claude", "Claude", "AI", "sharp", RuntimeType::ClaudeCode),
         ];
 
-        let zp = ChannelZoneProtocol::from_channel(&channel, &agents);
+        let zp = ChannelZoneProtocol::from_channel(&channel, "Ryan", &agents);
         // Only 1 member should be rendered (unknown_agent skipped)
         assert_eq!(zp.members.len(), 1);
         assert_eq!(zp.members[0].display_name, "Claude");
@@ -310,14 +319,15 @@ mod tests {
             make_agent("claude", "Claude", "AI", "sharp", RuntimeType::ClaudeCode),
         ];
 
-        let zp = ChannelZoneProtocol::from_channel(&channel, &agents);
+        let zp = ChannelZoneProtocol::from_channel(&channel, "Ryan", &agents);
         let rendered = zp.render();
 
         // Should have table header and separator
-        assert!(rendered.contains("| Agent | Role | Capabilities | Runtime |"));
-        assert!(rendered.contains("|-------|------|-------------|----------|"));
-        // Should have Claude row
-        assert!(rendered.contains("| @Claude | Code Expert | sharp | Claude Code |"));
+        assert!(rendered.contains("| Member | Type | Role | Capabilities |"));
+        assert!(rendered.contains("|--------|------|------|-------------|"));
+        // Should have user row and Claude row
+        assert!(rendered.contains("| @Ryan | **User** | Human | The person you are helping |"));
+        assert!(rendered.contains("| @Claude | Agent | Code Expert | sharp |"));
     }
 
     #[test]

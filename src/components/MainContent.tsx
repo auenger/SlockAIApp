@@ -46,6 +46,7 @@ import { SkillFormModal } from './SkillsPanel';
 import type { SkillInfo } from '../types';
 import { useActivityLog, getActivityTypeConfig } from '../lib/useActivityLog';
 import { MentionAutocomplete, renderMentionText } from './MentionAutocomplete';
+import { useUserProfile } from '../lib/useUserProfile';
 import { AgentIcon } from './AgentIcon';
 import { EditAgentModal } from './EditAgentModal';
 import { MarkdownRenderer } from './markdown';
@@ -207,12 +208,18 @@ interface AgentStreamBubbleProps {
   stream: AgentStreamState;
   agentInfo?: AgentWithRuntime;
   colorIndex: number;
+  allAgents: AgentWithRuntime[];
+  agentColorMap: Map<string, number>;
+  userName?: string;
 }
 
 const AgentStreamBubble: React.FC<AgentStreamBubbleProps> = ({
   stream,
   agentInfo,
   colorIndex,
+  allAgents,
+  agentColorMap,
+  userName,
 }) => {
   const agentName = agentInfo?.agent.name || stream.agent_id;
   const bgColor = getAgentColor(colorIndex);
@@ -262,7 +269,7 @@ const AgentStreamBubble: React.FC<AgentStreamBubbleProps> = ({
         ) : (
           <>
             <div className="text-sm leading-relaxed">
-              <MarkdownRenderer content={stream.text || ''} />
+              <MarkdownRenderer content={stream.text || ''} allAgents={allAgents} agentColorMap={agentColorMap} userName={userName} />
               {stream.streaming && (
                 <span className="inline-flex gap-[2px] ml-1">
                   <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -310,7 +317,7 @@ interface MainContentProps {
   /** All agents (for resolving channel member names) */
   allAgents?: AgentWithRuntime[];
   /** Send a message in a channel */
-  onSendChannelMessage?: (channelId: string, message: string) => Promise<void>;
+  onSendChannelMessage?: (channelId: string, message: string, userName?: string) => Promise<void>;
   /** Whether a channel message is streaming */
   channelIsStreaming?: boolean;
   /** Whether the channel agent is thinking */
@@ -352,6 +359,69 @@ export const MainContent: React.FC<MainContentProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'channel' | 'agent'; id: string; name: string } | null>(null);
+
+  // User profile for self-mention
+  const { profile: userProfile } = useUserProfile();
+
+  // Mention toast state: 'self' = user mentioned themselves, 'agent' = agent mentioned user
+  const [mentionToast, setMentionToast] = useState<'self' | 'agent' | null>(null);
+
+  // Detect when an Agent @mentions the user in incoming messages
+  // Shows toast + system notification
+  const lastCheckedMsgCountRef = useRef(0);
+  useEffect(() => {
+    if (!activeChannel || !activeChannel.messages) return;
+    const userName = userProfile.name;
+    if (!userName || userName === 'User') return;
+
+    const messages = activeChannel.messages;
+    // Only check new messages since last check
+    if (messages.length <= lastCheckedMsgCountRef.current) {
+      lastCheckedMsgCountRef.current = messages.length;
+      return;
+    }
+
+    const escaped = userName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const mentionRegex = new RegExp(`@${escaped}\\b`, 'i');
+
+    let foundUserMention = false;
+    for (let i = lastCheckedMsgCountRef.current; i < messages.length; i++) {
+      const msg = messages[i];
+      // Only check agent messages (not user's own messages)
+      if (msg.sender_type === 'agent' && mentionRegex.test(msg.content)) {
+        foundUserMention = true;
+        break;
+      }
+    }
+
+    lastCheckedMsgCountRef.current = messages.length;
+
+    if (foundUserMention) {
+      setMentionToast('agent');
+      setTimeout(() => setMentionToast(null), 4000);
+
+      // System-level notification
+      try {
+        if ('Notification' in window) {
+          const showNotif = () => {
+            new Notification('You were mentioned', {
+              body: `An agent mentioned you (@${userName}) in #${activeChannel.name}.`,
+              silent: false,
+            });
+          };
+          if (Notification.permission === 'granted') {
+            showNotif();
+          } else if (Notification.permission !== 'denied') {
+            Notification.requestPermission().then((perm) => {
+              if (perm === 'granted') showNotif();
+            });
+          }
+        }
+      } catch {
+        // Notification API not available
+      }
+    }
+  }, [activeChannel?.messages, userProfile.name, activeChannel?.name]);
 
   // Skills management state
   const {
@@ -532,8 +602,45 @@ export const MainContent: React.FC<MainContentProps> = ({
     const userInput = inputValue;
     setInputValue('');
 
+    // Check for self-mention and show reminder
+    const userName = userProfile.name;
+    if (userName) {
+      const escaped = userName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Match @UserName format
+      const hasSelfMention = new RegExp(`@${escaped}\\b`, 'i').test(userInput);
+      if (hasSelfMention) {
+        setMentionToast('self');
+        setTimeout(() => setMentionToast(null), 4000);
+
+        // System-level notification
+        try {
+          if ('Notification' in window) {
+            const showNotif = () => {
+              new Notification('Self-mention', {
+                body: `You mentioned yourself (@${userName}) — agents can see this.`,
+                silent: true,
+              });
+            };
+            if (Notification.permission === 'granted') {
+              showNotif();
+            } else if (Notification.permission !== 'denied') {
+              Notification.requestPermission().then((perm) => {
+                if (perm === 'granted') showNotif();
+              });
+            }
+          }
+        } catch {
+          // Notification API not available
+        }
+      }
+    }
+
     try {
-      await onSendChannelMessage(activeChannel.id, userInput);
+      await onSendChannelMessage(
+        activeChannel.id,
+        userInput,
+        userProfile.name !== 'User' ? userProfile.name : undefined,
+      );
     } catch (error) {
       console.error("Channel Error:", error);
     }
@@ -993,9 +1100,9 @@ export const MainContent: React.FC<MainContentProps> = ({
                       <div className="text-sm leading-relaxed">
                         {/* Render with MarkdownRenderer for agent messages, plain text for user */}
                         {msg.sender.isAgent ? (
-                          <MarkdownRenderer content={msg.content} />
+                          <MarkdownRenderer content={msg.content} allAgents={allAgents} agentColorMap={agentColorMap} userName={userProfile.name !== 'User' ? userProfile.name : undefined} />
                         ) : isChannelMode ? (
-                          <span className="whitespace-pre-wrap">{renderMentionText(msg.content, allAgents, undefined, agentColorMap)}</span>
+                          <span className="whitespace-pre-wrap">{renderMentionText(msg.content, allAgents, undefined, agentColorMap, userProfile.name !== 'User' ? userProfile.name : undefined)}</span>
                         ) : (
                           <span className="whitespace-pre-wrap">{msg.content}</span>
                         )}
@@ -1031,6 +1138,9 @@ export const MainContent: React.FC<MainContentProps> = ({
                       stream={stream}
                       agentInfo={agentInfo}
                       colorIndex={cIdx}
+                      allAgents={allAgents}
+                      agentColorMap={agentColorMap}
+                      userName={userProfile.name !== 'User' ? userProfile.name : undefined}
                     />
                   );
                 })}
@@ -1050,7 +1160,7 @@ export const MainContent: React.FC<MainContentProps> = ({
                         <span className="text-[8px] text-gray-500 uppercase italic">Streaming...</span>
                       </div>
                       <div className="text-sm leading-relaxed">
-                        <MarkdownRenderer content={channelStreamingText || ''} />
+                        <MarkdownRenderer content={channelStreamingText || ''} allAgents={allAgents} agentColorMap={agentColorMap} userName={userProfile.name !== 'User' ? userProfile.name : undefined} />
                         <span className="inline-flex gap-[2px] ml-1">
                           <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                           <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -1129,7 +1239,8 @@ export const MainContent: React.FC<MainContentProps> = ({
 
              <div className="mt-4">
                 {isChannelMode ? (
-                  /* @Mention autocomplete input for channel mode */
+                  <>
+                  {/* @Mention autocomplete input for channel mode */}
                   <MentionAutocomplete
                     value={inputValue}
                     onChange={setInputValue}
@@ -1137,9 +1248,11 @@ export const MainContent: React.FC<MainContentProps> = ({
                     disabled={!activeChannel || channelIsStreaming || channelIsThinking}
                     placeholder={`Message #${activeChannel!.name}... (type @ to mention)`}
                     onSend={handleSendChannelMessage}
+                    userName={userProfile.name !== 'User' ? userProfile.name : undefined}
                   />
+
+                  </>
                 ) : (
-                  /* Standard textarea for thread mode */
                   <div className="relative">
                     <textarea
                       value={inputValue}
@@ -1561,6 +1674,34 @@ export const MainContent: React.FC<MainContentProps> = ({
           </div>
         )}
       </div>
+
+      {/* Mention toast — fixed top-right */}
+      {mentionToast && (
+        <div className="fixed top-4 right-4 z-[100] animate-slide-in-right">
+          <div className={cn(
+            "brutal-border brutal-shadow px-4 py-3 flex items-center gap-3 max-w-xs",
+            mentionToast === 'self' ? "bg-brutal-yellow" : "bg-purple-400"
+          )}>
+            <span className={cn(
+              "text-[10px] font-black uppercase text-white px-1.5 py-0.5 shrink-0",
+              mentionToast === 'self' ? "bg-black" : "bg-black/30"
+            )}>
+              {mentionToast === 'self' ? 'Self-mention' : '@Mention'}
+            </span>
+            <span className={cn("text-xs font-bold", mentionToast === 'self' ? "text-black" : "text-white")}>
+              {mentionToast === 'self'
+                ? 'You mentioned yourself — agents can see this.'
+                : `An agent mentioned you (@${userProfile.name}) in #${activeChannel?.name}.`}
+            </span>
+            <button
+              onClick={() => setMentionToast(null)}
+              className="ml-auto p-1 hover:bg-black/10 shrink-0"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" className="stroke-current"><line x1="1" y1="1" x2="9" y2="9" strokeWidth="2"/><line x1="9" y1="1" x2="1" y2="9" strokeWidth="2"/></svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Edit Agent Modal */}
       <EditAgentModal

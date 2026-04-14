@@ -342,6 +342,7 @@ mod tests {
         let zp = zone_protocol::ChannelZoneProtocol {
             channel_name: "Test Channel".to_string(),
             channel_description: None,
+            user_name: "Ryan".to_string(),
             members: vec![zone_protocol::AgentMemberInfo {
                 agent_id: "claude".to_string(),
                 display_name: "Claude".to_string(),

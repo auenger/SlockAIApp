@@ -29,6 +29,10 @@ interface MarkdownRendererProps {
   mentionRenderer?: (text: string) => React.ReactNode;
   /** All agents (for resolving mentions) */
   allAgents?: AgentWithRuntime[];
+  /** Color index map per agent_id for consistent mention coloring */
+  agentColorMap?: Map<string, number>;
+  /** Current user's display name (for rendering @UserName mentions from agents) */
+  userName?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -40,9 +44,70 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   className,
   compact = false,
   mentionRenderer,
+  allAgents,
+  agentColorMap,
+  userName,
 }) => {
   // Pre-process content: ensure it's a string
-  const safeContent = typeof content === 'string' ? content : String(content ?? '');
+  const rawContent = typeof content === 'string' ? content : String(content ?? '');
+
+  // Pre-process mentions into HTML spans before markdown parsing.
+  // This allows @mentions inside agent messages to render with special styling.
+  const safeContent = useMemo(() => {
+    if ((!allAgents || allAgents.length === 0) && !userName) return rawContent;
+
+    let processed = rawContent;
+    const colorList = [
+      'bg-brutal-cyan', 'bg-brutal-pink', 'bg-brutal-yellow',
+      'bg-purple-400', 'bg-brutal-green', 'bg-orange-400',
+      'bg-teal-400', 'bg-red-400',
+    ];
+
+    // Build lookup: agents + user
+    const lookup = [
+      ...(allAgents || []).map((awr) => ({
+        id: awr.agent.agent_id,
+        name: awr.agent.name,
+        emoji: awr.agent.emoji || '',
+      })),
+      // Include user as a mentionable entity (purple badge)
+      ...(userName ? [{
+        id: '__user__',
+        name: userName,
+        emoji: '',
+        isUser: true,
+      }] : []),
+    ];
+
+    // Replace @Word mentions (known agents + user)
+    processed = processed.replace(
+      /@([\w.-]+)/g,
+      (full, name) => {
+        const matched = lookup.find(
+          (a) => a.name.toLowerCase() === name.toLowerCase() ||
+                  a.id.toLowerCase() === name.toLowerCase()
+        );
+        if (matched) {
+          if ((matched as { isUser?: boolean }).isUser) {
+            // User mention — purple badge (matches "YOU" styling)
+            return `<span class="inline-flex items-center gap-0.5 bg-purple-400 text-white font-bold px-1.5 py-0.5 text-xs border-2 border-black">${matched.name}</span>`;
+          }
+          const colorIdx = agentColorMap?.get(matched.id) ?? 0;
+          const bgColor = colorList[colorIdx % colorList.length];
+          const emoji = matched.emoji ? `${matched.emoji} ` : '';
+          return `<span class="inline-flex items-center gap-0.5 ${bgColor} text-black font-bold px-1.5 py-0.5 text-xs border-2 border-black">${emoji}${matched.name}</span>`;
+        }
+        return full; // Not an agent/user mention, leave as-is
+      }
+    );
+
+    return processed;
+  }, [rawContent, allAgents, agentColorMap, userName]);
+
+  // Whether mentions were injected (always needs ReactMarkdown to render HTML spans)
+  const hasMentionHtml = useMemo(() => {
+    return safeContent !== rawContent;
+  }, [safeContent, rawContent]);
 
   // Check if the content looks like it has any markdown at all
   const hasMarkdown = useMemo(() => {
@@ -61,8 +126,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     );
   }, [safeContent]);
 
-  // If no markdown detected and no mentionRenderer, render as plain text
-  if (!hasMarkdown && !mentionRenderer) {
+  // If no markdown detected and no mention HTML injected, render as plain text
+  if (!hasMarkdown && !mentionRenderer && !hasMentionHtml) {
     return (
       <div className={cn(
         compact ? "text-xs" : "text-sm",

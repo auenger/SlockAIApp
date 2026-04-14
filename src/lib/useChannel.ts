@@ -93,7 +93,7 @@ export interface ChannelState {
   /** Remove an agent member from a channel */
   removeMember: (channelId: string, agentId: string) => Promise<void>;
   /** Send a message in the active channel */
-  send: (channelId: string, message: string, agents: AgentWithRuntime[]) => Promise<void>;
+  send: (channelId: string, message: string, agents: AgentWithRuntime[], userName?: string) => Promise<void>;
   /** Manually trigger compaction for a channel */
   compact: (channelId: string) => Promise<void>;
   /** Clear the active channel */
@@ -120,6 +120,7 @@ export function useChannel(): ChannelState {
   const unlistenRuntimeErrorRef = useRef<(() => void) | null>(null);
   const unlistenA2aStartRef = useRef<(() => void) | null>(null);
   const unlistenA2aDepthRef = useRef<(() => void) | null>(null);
+  const unlistenSessionCompleteRef = useRef<(() => void) | null>(null);
 
   // Ref guard to prevent concurrent send calls
   const isSendingRef = useRef(false);
@@ -133,6 +134,7 @@ export function useChannel(): ChannelState {
       if (unlistenRuntimeErrorRef.current) unlistenRuntimeErrorRef.current();
       if (unlistenA2aStartRef.current) unlistenA2aStartRef.current();
       if (unlistenA2aDepthRef.current) unlistenA2aDepthRef.current();
+      if (unlistenSessionCompleteRef.current) unlistenSessionCompleteRef.current();
     };
   }, []);
 
@@ -301,7 +303,7 @@ export function useChannel(): ChannelState {
   }, [activeChannel, loadChannels]);
 
   /** Send a message in a channel */
-  const send = useCallback(async (channelId: string, message: string, _agents: AgentWithRuntime[]) => {
+  const send = useCallback(async (channelId: string, message: string, _agents: AgentWithRuntime[], userName?: string) => {
     // Prevent concurrent sends — ref guard is synchronous, unlike React state
     if (isSendingRef.current) return;
     isSendingRef.current = true;
@@ -390,64 +392,46 @@ export function useChannel(): ChannelState {
       // Per-agent accumulated text
       const agentTexts = new Map<string, string>();
 
-      // Track expected agent count and completion to avoid vacuous-truth bugs.
-      // Updated when IPC returns (initial agents) and when A2A agents are detected.
+      // Track expected agent count for UI display purposes.
+      // Actual session completion is driven by backend's session-complete event.
       let expectedAgentCount = 0;
-      let completedAgentCount = 0;
 
-      // Helper to check completion and clean up listeners
-      const tryCompleteAll = (
+      // Cleanup function: tears down all streaming listeners and resets UI state.
+      // Called only when the backend confirms the entire session (including A2A chain) is done.
+      let sessionCompleteFired = false;
+      const cleanupSession = (
         unlistenAgentStart: () => void,
         unlistenChunk: () => void,
         unlistenResponse: () => void,
         unlistenRuntimeError: () => void,
         unlistenA2aStart: () => void,
         unlistenA2aDepth: () => void,
+        unlistenSessionComplete?: () => void,
       ) => {
-        if (expectedAgentCount > 0 && completedAgentCount >= expectedAgentCount) {
-          setStreamingText("");
-          setIsStreaming(false);
-          setIsThinking(false);
+        if (sessionCompleteFired) return; // Guard against double-cleanup
+        sessionCompleteFired = true;
 
-          unlistenAgentStart();
-          unlistenChunk();
-          unlistenResponse();
-          unlistenRuntimeError();
-          unlistenA2aStart();
-          unlistenA2aDepth();
-          unlistenChunkRef.current = null;
-          unlistenResponseRef.current = null;
-          unlistenAgentStartRef.current = null;
-          unlistenRuntimeErrorRef.current = null;
-          unlistenA2aStartRef.current = null;
-          unlistenA2aDepthRef.current = null;
+        setStreamingText("");
+        setIsStreaming(false);
+        setIsThinking(false);
 
-          setAgentStreams([]);
-          loadChannels();
-        }
-      };
-
-      // Helper to clean up all listeners and reset refs
-      const cleanupAllListeners = (
-        unlistenAgentStart: () => void,
-        unlistenChunk: () => void,
-        unlistenResponse: () => void,
-        unlistenRuntimeError: () => void,
-        unlistenA2aStart: () => void,
-        unlistenA2aDepth: () => void,
-      ) => {
         unlistenAgentStart();
         unlistenChunk();
         unlistenResponse();
         unlistenRuntimeError();
         unlistenA2aStart();
         unlistenA2aDepth();
+        unlistenSessionComplete?.();
         unlistenChunkRef.current = null;
         unlistenResponseRef.current = null;
         unlistenAgentStartRef.current = null;
         unlistenRuntimeErrorRef.current = null;
         unlistenA2aStartRef.current = null;
         unlistenA2aDepthRef.current = null;
+        unlistenSessionCompleteRef.current = null;
+
+        setAgentStreams([]);
+        loadChannels();
       };
 
       // --- Step 1: Set up listeners BEFORE IPC call ---
@@ -668,7 +652,7 @@ export function useChannel(): ChannelState {
             };
           });
 
-          // Mark this agent as done
+          // Mark this agent as done (session cleanup is deferred to session-complete event)
           setAgentStreams((prev) =>
             prev.map((s) =>
               s.agent_id === agent_id
@@ -676,17 +660,24 @@ export function useChannel(): ChannelState {
                 : s
             )
           );
-
-          // Use counter-based completion check instead of agentStreams.every()
-          // to avoid vacuous truth on empty arrays (after timeout cleanup)
-          completedAgentCount += 1;
-          tryCompleteAll(
-            unlistenAgentStart, unlistenChunk, unlistenResponse,
-            unlistenRuntimeError, unlistenA2aStart, unlistenA2aDepth,
-          );
         }
       );
       unlistenResponseRef.current = unlistenResponse;
+
+      // session-complete: backend confirms ALL agents (including A2A chain) are done.
+      // This is the ONLY signal that triggers listener cleanup.
+      const unlistenSessionComplete = await listen(
+        "agent://channel-session-complete",
+        (event: { payload: { channel_id: string } }) => {
+          if (event.payload.channel_id !== channelId) return;
+          cleanupSession(
+            unlistenAgentStart, unlistenChunk, unlistenResponse,
+            unlistenRuntimeError, unlistenA2aStart, unlistenA2aDepth,
+            unlistenSessionComplete,
+          );
+        }
+      );
+      unlistenSessionCompleteRef.current = unlistenSessionComplete;
 
       // --- Step 2: Set streaming UI state + optimistic user message ---
 
@@ -710,7 +701,7 @@ export function useChannel(): ChannelState {
 
       // --- Step 3: IPC call — returns immediately with user message saved ---
 
-      const response = await sendChannelMessage(channelId, message);
+      const response = await sendChannelMessage(channelId, message, userName);
 
       // --- Step 4: Replace optimistic data with real backend data ---
       // Backend now returns immediately (agent execution runs in background).
@@ -724,16 +715,11 @@ export function useChannel(): ChannelState {
 
       if (response.agents_triggered === 0) {
         // No @mentions → no agents were triggered. Clean up streaming state.
-        expectedAgentCount = 0;
-        setIsStreaming(false);
-        setIsThinking(false);
-        setStreamingText("");
-        setAgentStreams([]);
-        cleanupAllListeners(
+        cleanupSession(
           unlistenAgentStart, unlistenChunk, unlistenResponse,
           unlistenRuntimeError, unlistenA2aStart, unlistenA2aDepth,
+          unlistenSessionComplete,
         );
-        loadChannels();
       } else {
         // Initialize expected agent count from IPC response.
         // A2A agents will increment this later via the a2a-start listener.
