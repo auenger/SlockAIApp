@@ -47,7 +47,7 @@ export default function App() {
 
   // Resizable panels
   const sidebarResize = useResizable({ initialWidth: 256, minWidth: 180, maxWidth: 400, edge: 'right' });
-  const threadResize = useResizable({ initialWidth: 320, minWidth: 240, maxWidth: 560, edge: 'left' });
+  const threadResize = useResizable({ initialWidth: 320, minWidth: 280, maxWidth: 600, edge: 'left' });
 
   // Keep selectedAgent in sync with the latest allAgents data
   // This ensures edits to agent properties (name, icon, etc.) are reflected everywhere
@@ -284,6 +284,9 @@ export default function App() {
         onSend={handleSendThreadMessage}
         onClose={() => setIsThreadOpen(false)}
         onRenameThread={renameThreadAction}
+        isThinking={threadIsThinking}
+        isStreaming={threadIsStreaming}
+        streamingText={threadStreamingText}
         style={threadResize.style}
         resizeHandleRef={threadResize.handleRef}
       />

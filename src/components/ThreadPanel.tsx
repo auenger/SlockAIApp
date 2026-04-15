@@ -12,6 +12,12 @@ interface ThreadPanelProps {
   onClose: () => void;
   /** Callback when user renames the thread */
   onRenameThread?: (threadId: string, newTitle: string) => Promise<import('../types').ThreadInfo | null>;
+  /** Whether the agent is currently "thinking" (no text yet) */
+  isThinking?: boolean;
+  /** Whether a streaming response is in progress */
+  isStreaming?: boolean;
+  /** Buffered streaming text from the current response */
+  streamingText?: string;
   /** Resizable width style from parent */
   style?: React.CSSProperties;
   /** Resize handle ref from parent */
@@ -25,6 +31,9 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
   onSend,
   onClose,
   onRenameThread,
+  isThinking,
+  isStreaming,
+  streamingText,
   style,
   resizeHandleRef,
 }) => {
@@ -33,10 +42,10 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive or streaming text updates
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [thread?.messages]);
+  }, [thread?.messages, streamingText]);
 
   const handleSend = () => {
     const trimmed = inputValue.trim();
@@ -66,11 +75,20 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
   if (!thread) {
     return (
       <div className="h-full bg-white brutal-border-l flex flex-col relative" style={style}>
-        {/* Resize Handle — left edge */}
+        {/* Resize Handle — left edge with grip indicator */}
         <div
           ref={resizeHandleRef}
-          className="absolute top-0 left-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 active:bg-black/30 transition-colors z-10"
-        />
+          className="absolute top-0 left-0 bottom-0 w-1.5 cursor-col-resize z-10 group"
+        >
+          {/* Hover/active highlight */}
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 group-active:bg-black/30 transition-colors" />
+          {/* Grip dots — visible on hover */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-[3px] opacity-0 group-hover:opacity-60 transition-opacity">
+            <div className="w-[4px] h-[4px] rounded-full bg-gray-600" />
+            <div className="w-[4px] h-[4px] rounded-full bg-gray-600" />
+            <div className="w-[4px] h-[4px] rounded-full bg-gray-600" />
+          </div>
+        </div>
         <div className="p-3 brutal-border-b flex items-center justify-between bg-gray-50">
           <div className="font-black text-sm truncate">Thread</div>
           <button onClick={onClose} className="p-1 brutal-border hover:bg-gray-200">
@@ -85,13 +103,24 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
     );
   }
 
+  const agentName = agent?.agent.name || 'Agent';
+
   return (
     <div className="h-full bg-white brutal-border-l flex flex-col relative" style={style}>
-      {/* Resize Handle — left edge */}
+      {/* Resize Handle — left edge with grip indicator */}
       <div
         ref={resizeHandleRef}
-        className="absolute top-0 left-0 bottom-0 w-1 cursor-col-resize hover:bg-black/20 active:bg-black/30 transition-colors z-10"
-      />
+        className="absolute top-0 left-0 bottom-0 w-1.5 cursor-col-resize z-10 group"
+      >
+        {/* Hover/active highlight */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 group-active:bg-black/30 transition-colors" />
+        {/* Grip dots — visible on hover */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-[3px] opacity-0 group-hover:opacity-60 transition-opacity">
+          <div className="w-[4px] h-[4px] rounded-full bg-gray-600" />
+          <div className="w-[4px] h-[4px] rounded-full bg-gray-600" />
+          <div className="w-[4px] h-[4px] rounded-full bg-gray-600" />
+        </div>
+      </div>
       {/* Header */}
       <div className="p-3 brutal-border-b flex items-center justify-between bg-gray-50">
         <div className="font-black text-sm truncate flex-1 mr-2 flex items-center gap-1">
@@ -183,6 +212,52 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
             </div>
           ))
         )}
+
+        {/* Thinking indicator — bouncing pulse, no text yet */}
+        {isThinking && !streamingText && (
+          <div className="flex gap-2 animate-pulse">
+            <AgentIcon
+              icon={agent?.agent.icon}
+              emoji={agent?.agent.emoji}
+              size="md"
+              bgColor="bg-brutal-cyan"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-black text-xs">{agentName}</span>
+                <span className="text-[8px] text-gray-500 uppercase italic">Thinking...</span>
+              </div>
+              <div className="h-4 bg-gray-200 w-2/3 brutal-border-b" />
+            </div>
+          </div>
+        )}
+
+        {/* Streaming indicator — real-time text + bouncing dots */}
+        {isStreaming && streamingText && (
+          <div className="flex gap-2">
+            <AgentIcon
+              icon={agent?.agent.icon}
+              emoji={agent?.agent.emoji}
+              size="md"
+              bgColor="bg-brutal-cyan"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-black text-xs">{agentName}</span>
+                <span className="text-[8px] text-gray-500 uppercase italic">Streaming...</span>
+              </div>
+              <div className="text-xs leading-relaxed">
+                <MarkdownRenderer content={streamingText} compact />
+                <span className="inline-flex gap-[2px] ml-1">
+                  <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
