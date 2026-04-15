@@ -1,10 +1,33 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-13T16:00:00+08:00"
-  version: 31
-  total_completed: 31
+  last_updated: "2026-04-14T15:34:00+08:00"
+  version: 32
+  total_completed: 32
 
 records:
+  - id: fix-channel-state-isolation
+    name: "Channel 切换时 Agent Thinking/Streaming 状态隔离"
+    completed: "2026-04-14T15:34:00+08:00"
+    tag: fix-channel-state-isolation-20260414
+    merge_commit: "f75e522"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/fix-channel-state-isolation
+    worktree_deleted: true
+    worktree_path: ../SlockAI-fix-channel-state-isolation
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-14T14:10:00+08:00"
+      duration: "~1h 24m"
+      commits: 1
+      files_changed: 1
+
   - id: feat-channel-contentblocks-persist
     name: "Channel ContentBlocks 持久化可观测（tool 调用过程保留 + 上下文隔离）"
     completed: "2026-04-13T16:00:00+08:00"

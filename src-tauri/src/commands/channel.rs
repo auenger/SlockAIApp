@@ -706,6 +706,7 @@ fn execute_single_agent_inner(
         }
 
         let params = crate::runtime::ExecuteParams {
+            agent_id: agent_id.clone(),
             message: message.clone(),
             session_id: None,
             workspace: Some(workspace_path),
@@ -1259,7 +1260,7 @@ pub async fn compact_channel(
     channel_id: String,
 ) -> Result<Channel, String> {
     // Load channel and determine the range of messages to summarize
-    let (full_prompt, summary_up_to_id, _agent_id, runtime_id, workspace_path) = {
+    let (full_prompt, summary_up_to_id, agent_id, runtime_id, workspace_path) = {
         let manager = state
             .agent_manager
             .lock()
@@ -1357,6 +1358,7 @@ pub async fn compact_channel(
         }
 
         let params = crate::runtime::ExecuteParams {
+            agent_id: agent_id.clone(),
             message: full_prompt,
             session_id: None, // Fresh session for summary
             workspace: Some(workspace_path),

@@ -572,6 +572,7 @@ pub async fn send_message(
             }
 
             let params = ExecuteParams {
+                agent_id: agent_id.clone(),
                 message,
                 session_id,
                 workspace: Some(workspace_path),

@@ -150,6 +150,8 @@ pub struct AgentRuntimeInfo {
 /// Parameters for executing a message on an AgentRuntime.
 #[derive(Debug, Clone)]
 pub struct ExecuteParams {
+    /// The agent ID this execution is for (used for process pool key)
+    pub agent_id: String,
     /// The user message to send to the agent
     pub message: String,
     /// Optional session ID for resuming a conversation

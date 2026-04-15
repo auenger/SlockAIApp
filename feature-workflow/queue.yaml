@@ -1,182 +1,268 @@
 meta:
-  last_updated: "2026-04-13T16:00:00+08:00"
-  version: 99
-
+  last_updated: '2026-04-15T10:00:00+08:00'
+  version: 107
 parents:
-  - id: feat-agent-runtime-select
-    name: "Agent Runtime 选择（泛化多 Runtime 支持）"
-    split: true
-    children:
-      - feat-agent-runtime-model
-      - feat-agent-runtime-ui
-      - feat-agent-runtime-exec
-  - id: feat-channel-agent-prompt-arch
-    name: "Channel Agent 对话 Prompt 架构（7层 + Zone Protocol + A2A 触发）"
-    split: true
-    children:
-      - feat-channel-zone-protocol
-      - feat-agent-a2a-trigger
+- id: feat-a2a-runtime
+  name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
+  split: true
+  children:
+  - feat-a2a-transport
+  - feat-a2a-adapter
+  - feat-a2a-remote-client
+  - feat-a2a-multi-agent
+- id: feat-agent-runtime-select
+  name: Agent Runtime 选择（泛化多 Runtime 支持）
+  split: true
+  children:
+  - feat-agent-runtime-model
+  - feat-agent-runtime-ui
+  - feat-agent-runtime-exec
+- id: feat-channel-agent-prompt-arch
+  name: Channel Agent 对话 Prompt 架构（7层 + Zone Protocol + A2A 触发）
+  split: true
+  children:
+  - feat-channel-zone-protocol
+  - feat-agent-a2a-trigger
+- id: feat-agent-task-system
+  name: Agent Task 系统（混合型任务管理 + Agent 执行引擎）
+  split: true
+  children:
+  - feat-task-data-model
+  - feat-task-ui-board
+  - feat-task-execution
+  - feat-task-conversation-bind
+  - feat-task-advanced
 active: []
-pending: []
+pending:
+- id: feat-claude-control-protocol
+  name: Claude Code Control Protocol Runtime（双向持久会话 + 权限交互）
+  priority: 80
+  created_at: '2026-04-15'
+  depends_on: []
+- id: feat-a2a-transport
+  name: A2A 协议类型定义 + Transport 基础设施
+  priority: 80
+  created_at: '2026-04-14'
+  parent: feat-a2a-runtime
+  depends_on: []
+- id: feat-a2a-adapter
+  name: 本地 Runtime → A2A Server Adapter（CLI 包装为 A2A 端点）
+  priority: 78
+  created_at: '2026-04-14'
+  parent: feat-a2a-runtime
+  depends_on:
+  - feat-a2a-transport
+  - feat-claude-control-protocol
+- id: feat-a2a-remote-client
+  name: 远程 A2A Client + 连接管理 UI
+  priority: 75
+  created_at: '2026-04-14'
+  parent: feat-a2a-runtime
+  depends_on:
+  - feat-a2a-transport
+- id: feat-a2a-multi-agent
+  name: 多 Agent A2A 协作（Push Notification + 任务委托）
+  priority: 70
+  created_at: '2026-04-14'
+  parent: feat-a2a-runtime
+  depends_on:
+  - feat-a2a-adapter
+  - feat-a2a-remote-client
+- id: feat-task-execution
+  name: Task 执行引擎（实时 + 异步双模式，可与 UI 并行）
+  priority: 85
+  created_at: '2026-04-14'
+  parent: feat-agent-task-system
+  depends_on:
+  - feat-task-data-model
+- id: feat-task-ui-board
+  name: Task 看板 + 列表 + 详情 UI（可与执行引擎并行）
+  priority: 85
+  created_at: '2026-04-14'
+  parent: feat-agent-task-system
+  depends_on:
+  - feat-task-data-model
+- id: feat-task-conversation-bind
+  name: 对话驱动 Task 生成 + 上下文绑定
+  priority: 85
+  created_at: '2026-04-14'
+  parent: feat-agent-task-system
+  depends_on:
+  - feat-task-execution
+- id: feat-task-advanced
+  name: 高级 Task 协作（子任务 + 依赖 + A2A 传递）
+  priority: 85
+  created_at: '2026-04-14'
+  parent: feat-agent-task-system
+  depends_on:
+  - feat-task-conversation-bind
 blocked: []
 completed:
-  - id: feat-channel-contentblocks-persist
-    name: "Channel ContentBlocks 持久化可观测（tool 调用过程保留 + 上下文隔离）"
-    completed_at: "2026-04-13T16:00:00+08:00"
-    tag: feat-channel-contentblocks-persist-20260413
-  - id: feat-channel-agent-thinking
-    name: "Channel Agent 思考过程渲染（Claude Code 输出结构化展示）"
-    completed_at: "2026-04-13T14:30:00+08:00"
-    tag: feat-channel-agent-thinking-20260413
-  - id: feat-workspace-open-finder
-    name: "Workspace 在 Finder 中打开"
-    completed_at: "2026-04-11T21:30:00+08:00"
-    tag: feat-workspace-open-finder-20260411
-  - id: feat-thread-list-rename
-    name: "Thread 全局展示 & 重命名"
-    completed_at: "2026-04-12T04:30:00+08:00"
-    tag: feat-thread-list-rename-20260412
-  - id: feat-header-actions
-    name: "Header 操作按钮（暂停/刷新/删除）逻辑实现"
-    completed_at: "2026-04-12T03:00:00+08:00"
-    tag: feat-header-actions-20260412
-  - id: feat-project-init
-    name: "Project Init (Tauri V2 + React 19)"
-    completed_at: "2026-04-08T13:20:00Z"
-    tag: feat-project-init-20260408
-  - id: feat-claude-runtime
-    name: "Claude Code Runtime Agent"
-    completed_at: "2026-04-08T14:30:00Z"
-    tag: feat-claude-runtime-20260408
-  - id: feat-style-consistency
-    name: "原型 MVP 移植"
-    completed_at: "2026-04-08T14:45:00Z"
-    tag: feat-style-consistency-20260408
-  - id: feat-agent-workspace-design
-    name: "Agent Workspace 与身份系统设计"
-    completed_at: "2026-04-08T16:15:00Z"
-    tag: feat-agent-workspace-design-20260408
-  - id: feat-project-review
-    name: "Project Design Review"
-    completed_at: "2026-04-08T17:30:00Z"
-    tag: feat-project-review-20260408
-  - id: feat-rename-agentszone
-    name: "Rename to AgentsZone"
-    completed_at: "2026-04-08T18:10:00Z"
-    tag: feat-rename-agentszone-20260408
-  - id: feat-agent-status
-    name: "Agent 状态与选择器"
-    completed_at: "2026-04-09T10:45:00+08:00"
-    tag: feat-agent-status-20260409
-  - id: feat-thread-chat
-    name: "Thread: 1对1 Agent 对话"
-    completed_at: "2026-04-09T13:00:00+08:00"
-    tag: feat-thread-chat-20260409
-  - id: feat-conversation-store
-    name: "对话持久化与历史"
-    completed_at: "2026-04-09T15:30:00+08:00"
-    tag: feat-conversation-store-20260409
-  - id: feat-channel-infra
-    name: "Channel 基础设施"
-    completed_at: "2026-04-09T17:00:00+08:00"
-    tag: feat-channel-infra-20260409
-  - id: feat-channel-multi-agent
-    name: "Channel 多Agent协作"
-    completed_at: "2026-04-09T18:00:00+08:00"
-    tag: feat-channel-multi-agent-20260409
-  - id: feat-thread-context-inject
-    name: "Thread 模式 Context 注入"
-    completed_at: "2026-04-09T20:45:00+08:00"
-    tag: feat-thread-context-inject-20260409
-  - id: feat-agent-profile-page
-    name: "Agent Profile 页真实数据"
-    completed_at: "2026-04-09T21:00:00+08:00"
-    tag: feat-agent-profile-page-20260409
-  - id: feat-agent-create-ui
-    name: "Agent 创建 UI"
-    completed_at: "2026-04-09T20:50:00+08:00"
-    tag: feat-agent-create-ui-20260409
-  - id: feat-thread-panel-live
-    name: "ThreadPanel 真实数据接入"
-    completed_at: "2026-04-09T21:20:00+08:00"
-    tag: feat-thread-panel-live-20260409
-  - id: feat-workspace-browser
-    name: "Workspace 文件浏览器"
-    completed_at: "2026-04-09T21:30:00+08:00"
-    tag: feat-workspace-browser-20260409
-  - id: feat-apikey-management-ui
-    name: "API Key 管理 UI（低优先级，Runtime CLI 自管理认证）"
-    completed_at: "2026-04-10T10:50:00+08:00"
-    tag: feat-apikey-management-ui-20260410
-  - id: feat-skills-management
-    name: "Skills 管理 UI"
-    completed_at: "2026-04-10T12:05:00+08:00"
-    tag: feat-skills-management-20260410
-  - id: feat-activity-log
-    name: "Activity 日志后端集成"
-    completed_at: "2026-04-10T12:10:00+08:00"
-    tag: feat-activity-log-20260410
-  - id: feat-data-storage
-    name: "数据存储架构（SQLite + JSONL 混合方案）"
-    completed_at: "2026-04-10T16:47:00+08:00"
-    tag: feat-data-storage-20260410
-  - id: feat-svg-icon-system
-    name: "SVG Icon 系统"
-    completed_at: "2026-04-10T17:35:00+08:00"
-    tag: feat-svg-icon-system-20260410
-  - id: feat-agent-runtime-model
-    name: "Agent Runtime 数据模型 & 泛化 Runtime Trait"
-    completed_at: "2026-04-10T18:45:00+08:00"
-    tag: feat-agent-runtime-model-20260410
-  - id: feat-agent-runtime-ui
-    name: "Agent 创建 UI Runtime 选择"
-    completed_at: "2026-04-10T19:20:00+08:00"
-    tag: feat-agent-runtime-ui-20260410
-  - id: feat-agent-runtime-exec
-    name: "多 Runtime 对话执行"
-    completed_at: "2026-04-10T20:00:00+08:00"
-    tag: feat-agent-runtime-exec-20260410
-  - id: feat-agent-edit
-    name: "Agent 编辑能力"
-    completed_at: "2026-04-10T21:00:00+08:00"
-    tag: feat-agent-edit-20260410
-  - id: fix-channel-ui-bugs
-    name: "Channel @Agent UI 修复（thinking 状态 + icon 渲染）"
-    completed_at: "2026-04-11T00:45:00+08:00"
-    tag: fix-channel-ui-bugs-20260411
-  - id: fix-delete-and-render
-    name: "修复删除功能与渲染状态逻辑"
-    completed_at: "2026-04-11T11:00:00+08:00"
-    tag: fix-delete-and-render-20260411
-  - id: feat-agent-workspace-persist
-    name: "Agent Workspace 对话持久化"
-    completed_at: "2026-04-11T13:00:00+08:00"
-    tag: feat-agent-workspace-persist-20260411
-  - id: feat-sidebar-style
-    name: "Sidebar 标题更名与面板可调宽度"
-    completed_at: "2026-04-11T15:00:00+08:00"
-    tag: feat-sidebar-style-20260411
-  - id: feat-md-rendering
-    name: "Markdown 渲染优化 & Tool Call 结构化展示"
-    completed_at: "2026-04-11T17:00:00+08:00"
-    tag: feat-md-rendering-20260411
-  - id: feat-channel-zone-protocol
-    name: "Channel Zone Protocol（Prompt 7层架构 + Zone Agent Protocol）"
-    completed_at: "2026-04-11T18:30:00+08:00"
-    tag: feat-channel-zone-protocol-20260411
-  - id: feat-agent-a2a-trigger
-    name: "Agent-to-Agent @{agent} 触发机制"
-    completed_at: "2026-04-11T19:30:00+08:00"
-    tag: feat-agent-a2a-trigger-20260411
-  - id: fix-unify-data-path
-    name: "统一应用数据目录至 ~/.agentszone"
-    completed_at: "2026-04-11T23:45:00+08:00"
-    tag: fix-unify-data-path-20260411
-  - id: fix-agent-create-bugs
-    name: "Agent 创建流程修复（Icon 保存 + 列表刷新）"
-    completed_at: "2026-04-12T00:30:00+08:00"
-    tag: fix-agent-create-bugs-20260412
-  - id: fix-channel-msg-render
-    name: "Channel 消息即时渲染 & Agent Thinking 状态清理"
-    completed_at: "2026-04-12T01:30:00+08:00"
-    tag: fix-channel-msg-render-20260412
+- id: feat-task-data-model
+  name: Task 数据模型 + 后端 CRUD + IPC Commands
+  completed_at: '2026-04-14T16:30:00+08:00'
+  tag: feat-task-data-model-20260414
+- id: fix-channel-state-isolation
+  name: Channel 切换时 Agent Thinking/Streaming 状态隔离
+  completed_at: '2026-04-14T15:34:00+08:00'
+  tag: fix-channel-state-isolation-20260414
+- id: feat-channel-contentblocks-persist
+  name: Channel ContentBlocks 持久化可观测（tool 调用过程保留 + 上下文隔离）
+  completed_at: '2026-04-13T16:00:00+08:00'
+  tag: feat-channel-contentblocks-persist-20260413
+- id: feat-channel-agent-thinking
+  name: Channel Agent 思考过程渲染（Claude Code 输出结构化展示）
+  completed_at: '2026-04-13T14:30:00+08:00'
+  tag: feat-channel-agent-thinking-20260413
+- id: feat-workspace-open-finder
+  name: Workspace 在 Finder 中打开
+  completed_at: '2026-04-11T21:30:00+08:00'
+  tag: feat-workspace-open-finder-20260411
+- id: feat-thread-list-rename
+  name: Thread 全局展示 & 重命名
+  completed_at: '2026-04-12T04:30:00+08:00'
+  tag: feat-thread-list-rename-20260412
+- id: feat-header-actions
+  name: Header 操作按钮（暂停/刷新/删除）逻辑实现
+  completed_at: '2026-04-12T03:00:00+08:00'
+  tag: feat-header-actions-20260412
+- id: feat-project-init
+  name: Project Init (Tauri V2 + React 19)
+  completed_at: '2026-04-08T13:20:00Z'
+  tag: feat-project-init-20260408
+- id: feat-claude-runtime
+  name: Claude Code Runtime Agent
+  completed_at: '2026-04-08T14:30:00Z'
+  tag: feat-claude-runtime-20260408
+- id: feat-style-consistency
+  name: 原型 MVP 移植
+  completed_at: '2026-04-08T14:45:00Z'
+  tag: feat-style-consistency-20260408
+- id: feat-agent-workspace-design
+  name: Agent Workspace 与身份系统设计
+  completed_at: '2026-04-08T16:15:00Z'
+  tag: feat-agent-workspace-design-20260408
+- id: feat-project-review
+  name: Project Design Review
+  completed_at: '2026-04-08T17:30:00Z'
+  tag: feat-project-review-20260408
+- id: feat-rename-agentszone
+  name: Rename to AgentsZone
+  completed_at: '2026-04-08T18:10:00Z'
+  tag: feat-rename-agentszone-20260408
+- id: feat-agent-status
+  name: Agent 状态与选择器
+  completed_at: '2026-04-09T10:45:00+08:00'
+  tag: feat-agent-status-20260409
+- id: feat-thread-chat
+  name: 'Thread: 1对1 Agent 对话'
+  completed_at: '2026-04-09T13:00:00+08:00'
+  tag: feat-thread-chat-20260409
+- id: feat-conversation-store
+  name: 对话持久化与历史
+  completed_at: '2026-04-09T15:30:00+08:00'
+  tag: feat-conversation-store-20260409
+- id: feat-channel-infra
+  name: Channel 基础设施
+  completed_at: '2026-04-09T17:00:00+08:00'
+  tag: feat-channel-infra-20260409
+- id: feat-channel-multi-agent
+  name: Channel 多Agent协作
+  completed_at: '2026-04-09T18:00:00+08:00'
+  tag: feat-channel-multi-agent-20260409
+- id: feat-thread-context-inject
+  name: Thread 模式 Context 注入
+  completed_at: '2026-04-09T20:45:00+08:00'
+  tag: feat-thread-context-inject-20260409
+- id: feat-agent-profile-page
+  name: Agent Profile 页真实数据
+  completed_at: '2026-04-09T21:00:00+08:00'
+  tag: feat-agent-profile-page-20260409
+- id: feat-agent-create-ui
+  name: Agent 创建 UI
+  completed_at: '2026-04-09T20:50:00+08:00'
+  tag: feat-agent-create-ui-20260409
+- id: feat-thread-panel-live
+  name: ThreadPanel 真实数据接入
+  completed_at: '2026-04-09T21:20:00+08:00'
+  tag: feat-thread-panel-live-20260409
+- id: feat-workspace-browser
+  name: Workspace 文件浏览器
+  completed_at: '2026-04-09T21:30:00+08:00'
+  tag: feat-workspace-browser-20260409
+- id: feat-apikey-management-ui
+  name: API Key 管理 UI（低优先级，Runtime CLI 自管理认证）
+  completed_at: '2026-04-10T10:50:00+08:00'
+  tag: feat-apikey-management-ui-20260410
+- id: feat-skills-management
+  name: Skills 管理 UI
+  completed_at: '2026-04-10T12:05:00+08:00'
+  tag: feat-skills-management-20260410
+- id: feat-activity-log
+  name: Activity 日志后端集成
+  completed_at: '2026-04-10T12:10:00+08:00'
+  tag: feat-activity-log-20260410
+- id: feat-data-storage
+  name: 数据存储架构（SQLite + JSONL 混合方案）
+  completed_at: '2026-04-10T16:47:00+08:00'
+  tag: feat-data-storage-20260410
+- id: feat-svg-icon-system
+  name: SVG Icon 系统
+  completed_at: '2026-04-10T17:35:00+08:00'
+  tag: feat-svg-icon-system-20260410
+- id: feat-agent-runtime-model
+  name: Agent Runtime 数据模型 & 泛化 Runtime Trait
+  completed_at: '2026-04-10T18:45:00+08:00'
+  tag: feat-agent-runtime-model-20260410
+- id: feat-agent-runtime-ui
+  name: Agent 创建 UI Runtime 选择
+  completed_at: '2026-04-10T19:20:00+08:00'
+  tag: feat-agent-runtime-ui-20260410
+- id: feat-agent-runtime-exec
+  name: 多 Runtime 对话执行
+  completed_at: '2026-04-10T20:00:00+08:00'
+  tag: feat-agent-runtime-exec-20260410
+- id: feat-agent-edit
+  name: Agent 编辑能力
+  completed_at: '2026-04-10T21:00:00+08:00'
+  tag: feat-agent-edit-20260410
+- id: fix-channel-ui-bugs
+  name: Channel @Agent UI 修复（thinking 状态 + icon 渲染）
+  completed_at: '2026-04-11T00:45:00+08:00'
+  tag: fix-channel-ui-bugs-20260411
+- id: fix-delete-and-render
+  name: 修复删除功能与渲染状态逻辑
+  completed_at: '2026-04-11T11:00:00+08:00'
+  tag: fix-delete-and-render-20260411
+- id: feat-agent-workspace-persist
+  name: Agent Workspace 对话持久化
+  completed_at: '2026-04-11T13:00:00+08:00'
+  tag: feat-agent-workspace-persist-20260411
+- id: feat-sidebar-style
+  name: Sidebar 标题更名与面板可调宽度
+  completed_at: '2026-04-11T15:00:00+08:00'
+  tag: feat-sidebar-style-20260411
+- id: feat-md-rendering
+  name: Markdown 渲染优化 & Tool Call 结构化展示
+  completed_at: '2026-04-11T17:00:00+08:00'
+  tag: feat-md-rendering-20260411
+- id: feat-channel-zone-protocol
+  name: Channel Zone Protocol（Prompt 7层架构 + Zone Agent Protocol）
+  completed_at: '2026-04-11T18:30:00+08:00'
+  tag: feat-channel-zone-protocol-20260411
+- id: feat-agent-a2a-trigger
+  name: Agent-to-Agent @{agent} 触发机制
+  completed_at: '2026-04-11T19:30:00+08:00'
+  tag: feat-agent-a2a-trigger-20260411
+- id: fix-unify-data-path
+  name: 统一应用数据目录至 ~/.agentszone
+  completed_at: '2026-04-11T23:45:00+08:00'
+  tag: fix-unify-data-path-20260411
+- id: fix-agent-create-bugs
+  name: Agent 创建流程修复（Icon 保存 + 列表刷新）
+  completed_at: '2026-04-12T00:30:00+08:00'
+  tag: fix-agent-create-bugs-20260412
+- id: fix-channel-msg-render
+  name: Channel 消息即时渲染 & Agent Thinking 状态清理
+  completed_at: '2026-04-12T01:30:00+08:00'
+  tag: fix-channel-msg-render-20260412

@@ -156,6 +156,15 @@ impl ContextBuilder {
         // Add soul content
         prompt.push_str(soul);
 
+        // [Runtime Guard] Disable built-in Task/Todo tools that cause
+        // the Claude CLI process to hang in --print mode.
+        prompt.push_str(
+            "\n\n## Runtime Restrictions\n\n\
+             NEVER use the following built-in tools: \
+             TodoWrite, TaskCreate, TaskUpdate, TaskList, TaskGet. \
+             These tools cause the CLI process to hang in non-interactive mode.\n",
+        );
+
         prompt
     }
 

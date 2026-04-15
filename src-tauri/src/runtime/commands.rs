@@ -47,6 +47,7 @@ pub async fn runtime_execute(
 ) -> Result<(), String> {
     // Build execution parameters
     let params = ExecuteParams {
+        agent_id: runtime_id.clone(),
         message,
         session_id: session_id.clone(),
         workspace: None,
