@@ -12,7 +12,7 @@ import {
   cancelTaskExecution,
   getTaskEngineStatus,
 } from './ipc';
-import type { Task, TaskStatus } from '../types';
+// Task and TaskStatus types are used by consumers of this hook
 
 // ---------------------------------------------------------------------------
 // Event types
@@ -248,11 +248,12 @@ export function useTaskEngine(
         await listen<TaskProgressEvent>('task://progress', (event) => {
           const data = event.payload;
           if (data.task_id) {
+            const tid = data.task_id;
             setState((prev) => {
               const updated = new Map(prev.activeTasks);
-              const existing = updated.get(data.task_id);
+              const existing = updated.get(tid);
               if (existing) {
-                updated.set(data.task_id, {
+                updated.set(tid, {
                   ...existing,
                   progress: data.text,
                 });
