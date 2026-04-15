@@ -78,18 +78,43 @@
 
 ## Technical Solution
 
-<!-- 待实现时填充 -->
-
-### 架构概要
+### Architecture
 
 ```
 src-tauri/src/runtime/a2a/
 ├── adapter/
 │   ├── mod.rs           # Adapter 模块导出
-│   ├── cli_adapter.rs   # 通用 CLI → A2A 适配器 trait
-│   ├── claude_adapter.rs # Claude Code 具体适配器
-│   └── codex_adapter.rs  # Codex 具体适配器
+│   ├── cli_adapter.rs   # CliA2AAdapter trait + AdapterConfig + AdapterState
+│   ├── claude_adapter.rs # ClaudeCodeAdapter — wraps ClaudeCodeRuntime
+│   ├── codex_adapter.rs  # CodexAdapter — wraps CodexRuntime
+│   └── handler.rs       # AdapterServer + ListenerConfig + TCP handler + AgentCard generation
 ```
+
+### Key Design Decisions
+
+1. **Adapter trait pattern**: `CliA2AAdapter` trait provides a clean abstraction over CLI runtimes.
+   Each adapter wraps an existing `AgentRuntime::execute()` and maps A2A Task lifecycle to CLI process lifecycle.
+
+2. **Arc<dyn CliA2AAdapter>**: The adapter is shared between the AdapterServer and its closures via Arc,
+   enabling multiple handlers to reference the same adapter instance safely.
+
+3. **Status tracking via spawn_status_tracker**: A background thread reads StreamEvents from the CLI runtime,
+   updates the shared AdapterState (task status + session_id), and forwards events to the caller.
+
+4. **Non-invasive wrapping**: The adapter layer does NOT modify claude.rs or codex.rs. It wraps their
+   existing `execute()` method, preserving all existing behavior.
+
+5. **Unix socket + TCP**: ListenerConfig supports both modes with auto-socket-path generation.
+   TCP listener provides a simple HTTP server for integration testing and remote deployment.
+
+### Task 5 (AgentManager Integration) — deferred
+
+AgentManager integration is a deeper concern that touches the Tauri app lifecycle:
+- Starting/stopping A2A Server instances when agents activate/deactivate
+- Adding `a2a_endpoint` field to agent configuration
+- Routing @mention triggers through A2A protocol
+
+This is intentionally deferred to keep the current scope focused on the adapter infrastructure.
 
 ### 调用链路（本地模式 + 远端部署模式）
 
