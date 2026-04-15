@@ -39,6 +39,11 @@ import type {
   UpdateRemoteConnectionRequest,
   TestConnectionResult,
   RemoteAgentCard,
+  DelegationInfo,
+  CreateDelegationRequest,
+  ArtifactInfo,
+  ArtifactContentResult,
+  PushNotificationConfigInfo,
 } from "../types";
 
 /**
@@ -708,4 +713,115 @@ export async function remoteConnectionGetAgentCard(
   id: string
 ): Promise<RemoteAgentCard | null> {
   return invoke<RemoteAgentCard | null>("remote_connection_get_agent_card", { id });
+}
+
+// ---------------------------------------------------------------------------
+// Collaboration / A2A Multi-Agent commands
+// ---------------------------------------------------------------------------
+
+/** Create a delegation from one agent to another. */
+export async function collaborationDelegate(
+  request: CreateDelegationRequest
+): Promise<DelegationInfo> {
+  return invoke<DelegationInfo>("collaboration_delegate", { request });
+}
+
+/** List delegations with optional filters. */
+export async function collaborationListDelegations(params?: {
+  agentId?: string;
+  activeOnly?: boolean;
+}): Promise<DelegationInfo[]> {
+  return invoke<DelegationInfo[]>("collaboration_list_delegations", {
+    agentId: params?.agentId ?? null,
+    activeOnly: params?.activeOnly ?? false,
+  });
+}
+
+/** Cancel a delegation. */
+export async function collaborationCancelDelegation(
+  delegationId: string
+): Promise<DelegationInfo> {
+  return invoke<DelegationInfo>("collaboration_cancel_delegation", { delegationId });
+}
+
+/** Retry a failed delegation. */
+export async function collaborationRetryDelegation(
+  delegationId: string
+): Promise<DelegationInfo> {
+  return invoke<DelegationInfo>("collaboration_retry_delegation", { delegationId });
+}
+
+/** List artifacts with optional filters. */
+export async function collaborationListArtifacts(params?: {
+  agentId?: string;
+  taskId?: string;
+}): Promise<ArtifactInfo[]> {
+  return invoke<ArtifactInfo[]>("collaboration_list_artifacts", {
+    agentId: params?.agentId ?? null,
+    taskId: params?.taskId ?? null,
+  });
+}
+
+/** Get artifact content. */
+export async function collaborationGetArtifact(
+  artifactId: string,
+  consumerAgentId?: string
+): Promise<ArtifactContentResult> {
+  return invoke<ArtifactContentResult>("collaboration_get_artifact", {
+    artifactId,
+    consumerAgentId: consumerAgentId ?? null,
+  });
+}
+
+/** Search artifacts by name. */
+export async function collaborationSearchArtifacts(
+  query: string
+): Promise<ArtifactInfo[]> {
+  return invoke<ArtifactInfo[]>("collaboration_search_artifacts", { query });
+}
+
+/** Register a new artifact. */
+export async function collaborationRegisterArtifact(params: {
+  producerAgentId: string;
+  name: string;
+  filePath: string;
+  mimeType?: string;
+  taskId?: string;
+  description?: string;
+}): Promise<ArtifactInfo> {
+  return invoke<ArtifactInfo>("collaboration_register_artifact", {
+    producerAgentId: params.producerAgentId,
+    name: params.name,
+    filePath: params.filePath,
+    mimeType: params.mimeType ?? null,
+    taskId: params.taskId ?? null,
+    description: params.description ?? null,
+  });
+}
+
+/** Register a push notification endpoint. */
+export async function collaborationRegisterPushUrl(params: {
+  url: string;
+  token?: string;
+  hmacSecret?: string;
+  events?: string[];
+}): Promise<PushNotificationConfigInfo> {
+  return invoke<PushNotificationConfigInfo>("collaboration_register_push_url", {
+    url: params.url,
+    token: params.token ?? null,
+    hmacSecret: params.hmacSecret ?? null,
+    events: params.events ?? null,
+  });
+}
+
+/** List push notification configs. */
+export async function collaborationListPushConfigs(): Promise<PushNotificationConfigInfo[]> {
+  return invoke<PushNotificationConfigInfo[]>("collaboration_list_push_configs");
+}
+
+/** Unregister a push notification config. */
+export async function collaborationUnregisterPushUrl(
+  configId: string
+): Promise<boolean> {
+  return invoke<boolean>("collaboration_unregister_push_url", { configId });
 }
