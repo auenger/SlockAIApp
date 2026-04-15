@@ -8,7 +8,6 @@ import {
   User,
   Plus,
   Trash2,
-  Users,
   ChevronRight,
   ChevronLeft,
   ChevronDown,
@@ -35,7 +34,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { TabType, Task, Message, AgentWithRuntime, Channel, ChannelMessage, ContentBlock, Thread } from '../types';
+import { TabType, Message, AgentWithRuntime, Channel, ChannelMessage, ContentBlock, Thread } from '../types';
 import { getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
 import { useAgentProfile } from '../lib/useAgentProfile';
 import { useWorkspace } from '../lib/useWorkspace';
@@ -48,6 +47,7 @@ import { MentionAutocomplete, renderMentionText } from './MentionAutocomplete';
 import { useUserProfile } from '../lib/useUserProfile';
 import { AgentIcon } from './AgentIcon';
 import { EditAgentModal } from './EditAgentModal';
+import { TaskView } from './task/TaskView';
 import { MarkdownRenderer } from './markdown';
 import type { AgentStreamState } from '../lib/useChannel';
 
@@ -374,7 +374,6 @@ export const MainContent: React.FC<MainContentProps> = ({
   threadCreateNewThread,
   threadSelectThread,
 }) => {
-  const [taskFilter, setTaskFilter] = useState('All');
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -683,8 +682,6 @@ export const MainContent: React.FC<MainContentProps> = ({
     { id: 'PROFILE', label: 'PROFILE', icon: User },
   ];
 
-  const tasks: Task[] = [];
-
   // Get channel members as AgentWithRuntime[] for MentionAutocomplete
   const channelMembers = isChannelMode
     ? activeChannel!.members
@@ -885,66 +882,11 @@ export const MainContent: React.FC<MainContentProps> = ({
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto p-4 bg-brutal-bg/20">
         {activeTab === 'TASKS' && (
-          <div className="space-y-4">
-            {/* Task Filters */}
-            <div className="flex items-center justify-between">
-              <div className="flex gap-1">
-                {['All', 'Todo', 'In Progress', 'In Review', 'Done'].map(f => (
-                  <button
-                    key={f}
-                    onClick={() => setTaskFilter(f.split(' ')[0])}
-                    className={cn(
-                      "px-2 py-0.5 brutal-border text-[10px] font-black uppercase",
-                      taskFilter === f.split(' ')[0] ? "bg-brutal-yellow" : "bg-white hover:bg-gray-100"
-                    )}
-                  >
-                    {f}
-                  </button>
-                ))}
-              </div>
-              <button
-                className="brutal-btn bg-brutal-pink text-white text-xs flex items-center gap-1"
-              >
-                <Plus size={14} /> New Task
-              </button>
-            </div>
-
-            {/* Task List */}
-            <div className="space-y-2">
-              {tasks
-                .filter(t => taskFilter === 'All' || t.status.startsWith(taskFilter))
-                .map(task => (
-                <div key={task.id} className="brutal-card flex items-center justify-between py-2 px-3">
-                  <div className="flex items-center gap-3">
-                    <ChevronRight size={14} className="text-gray-400" />
-                    <span className="text-gray-400 font-mono text-xs">#{task.id}</span>
-                    <span className={cn(
-                      "px-1.5 py-0.5 brutal-border text-[8px] font-black",
-                      task.status === 'todo' ? "bg-brutal-yellow" : "bg-brutal-cyan"
-                    )}>
-                      {task.status}
-                    </span>
-                    <span className="font-bold text-sm">{task.title}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {task.assigneeId && (
-                      <div className="flex items-center gap-1 px-1.5 py-0.5 brutal-border bg-gray-50 text-[10px] font-bold">
-                        <span className="text-gray-500">@</span>{task.assigneeId}
-                      </div>
-                    )}
-                    <div className="flex gap-1">
-                      <button className="p-1 brutal-border bg-brutal-cyan hover:bg-cyan-400">
-                        <Users size={14} />
-                      </button>
-                      <button className="p-1 brutal-border hover:bg-gray-100">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <TaskView
+            agents={allAgents}
+            channelId={activeChannel?.id}
+            userName={userProfile.name !== 'User' ? userProfile.name : undefined}
+          />
         )}
 
         {activeTab === 'WORKSPACE' && (

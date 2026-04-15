@@ -12,6 +12,7 @@ import {
   X,
   Pencil,
   Trash2,
+  CheckSquare,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAgentStatus, getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
@@ -55,6 +56,12 @@ interface SidebarProps {
   onDeleteAgent?: (agentId: string) => void;
   /** Callback to refresh the agent list from the parent */
   onRefreshAgents?: () => Promise<void>;
+  /** Whether the task view is active */
+  isTaskViewActive?: boolean;
+  /** Callback when user clicks the TASKS navigation entry */
+  onTaskViewOpen?: () => void;
+  /** Count of incomplete tasks for badge */
+  incompleteTaskCount?: number;
   /** Resizable width style from parent */
   style?: React.CSSProperties;
   /** Resize handle ref from parent */
@@ -79,6 +86,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onDeleteThread,
   onDeleteAgent,
   onRefreshAgents,
+  isTaskViewActive = false,
+  onTaskViewOpen,
+  incompleteTaskCount = 0,
   style,
   resizeHandleRef,
 }) => {
@@ -261,6 +271,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
             </div>
           )}
+        </section>
+
+        {/* Tasks navigation entry */}
+        <section>
+          <div className="flex items-center justify-between px-2 mb-2">
+            <h3 className="font-black text-xs uppercase tracking-wider flex items-center gap-1">
+              <ChevronDown size={14} /> Tasks
+            </h3>
+          </div>
+          <button
+            onClick={() => onTaskViewOpen?.()}
+            className={cn(
+              "w-full text-left px-3 py-1.5 font-bold text-sm flex items-center gap-2 brutal-border transition-all",
+              isTaskViewActive
+                ? "bg-brutal-pink text-white brutal-shadow-sm translate-x-[-2px] translate-y-[-2px]"
+                : "hover:bg-white/50 border-transparent"
+            )}
+          >
+            <CheckSquare size={14} />
+            <span className="flex-1">Board</span>
+            {incompleteTaskCount > 0 && (
+              <span className="text-[9px] bg-brutal-pink text-white px-1 brutal-border">
+                {incompleteTaskCount}
+              </span>
+            )}
+          </button>
         </section>
 
         {/* Threads - global list (all agents) */}

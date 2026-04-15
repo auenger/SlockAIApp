@@ -7,6 +7,7 @@ import { useThreadChat } from './lib/useThreadChat';
 import { useChannel } from './lib/useChannel';
 import { useAgentStatus } from './lib/useAgentStatus';
 import { useResizable } from './lib/useResizable';
+import { useTasks } from './lib/useTasks';
 import { deleteAgent, invoke } from './lib/ipc';
 
 export default function App() {
@@ -37,6 +38,12 @@ export default function App() {
 
   // Agent status for channel member selection
   const { agents: allAgents, scan } = useAgentStatus();
+
+  // Task state — track incomplete tasks for sidebar badge
+  const { tasks: allTasks } = useTasks();
+  const incompleteTaskCount = allTasks.filter(t =>
+    t.status !== 'done' && t.status !== 'cancelled'
+  ).length;
 
   // Resizable panels
   const sidebarResize = useResizable({ initialWidth: 256, minWidth: 180, maxWidth: 400, edge: 'right' });
@@ -183,6 +190,17 @@ export default function App() {
     setActiveTab('CHAT');
   };
 
+  /** Handle opening the global Task Board view */
+  const handleTaskViewOpen = () => {
+    setSelectedAgent(null);
+    setActiveChannel(null);
+    _clearActiveChannel();
+    setActiveThreadId(null);
+    clearActiveThread();
+    setIsThreadOpen(false);
+    setActiveTab('TASKS');
+  };
+
   /** Handle refresh: reload current view data */
   const handleRefresh = async () => {
     if (activeChannel) {
@@ -224,6 +242,9 @@ export default function App() {
         onDeleteThread={handleDeleteThread}
         onDeleteAgent={handleDeleteAgent}
         onRefreshAgents={scan}
+        isTaskViewActive={activeTab === 'TASKS'}
+        onTaskViewOpen={handleTaskViewOpen}
+        incompleteTaskCount={incompleteTaskCount}
         style={sidebarResize.style}
         resizeHandleRef={sidebarResize.handleRef}
       />
