@@ -6,7 +6,9 @@
 //! - SSE streaming (`streaming`) — Server-Sent Events support.
 //! - Server skeleton (`server`) — A2A HTTP server with handler registration.
 //! - Bridge conversion (`bridge`) — StreamEvent <-> A2A Message conversion.
+//! - CLI adapters (`adapter`) — Wrap CLI runtimes as A2A endpoints.
 
+pub mod adapter;
 pub mod bridge;
 pub mod server;
 pub mod streaming;
@@ -22,3 +24,4 @@ pub use types::{
     TaskStatus,
 };
 pub use transport::{A2AHttpClient, A2ATransport, A2AResult};
+pub use adapter::{CliA2AAdapter, AdapterConfig, AdapterState, ClaudeCodeAdapter, CodexAdapter, AdapterServer, ConnectionPool, ListenerConfig, PooledConnection, SocketGuard, generate_agent_card};
