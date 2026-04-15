@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-16T20:30:00+08:00'
-  version: 130
+  last_updated: '2026-04-16T21:30:00+08:00'
+  version: 132
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -33,17 +33,13 @@ parents:
   - feat-task-conversation-bind
   - feat-task-advanced
 active: []
-pending:
-- id: feat-a2a-multi-agent
-  name: 多 Agent A2A 协作（Push Notification + 任务委托）
-  priority: 70
-  created_at: '2026-04-14'
-  parent: feat-a2a-runtime
-  depends_on:
-  - feat-a2a-adapter
-  - feat-a2a-remote-client
+pending: []
 blocked: []
 completed:
+- id: feat-a2a-multi-agent
+  name: 多 Agent A2A 协作（Push Notification + 任务委托 + Artifact 共享）
+  completed_at: '2026-04-16T21:30:00+08:00'
+  tag: feat-a2a-multi-agent-20260416
 - id: feat-thread-ux-polish
   name: Thread 面板 UX 打磨（Thinking/Streaming 动画 + 宽度调整优化）
   completed_at: '2026-04-16T20:30:00+08:00'

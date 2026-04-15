@@ -200,12 +200,23 @@ If 用户选择"自行处理"则由 Agent A 自己完成任务
 ```
 
 ### General Checklist
-- [ ] Push Notification webhook listener 实现
-- [ ] PushNotificationConfig CRUD（注册/注销/列表）
-- [ ] Task 委托完整流程（@mention → 提取上下文 → 发送 → 接收结果）
-- [ ] 委托支持 local 和 remote 目标 Agent（Connection-Centric）
-- [ ] Artifact 跨 Agent 存储和检索（local fs + remote A2A API 双路径）
-- [ ] 协作可视化 UI 组件
-- [ ] 委托异常处理（超时、失败、取消）
-- [ ] 与现有 Task 系统（feat-task-execution）的集成
-- [ ] cargo build + npm run build 全部通过
+- [x] Push Notification webhook listener 实现
+- [x] PushNotificationConfig CRUD（注册/注销/列表）
+- [x] Task 委托完整流程（@mention → 提取上下文 → 发送 → 接收结果）
+- [x] 委托支持 local 和 remote 目标 Agent（Connection-Centric）
+- [x] Artifact 跨 Agent 存储和检索（local fs + remote A2A API 双路径）
+- [x] 协作可视化 UI 组件
+- [x] 委托异常处理（超时、失败、取消）
+- [x] 与现有 Task 系统（feat-task-execution）的集成
+- [x] cargo build + npm run build 全部通过
+
+## Merge Record
+
+- **Completed**: 2026-04-16
+- **Merged Branch**: feature/feat-a2a-multi-agent
+- **Merge Commit**: (merge via --no-ff)
+- **Archive Tag**: feat-a2a-multi-agent-20260416
+- **Conflicts**: None (clean rebase)
+- **Verification**: PASS (237/237 tests, tsc clean, 5/5 Gherkin scenarios)
+- **Evidence**: `features/archive/done-feat-a2a-multi-agent-20260416/evidence/verification-report.md`
+- **Stats**: 13 files changed, 3446 insertions, 1 commit on feature branch
