@@ -560,3 +560,47 @@ export async function getTaskHistory(
 ): Promise<TaskHistoryEntry[]> {
   return invoke<TaskHistoryEntry[]>("get_task_history", { taskId });
 }
+
+// ---------------------------------------------------------------------------
+// Task Engine execution commands
+// ---------------------------------------------------------------------------
+
+/** Execute a task via the TaskEngine (realtime or async based on task's execution_mode). */
+export async function executeTask(taskId: string): Promise<void> {
+  return invoke<void>("execute_task", { taskId });
+}
+
+/** Cancel a running task execution via the TaskEngine. */
+export async function cancelTaskExecution(taskId: string): Promise<void> {
+  return invoke<void>("cancel_task_execution", { taskId });
+}
+
+/** Report task completion to the TaskEngine (called by frontend after agent responds). */
+export async function reportTaskCompleted(
+  taskId: string,
+  result: string
+): Promise<void> {
+  return invoke<void>("report_task_completed", { taskId, result });
+}
+
+/** Report task failure to the TaskEngine. */
+export async function reportTaskFailed(
+  taskId: string,
+  error: string
+): Promise<void> {
+  return invoke<void>("report_task_failed", { taskId, error });
+}
+
+/** Get active task execution status from the TaskEngine. */
+export async function getTaskEngineStatus(): Promise<{
+  active_tasks: Array<{
+    task_id: string;
+    agent_id: string;
+    channel_id: string;
+    started_at: string;
+    mode: string;
+  }>;
+  queue_length: number;
+}> {
+  return invoke("get_task_engine_status");
+}

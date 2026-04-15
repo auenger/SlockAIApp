@@ -2,6 +2,7 @@ pub mod commands;
 pub mod context;
 pub mod runtime;
 pub mod storage;
+pub mod task_engine;
 pub mod workspace;
 
 use commands::AppState;
@@ -88,6 +89,11 @@ pub fn run() {
                 db_conn: Mutex::new(db_conn),
             });
 
+            // Initialize TaskEngine and start background poll thread
+            let task_engine = task_engine::TaskEngine::new(app.handle().clone());
+            task_engine.start_poll_thread();
+            app.manage(task_engine);
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -156,6 +162,11 @@ pub fn run() {
             commands::task::add_task_dependency,
             commands::task::remove_task_dependency,
             commands::task::get_task_history,
+            commands::task::execute_task,
+            commands::task::cancel_task_execution,
+            commands::task::report_task_completed,
+            commands::task::report_task_failed,
+            commands::task::get_task_engine_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
