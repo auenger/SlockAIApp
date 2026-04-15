@@ -6,6 +6,7 @@
 pub mod activity;
 pub mod channel;
 pub mod task;
+pub mod task_suggestion;
 pub mod thread;
 
 use std::fs;

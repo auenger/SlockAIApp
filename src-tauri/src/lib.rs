@@ -167,6 +167,8 @@ pub fn run() {
             commands::task::report_task_completed,
             commands::task::report_task_failed,
             commands::task::get_task_engine_status,
+            commands::task_suggestion::confirm_task_suggestions,
+            commands::task_suggestion::dismiss_task_suggestions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -32,6 +32,7 @@ import type {
   TaskHistoryEntry,
   CreateTaskInput,
   UpdateTaskInput,
+  SuggestedTask,
 } from "../types";
 
 /**
@@ -603,4 +604,25 @@ export async function getTaskEngineStatus(): Promise<{
   queue_length: number;
 }> {
   return invoke("get_task_engine_status");
+}
+
+// ---------------------------------------------------------------------------
+// Task Suggestion commands
+// ---------------------------------------------------------------------------
+
+/** Confirm task suggestions — creates Tasks from the selected suggestions. */
+export async function confirmTaskSuggestions(
+  messageId: string,
+  channelId: string,
+  selected: SuggestedTask[]
+): Promise<Task[]> {
+  return invoke<Task[]>("confirm_task_suggestions", { messageId, channelId, selected });
+}
+
+/** Dismiss task suggestions — marks the suggestion message as dismissed. */
+export async function dismissTaskSuggestions(
+  messageId: string,
+  channelId: string
+): Promise<void> {
+  return invoke<void>("dismiss_task_suggestions", { messageId, channelId });
 }

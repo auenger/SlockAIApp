@@ -1054,11 +1054,21 @@ mod tests {
                 id: format!("task-{}", i),
                 title: format!("Task {}", i),
                 status: status.to_string(),
-                assignee: None,
+                priority: 3,
+                creator_type: "user".to_string(),
+                creator_id: "user".to_string(),
+                assignee_id: None,
+                channel_id: None,
                 thread_id: None,
+                parent_task_id: None,
+                execution_mode: "realtime".to_string(),
+                source: "manual".to_string(),
+                source_message_id: None,
                 description: String::new(),
+                result: None,
                 created_at: "2026-04-10T12:00:00Z".to_string(),
                 updated_at: "2026-04-10T12:00:00Z".to_string(),
+                completed_at: None,
             }).unwrap();
         }
 
