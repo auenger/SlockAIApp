@@ -1,10 +1,35 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-16T19:00:00+08:00"
-  version: 41
-  total_completed: 41
+  last_updated: "2026-04-16T20:30:00+08:00"
+  version: 42
+  total_completed: 42
 
 records:
+  - id: feat-thread-ux-polish
+    name: "Thread 面板 UX 打磨（Thinking/Streaming 动画 + 宽度调整优化）"
+    completed: "2026-04-16T20:30:00+08:00"
+    tag: feat-thread-ux-polish-20260416
+    merge_commit: "1b90022"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-thread-ux-polish
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-thread-ux-polish
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-16T20:00:00+08:00"
+      duration: "~30min"
+      commits: 1
+      files_changed: 2
+      lines_added: 87
+      lines_deleted: 9
+
   - id: feat-a2a-remote-client
     name: "远程 A2A Client + 连接管理 UI"
     completed: "2026-04-16T19:00:00+08:00"
