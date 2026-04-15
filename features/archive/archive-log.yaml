@@ -1,10 +1,38 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-15T16:40:00+08:00"
-  version: 40
-  total_completed: 40
+  last_updated: "2026-04-16T19:00:00+08:00"
+  version: 41
+  total_completed: 41
 
 records:
+  - id: feat-a2a-remote-client
+    name: "远程 A2A Client + 连接管理 UI"
+    completed: "2026-04-16T19:00:00+08:00"
+    tag: feat-a2a-remote-client-20260416
+    merge_commit: "33cdbab"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-a2a-remote-client
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-a2a-remote-client
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 6
+      scenarios_passed: 5
+      scenarios_partial: 1
+      notes: "S5 @mention visual indicators deferred (UI polish), backend data complete"
+    stats:
+      started: "2026-04-16T18:00:00+08:00"
+      duration: "~1h"
+      commits: 1
+      files_changed: 18
+      lines_added: 1674
+      tasks_completed: 73
+      tasks_total: 77
+
   - id: feat-a2a-adapter
     name: "本地 Runtime → A2A Server Adapter（CLI 包装为 A2A 端点）"
     completed: "2026-04-15T16:40:00+08:00"

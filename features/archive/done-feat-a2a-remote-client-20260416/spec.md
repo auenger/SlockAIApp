@@ -10,6 +10,15 @@
 - **Children**: []
 - **Created**: 2026-04-14
 
+## Merge Record
+- **Completed**: 2026-04-16
+- **Branch**: feature/feat-a2a-remote-client
+- **Merge Commit**: 33cdbab
+- **Archive Tag**: feat-a2a-remote-client-20260416
+- **Conflicts**: none
+- **Verification**: passed (73/77 tasks, 202/202 tests, 6 Gherkin scenarios analyzed)
+- **Stats**: 18 files changed, 1674 insertions, 10 deletions
+
 ## Description
 
 基于 **Connection-Centric 模型** 实现远程 Agent 的完整支持。核心思想：**Agent 不再绑定到本地 CLI 二进制，而是绑定到一个"连接端点"（可能是本地进程，也可能是远程 URL）。前端和上层业务逻辑完全不感知这种差异。**
