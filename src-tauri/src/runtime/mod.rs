@@ -3,6 +3,7 @@
 //! Provides the abstraction layer for LLM agent runtimes
 //! (Claude Code, Codex, etc.).
 
+pub mod a2a;
 pub mod claude;
 pub mod codex;
 pub mod commands;

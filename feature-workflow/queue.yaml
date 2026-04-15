@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-15T21:00:00+08:00'
-  version: 114
+  last_updated: '2026-04-16T16:00:00+08:00'
+  version: 123
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -32,19 +32,17 @@ parents:
   - feat-task-execution
   - feat-task-conversation-bind
   - feat-task-advanced
-active: []
-pending:
-- id: feat-claude-control-protocol
-  name: Claude Code Control Protocol Runtime（双向持久会话 + 权限交互）
-  priority: 80
-  created_at: '2026-04-15'
-  depends_on: []
+active:
 - id: feat-a2a-transport
   name: A2A 协议类型定义 + Transport 基础设施
   priority: 80
   created_at: '2026-04-14'
   parent: feat-a2a-runtime
   depends_on: []
+  branch: feature/feat-a2a-transport
+  worktree: ../SlockAI-feat-a2a-transport
+  started_at: '2026-04-16T16:00:00+08:00'
+pending:
 - id: feat-a2a-adapter
   name: 本地 Runtime → A2A Server Adapter（CLI 包装为 A2A 端点）
   priority: 78
@@ -73,29 +71,24 @@ pending:
   depends_on:
   - feat-a2a-adapter
   - feat-a2a-remote-client
-- id: feat-task-ui-board
-  name: Task 看板 + 列表 + 详情 UI（可与执行引擎并行）
-  priority: 85
-  created_at: '2026-04-14'
-  parent: feat-agent-task-system
-  depends_on:
-  - feat-task-data-model
-- id: feat-task-conversation-bind
-  name: 对话驱动 Task 生成 + 上下文绑定
-  priority: 85
-  created_at: '2026-04-14'
-  parent: feat-agent-task-system
-  depends_on:
-  - feat-task-execution
-- id: feat-task-advanced
-  name: 高级 Task 协作（子任务 + 依赖 + A2A 传递）
-  priority: 85
-  created_at: '2026-04-14'
-  parent: feat-agent-task-system
-  depends_on:
-  - feat-task-conversation-bind
 blocked: []
 completed:
+- id: feat-claude-control-protocol
+  name: Claude Code Control Protocol Runtime（双向持久会话 + 权限交互）
+  completed_at: '2026-04-15T15:30:00+08:00'
+  tag: feat-claude-control-protocol-20260415
+- id: feat-task-advanced
+  name: 高级 Task 协作（子任务 + 依赖 + A2A 传递）
+  completed_at: '2026-04-16T14:03:00+08:00'
+  tag: feat-task-advanced-20260416
+- id: feat-task-conversation-bind
+  name: 对话驱动 Task 生成 + 上下文绑定
+  completed_at: '2026-04-16T10:00:00+08:00'
+  tag: feat-task-conversation-bind-20260416
+- id: feat-task-ui-board
+  name: Task 看板 + 列表 + 详情 UI（可与执行引擎并行）
+  completed_at: '2026-04-15T22:30:00+08:00'
+  tag: feat-task-ui-board-20260415b
 - id: feat-task-execution
   name: Task 执行引擎（实时 + 异步双模式，可与 UI 并行）
   completed_at: '2026-04-15T21:00:00+08:00'
