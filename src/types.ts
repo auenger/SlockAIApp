@@ -652,3 +652,114 @@ export interface UpdateRemoteConnectionRequest {
   auth_type?: RemoteAuthType;
   api_key?: string;
 }
+
+// ===========================================================================
+// Collaboration / A2A Multi-Agent types
+// ===========================================================================
+
+/** Delegation status */
+export type DelegationStatusType =
+  | 'PENDING'
+  | 'SENT'
+  | 'ACKNOWLEDGED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'TIMED_OUT';
+
+/** A task delegation between agents */
+export interface DelegationInfo {
+  id: string;
+  from_agent_id: string;
+  to_agent_id: string;
+  task_description: string;
+  context_summary: string;
+  parent_task_id: string | null;
+  channel_id: string | null;
+  status: DelegationStatusType;
+  target_connection_mode: ConnectionMode | null;
+  result: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Request to create a delegation */
+export interface CreateDelegationRequest {
+  from_agent_id: string;
+  to_agent_id: string;
+  task_description: string;
+  context_summary: string;
+  parent_task_id?: string;
+  channel_id?: string;
+}
+
+/** Artifact info returned from backend */
+export interface ArtifactInfo {
+  id: string;
+  producer_agent_id: string;
+  name: string;
+  file_path: string;
+  content_hash: string | null;
+  mime_type: string | null;
+  created_at: string;
+  task_id: string | null;
+  description: string | null;
+  size: number;
+}
+
+/** Artifact content result */
+export interface ArtifactContentResult {
+  artifact: ArtifactInfo;
+  content: string;
+}
+
+/** Push notification config info */
+export interface PushNotificationConfigInfo {
+  id: string;
+  url: string;
+  has_token: boolean;
+  has_hmac_secret: boolean;
+  events: string[];
+  active: boolean;
+}
+
+/** Push event payload for a2a://task-updated */
+export interface PushEventPayload {
+  event_id: string;
+  event_type: string;
+  agent_id: string;
+  task_id: string;
+  task_status: string;
+  message: string;
+  result: unknown;
+  timestamp: string;
+}
+
+/** Push event payload for a2a://task-completed */
+export interface PushTaskCompletedPayload {
+  event_id: string;
+  agent_id: string;
+  task_id: string;
+  message: string;
+  result: unknown;
+  timestamp: string;
+}
+
+/** Push event payload for a2a://task-failed */
+export interface PushTaskFailedPayload {
+  event_id: string;
+  agent_id: string;
+  task_id: string;
+  message: string;
+  result: unknown;
+  timestamp: string;
+}
+
+/** Delegation created event */
+export interface DelegationCreatedEvent {
+  delegation_id: string;
+  from_agent_id: string;
+  to_agent_id: string;
+}

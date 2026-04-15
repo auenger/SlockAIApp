@@ -5,6 +5,7 @@
 
 pub mod activity;
 pub mod channel;
+pub mod collaboration;
 pub mod remote_connection;
 pub mod task;
 pub mod task_suggestion;

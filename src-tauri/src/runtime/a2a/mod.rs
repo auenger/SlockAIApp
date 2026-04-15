@@ -9,7 +9,10 @@
 //! - CLI adapters (`adapter`) — Wrap CLI runtimes as A2A endpoints.
 
 pub mod adapter;
+pub mod artifact_store;
 pub mod bridge;
+pub mod delegation;
+pub mod push;
 pub mod remote;
 pub mod remote_runtime;
 pub mod server;
@@ -27,3 +30,6 @@ pub use types::{
 };
 pub use transport::{A2AHttpClient, A2ATransport, A2AResult};
 pub use adapter::{CliA2AAdapter, AdapterConfig, AdapterState, ClaudeCodeAdapter, CodexAdapter, AdapterServer, ConnectionPool, ListenerConfig, PooledConnection, SocketGuard, generate_agent_card};
+pub use push::{PushNotificationManager, PushNotification, PushEventType, PushCallbackConfig};
+pub use delegation::{DelegationManager, DelegationRequest, DelegationStatus};
+pub use artifact_store::{ArtifactStore, ArtifactRef, ArtifactRecord};

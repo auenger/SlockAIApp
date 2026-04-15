@@ -94,6 +94,11 @@ pub fn run() {
             task_engine.start_poll_thread();
             app.manage(task_engine);
 
+            // Initialize CollaborationState for A2A multi-agent features
+            let artifacts_dir = workspace_root.join("artifacts");
+            let collaboration_state = commands::collaboration::CollaborationState::new(&artifacts_dir);
+            app.manage(collaboration_state);
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -179,6 +184,18 @@ pub fn run() {
             commands::remote_connection::remote_connection_test,
             commands::remote_connection::remote_connection_health_all,
             commands::remote_connection::remote_connection_get_agent_card,
+            commands::collaboration::collaboration_delegate,
+            commands::collaboration::collaboration_list_delegations,
+            commands::collaboration::collaboration_cancel_delegation,
+            commands::collaboration::collaboration_retry_delegation,
+            commands::collaboration::collaboration_list_artifacts,
+            commands::collaboration::collaboration_get_artifact,
+            commands::collaboration::collaboration_search_artifacts,
+            commands::collaboration::collaboration_register_artifact,
+            commands::collaboration::collaboration_register_push_url,
+            commands::collaboration::collaboration_list_push_configs,
+            commands::collaboration::collaboration_unregister_push_url,
+            commands::collaboration::collaboration_process_push_event,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
