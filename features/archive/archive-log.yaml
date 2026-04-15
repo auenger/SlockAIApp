@@ -1,10 +1,35 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-16T17:00:00+08:00"
-  version: 39
-  total_completed: 39
+  last_updated: "2026-04-15T16:40:00+08:00"
+  version: 40
+  total_completed: 40
 
 records:
+  - id: feat-a2a-adapter
+    name: "本地 Runtime → A2A Server Adapter（CLI 包装为 A2A 端点）"
+    completed: "2026-04-15T16:40:00+08:00"
+    tag: feat-a2a-adapter-20260415
+    merge_commit: "43a0a0a"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-a2a-adapter
+    worktree_deleted: true
+    worktree_path: ../SlockAI-feat-a2a-adapter
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 6
+      scenarios_passed: 6
+    stats:
+      started: "2026-04-15T10:00:00+08:00"
+      duration: "~6h"
+      commits: 2
+      files_changed: 10
+      lines_added: 2100
+      notes: "Task 5 (AgentManager integration) deferred per spec"
+
   - id: feat-a2a-transport
     name: "A2A 协议类型定义 + Transport 基础设施"
     completed: "2026-04-16T17:00:00+08:00"
