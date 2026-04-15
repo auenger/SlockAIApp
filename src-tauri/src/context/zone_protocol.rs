@@ -150,6 +150,27 @@ impl ChannelZoneProtocol {
         out.push_str("- Mention with instruction: @Claude please review this code\n");
         out.push_str(&format!("- Notify the user of results: @{}, here is what I found...\n", self.user_name));
 
+        // Task Suggestion Protocol
+        out.push_str("\n### Task Suggestion Protocol\n\n");
+        out.push_str("When you identify actionable tasks from the user's request, output them in the following format:\n\n");
+        out.push_str("<task-suggestions>\n");
+        out.push_str("[\n");
+        out.push_str("  {\n");
+        out.push_str("    \"title\": \"Task title\",\n");
+        out.push_str("    \"description\": \"Brief description\",\n");
+        out.push_str("    \"priority\": 3,\n");
+        out.push_str("    \"assignee\": \"AgentName or null\",\n");
+        out.push_str("    \"dependencies\": []\n");
+        out.push_str("  }\n");
+        out.push_str("]\n");
+        out.push_str("</task-suggestions>\n\n");
+        out.push_str("Rules:\n");
+        out.push_str("- Only suggest tasks that are concrete and actionable\n");
+        out.push_str("- Use priority 1 (critical) to 5 (trivial), default is 3\n");
+        out.push_str("- Each task should be independently completable\n");
+        out.push_str("- If no actionable tasks are identified, do NOT output this block\n");
+        out.push_str("- You may output regular text before/after the block\n");
+
         out
     }
 }

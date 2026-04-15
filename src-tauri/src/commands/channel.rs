@@ -880,6 +880,37 @@ fn execute_single_agent_inner(
                 agent_id_clone,
                 channel_id_clone
             );
+
+            // Parse task suggestions from the agent response
+            let suggestions = crate::commands::task_suggestion::parse_task_suggestions(&full_response);
+            if !suggestions.is_empty() {
+                let channels_dir = agent_manager_ptr.join("channels");
+                match crate::commands::task_suggestion::create_suggestion_message(
+                    &channel_id_clone,
+                    &agent_id_clone,
+                    suggestions,
+                    &channels_dir,
+                ) {
+                    Ok(suggestion_msg_id) => {
+                        let _ = app_clone.emit(
+                            "task://suggested",
+                            serde_json::json!({
+                                "channel_id": channel_id_clone,
+                                "agent_id": agent_id_clone,
+                                "message_id": suggestion_msg_id,
+                            }),
+                        );
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            "[response-thread] agent={}, channel={}: failed to create task suggestion message: {}",
+                            agent_id_clone,
+                            channel_id_clone,
+                            e
+                        );
+                    }
+                }
+            }
         } else {
             log::warn!(
                 "[response-thread] agent={}, channel={}: skipping save (empty={}, error={})",

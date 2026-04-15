@@ -48,6 +48,7 @@ import { useUserProfile } from '../lib/useUserProfile';
 import { AgentIcon } from './AgentIcon';
 import { EditAgentModal } from './EditAgentModal';
 import { TaskView } from './task/TaskView';
+import { TaskSuggestionCard } from './task/TaskSuggestionCard';
 import { MarkdownRenderer } from './markdown';
 import type { AgentStreamState } from '../lib/useChannel';
 
@@ -1055,14 +1056,33 @@ export const MainContent: React.FC<MainContentProps> = ({
                         <span className="text-[8px] text-gray-500 uppercase">{msg.timestamp}</span>
                       </div>
                       <div className="text-sm leading-relaxed">
-                        {/* Render with MarkdownRenderer for agent messages, plain text for user */}
-                        {msg.sender.isAgent ? (
-                          <MarkdownRenderer content={msg.content} allAgents={allAgents} agentColorMap={agentColorMap} userName={userProfile.name !== 'User' ? userProfile.name : undefined} />
-                        ) : isChannelMode ? (
-                          <span className="whitespace-pre-wrap">{renderMentionText(msg.content, allAgents, undefined, agentColorMap, userProfile.name !== 'User' ? userProfile.name : undefined)}</span>
-                        ) : (
-                          <span className="whitespace-pre-wrap">{msg.content}</span>
-                        )}
+                        {/* Check for task_suggestion content type in channel agent messages */}
+                        {(() => {
+                          // Task suggestion detection
+                          if (msg.sender.isAgent && isChannelMode) {
+                            try {
+                              const parsed = JSON.parse(msg.content);
+                              if (parsed && parsed.type === 'task_suggestion') {
+                                return (
+                                  <TaskSuggestionCard
+                                    messageId={msg.id}
+                                    channelId={activeChannel!.id}
+                                    contentJson={msg.content}
+                                    agentName={msg.sender.name}
+                                  />
+                                );
+                              }
+                            } catch { /* not JSON, fall through to markdown */ }
+                          }
+                          // Default rendering
+                          if (msg.sender.isAgent) {
+                            return <MarkdownRenderer content={msg.content} allAgents={allAgents} agentColorMap={agentColorMap} userName={userProfile.name !== 'User' ? userProfile.name : undefined} />;
+                          }
+                          if (isChannelMode) {
+                            return <span className="whitespace-pre-wrap">{renderMentionText(msg.content, allAgents, undefined, agentColorMap, userProfile.name !== 'User' ? userProfile.name : undefined)}</span>;
+                          }
+                          return <span className="whitespace-pre-wrap">{msg.content}</span>;
+                        })()}
                       </div>
                       {/* Persisted content_blocks for historical agent messages */}
                       {isChannelMode && msg.sender.isAgent && hasBlocks && (

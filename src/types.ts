@@ -541,3 +541,47 @@ export interface ListActivitiesResult {
   /** Total count of matching entries (before pagination) */
   total: number;
 }
+
+// ===========================================================================
+// Task Suggestion types
+// ===========================================================================
+
+/** A single task suggested by an agent during a conversation */
+export interface SuggestedTask {
+  title: string;
+  description: string;
+  priority: number;
+  assignee: string | null;
+  dependencies: string[];
+}
+
+/** Task suggestion status */
+export type TaskSuggestionStatus = 'pending' | 'confirmed' | 'dismissed';
+
+/** Content payload for a task_suggestion message */
+export interface TaskSuggestionContent {
+  type: 'task_suggestion';
+  suggestions: SuggestedTask[];
+  status: TaskSuggestionStatus;
+  confirmed_task_ids?: string[];
+}
+
+/** Event payload for task://suggested */
+export interface TaskSuggestedEvent {
+  channel_id: string;
+  agent_id: string;
+  message_id: string;
+}
+
+/** Event payload for task://suggested-confirmed */
+export interface TaskSuggestedConfirmedEvent {
+  channel_id: string;
+  message_id: string;
+  task_ids: string[];
+}
+
+/** Event payload for task://suggested-dismissed */
+export interface TaskSuggestedDismissedEvent {
+  channel_id: string;
+  message_id: string;
+}

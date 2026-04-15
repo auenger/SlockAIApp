@@ -38,7 +38,7 @@ pub struct TaskInfo {
 }
 
 impl TaskInfo {
-    fn from_row(row: &db_helpers::TaskRow, child_count: i64, dep_count: i64) -> Self {
+    pub fn from_row(row: &db_helpers::TaskRow, child_count: i64, dep_count: i64) -> Self {
         Self {
             id: row.id.clone(),
             title: row.title.clone(),
@@ -150,7 +150,7 @@ pub struct UpdateTaskRequest {
 // ---------------------------------------------------------------------------
 
 /// Generate a new UUID for a task.
-fn generate_task_id() -> String {
+pub fn generate_task_id_helper() -> String {
     // Use a simple random UUID v4 (without pulling in uuid crate).
     // Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -234,7 +234,7 @@ pub fn create_task(
     };
 
     let now = db_helpers::chrono_now_iso();
-    let task_id = generate_task_id();
+    let task_id = generate_task_id_helper();
 
     let task_row = db_helpers::TaskRow {
         id: task_id,
