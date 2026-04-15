@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-16T17:00:00+08:00'
-  version: 124
+  last_updated: '2026-04-15T10:00:00+08:00'
+  version: 125
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -32,16 +32,19 @@ parents:
   - feat-task-execution
   - feat-task-conversation-bind
   - feat-task-advanced
-active: []
-pending:
+active:
 - id: feat-a2a-adapter
   name: 本地 Runtime → A2A Server Adapter（CLI 包装为 A2A 端点）
   priority: 78
   created_at: '2026-04-14'
+  started_at: '2026-04-15T10:00:00+08:00'
   parent: feat-a2a-runtime
   depends_on:
   - feat-a2a-transport
   - feat-claude-control-protocol
+  branch: feature/feat-a2a-adapter
+  worktree: ../SlockAI-feat-a2a-adapter
+pending:
 - id: feat-a2a-remote-client
   name: 远程 A2A Client + 连接管理 UI
   priority: 75
