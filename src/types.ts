@@ -335,6 +335,8 @@ export interface AgentSummary {
   session_count: number;
   /** The runtime type this agent is bound to */
   runtime_type: RuntimeType;
+  /** Connection mode: local (default) or remote */
+  connection_mode: ConnectionMode;
 }
 
 /** Agent identity metadata */
@@ -349,6 +351,8 @@ export interface IdentitySummary {
   vibe: string;
   /** The runtime type this agent is bound to */
   runtime_type: RuntimeType;
+  /** Connection mode: local or remote */
+  connection_mode: ConnectionMode;
 }
 
 /** Request to create a new Agent */
@@ -362,6 +366,8 @@ export interface CreateAgentRequest {
   icon?: string;
   /** Runtime type for the agent (defaults to "claude_code") */
   runtime_type?: RuntimeType;
+  /** Connection mode for the agent (defaults to "local") */
+  connection_mode?: ConnectionMode;
 }
 
 /** Request to update an existing Agent's mutable properties */
@@ -584,4 +590,65 @@ export interface TaskSuggestedConfirmedEvent {
 export interface TaskSuggestedDismissedEvent {
   channel_id: string;
   message_id: string;
+}
+
+// ===========================================================================
+// Remote Connection types
+// ===========================================================================
+
+/** Connection mode for agents */
+export type ConnectionMode =
+  | "local"
+  | { remote: { connection_id: string } };
+
+/** Authentication type for remote connections */
+export type RemoteAuthType = "none" | "api_key" | "oauth2";
+
+/** Remote connection status */
+export type RemoteConnectionStatus = "online" | "offline" | "error" | "unknown";
+
+/** A remote A2A endpoint connection */
+export interface RemoteConnectionInfo {
+  id: string;
+  name: string;
+  endpoint_url: string;
+  auth_type: RemoteAuthType;
+  status: RemoteConnectionStatus;
+  agent_card: RemoteAgentCard | null;
+  last_health_check_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Agent card from a remote endpoint */
+export interface RemoteAgentCard {
+  name: string;
+  description?: string;
+  endpoint?: string;
+  capabilities: string[];
+  supported_operations: string[];
+  version?: string;
+}
+
+/** Result of testing a remote connection */
+export interface TestConnectionResult {
+  success: boolean;
+  agent_card: RemoteAgentCard | null;
+  error: string | null;
+}
+
+/** Request to create a remote connection */
+export interface CreateRemoteConnectionRequest {
+  name: string;
+  endpoint_url: string;
+  auth_type?: RemoteAuthType;
+  api_key?: string;
+}
+
+/** Request to update a remote connection */
+export interface UpdateRemoteConnectionRequest {
+  name?: string;
+  endpoint_url?: string;
+  auth_type?: RemoteAuthType;
+  api_key?: string;
 }

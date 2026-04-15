@@ -27,6 +27,7 @@ const MOCK_AGENTS: AgentWithRuntime[] = [
       enabled: true,
       session_count: 0,
       runtime_type: "claude_code",
+      connection_mode: "local",
     },
     runtime_status: "available",
     runtime_version: "1.0.0-dev",

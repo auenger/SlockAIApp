@@ -272,6 +272,7 @@ pub enum ContextError {
 mod tests {
     use super::*;
     use crate::workspace::manager::AgentManager;
+    use crate::runtime::a2a::types::ConnectionMode;
 
     #[test]
     fn test_build_context_with_agent_soul_override() {
@@ -281,7 +282,7 @@ mod tests {
         let mut manager = AgentManager::new(dir.path());
         manager.initialize_workspace().unwrap();
         manager.load().unwrap();
-        manager.create_agent("Claude", "AI", "sharp", "sparkles", None, None, crate::runtime::RuntimeType::ClaudeCode).unwrap();
+        manager.create_agent("Claude", "AI", "sharp", "sparkles", None, None, crate::runtime::RuntimeType::ClaudeCode, ConnectionMode::Local).unwrap();
 
         // Override agent SOUL.md
         let agent_soul = dir.path().join("agents/claude/SOUL.md");
@@ -345,7 +346,7 @@ mod tests {
         let mut manager = AgentManager::new(dir.path());
         manager.initialize_workspace().unwrap();
         manager.load().unwrap();
-        manager.create_agent("Claude", "AI", "sharp", "sparkles", None, None, crate::runtime::RuntimeType::ClaudeCode).unwrap();
+        manager.create_agent("Claude", "AI", "sharp", "sparkles", None, None, crate::runtime::RuntimeType::ClaudeCode, ConnectionMode::Local).unwrap();
 
         // Build a Zone Protocol
         let zp = zone_protocol::ChannelZoneProtocol {

@@ -975,6 +975,149 @@ pub fn count_activities(conn: &Connection, agent_id: Option<&str>) -> Result<i64
 }
 
 // ===========================================================================
+// Remote connection queries
+// ===========================================================================
+
+/// Remote connection row from the database.
+#[derive(Debug, Clone)]
+pub struct RemoteConnectionRow {
+    pub id: String,
+    pub name: String,
+    pub endpoint_url: String,
+    pub auth_type: String,
+    pub status: String,
+    pub cached_agent_card: Option<String>,
+    pub last_health_check_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+impl RemoteConnectionRow {
+    pub fn from_row(row: &Row<'_>) -> Result<Self, rusqlite::Error> {
+        Ok(Self {
+            id: row.get("id")?,
+            name: row.get("name")?,
+            endpoint_url: row.get("endpoint_url")?,
+            auth_type: row.get("auth_type")?,
+            status: row.get("status")?,
+            cached_agent_card: row.get("cached_agent_card")?,
+            last_health_check_at: row.get("last_health_check_at")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+        })
+    }
+}
+
+/// Insert a remote connection into the database.
+pub fn insert_remote_connection(conn: &Connection, rc: &RemoteConnectionRow) -> Result<(), DbError> {
+    conn.execute(
+        "INSERT INTO remote_connections (id, name, endpoint_url, auth_type, status, cached_agent_card, last_health_check_at, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            rc.id,
+            rc.name,
+            rc.endpoint_url,
+            rc.auth_type,
+            rc.status,
+            rc.cached_agent_card,
+            rc.last_health_check_at,
+            rc.created_at,
+            rc.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
+/// List all remote connections.
+pub fn list_remote_connections(conn: &Connection) -> Result<Vec<RemoteConnectionRow>, DbError> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM remote_connections ORDER BY name ASC"
+    )?;
+    let rows = stmt.query_map([], RemoteConnectionRow::from_row)?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+/// Get a single remote connection by ID.
+pub fn get_remote_connection(conn: &Connection, id: &str) -> Result<Option<RemoteConnectionRow>, DbError> {
+    let mut stmt = conn.prepare("SELECT * FROM remote_connections WHERE id = ?1")?;
+    let mut rows = stmt.query_map(params![id], RemoteConnectionRow::from_row)?;
+    match rows.next() {
+        Some(row) => Ok(Some(row?)),
+        None => Ok(None),
+    }
+}
+
+/// Update a remote connection's mutable fields.
+pub fn update_remote_connection(
+    conn: &Connection,
+    id: &str,
+    name: Option<&str>,
+    endpoint_url: Option<&str>,
+    auth_type: Option<&str>,
+    status: Option<&str>,
+    cached_agent_card: Option<Option<&str>>,
+    last_health_check_at: Option<Option<&str>>,
+    updated_at: &str,
+) -> Result<(), DbError> {
+    let mut set_clauses = Vec::new();
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    let mut param_idx = 1u32;
+
+    if let Some(v) = name {
+        set_clauses.push(format!("name = ?{}", param_idx));
+        param_values.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = endpoint_url {
+        set_clauses.push(format!("endpoint_url = ?{}", param_idx));
+        param_values.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = auth_type {
+        set_clauses.push(format!("auth_type = ?{}", param_idx));
+        param_values.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = status {
+        set_clauses.push(format!("status = ?{}", param_idx));
+        param_values.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = cached_agent_card {
+        set_clauses.push(format!("cached_agent_card = ?{}", param_idx));
+        param_values.push(Box::new(v.map(|s| s.to_string())));
+        param_idx += 1;
+    }
+    if let Some(v) = last_health_check_at {
+        set_clauses.push(format!("last_health_check_at = ?{}", param_idx));
+        param_values.push(Box::new(v.map(|s| s.to_string())));
+        param_idx += 1;
+    }
+
+    if set_clauses.is_empty() {
+        return Ok(());
+    }
+
+    set_clauses.push(format!("updated_at = ?{}", param_idx));
+    param_values.push(Box::new(updated_at.to_string()));
+    param_idx += 1;
+
+    let where_clause = format!("id = ?{}", param_idx);
+    param_values.push(Box::new(id.to_string()));
+
+    let sql = format!("UPDATE remote_connections SET {} WHERE {}", set_clauses.join(", "), where_clause);
+    let params: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    conn.execute(&sql, params.as_slice())?;
+    Ok(())
+}
+
+/// Delete a remote connection.
+pub fn delete_remote_connection(conn: &Connection, id: &str) -> Result<(), DbError> {
+    conn.execute("DELETE FROM remote_connections WHERE id = ?1", params![id])?;
+    Ok(())
+}
+
+// ===========================================================================
 // Migration helpers
 // ===========================================================================
 
