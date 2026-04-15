@@ -53,6 +53,7 @@ pub async fn runtime_execute(
         workspace: None,
         system_prompt,
         timeout_secs: 120,
+        persistent: session_id.is_some(), // Resume = persistent, fresh = one-shot
     };
 
     log::info!(

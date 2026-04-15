@@ -578,6 +578,7 @@ pub async fn send_message(
                 workspace: Some(workspace_path),
                 system_prompt: Some(context_prefix),
                 timeout_secs: 120,
+                persistent: true, // Thread: persistent process, context kept in-process
             };
 
             runtime.execute(params)?

@@ -712,6 +712,7 @@ fn execute_single_agent_inner(
             workspace: Some(workspace_path),
             system_prompt,
             timeout_secs: 120,
+            persistent: false, // Channel: one-shot, context reconstructed each time
         };
 
         runtime.execute(params)?
@@ -1364,6 +1365,7 @@ pub async fn compact_channel(
             workspace: Some(workspace_path),
             system_prompt: None,
             timeout_secs: 60,
+            persistent: false,
         };
 
         let receiver = runtime.execute(params)?;

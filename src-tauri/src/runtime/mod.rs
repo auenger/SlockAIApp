@@ -162,6 +162,10 @@ pub struct ExecuteParams {
     pub system_prompt: Option<String>,
     /// Maximum execution time in seconds before idle timeout
     pub timeout_secs: u64,
+    /// Whether to use a persistent process (Thread) or one-shot (Channel).
+    /// Thread mode: reuse process via stdin JSON, context kept in-process.
+    /// Channel mode: fresh process each request, context reconstructed by caller.
+    pub persistent: bool,
 }
 
 /// A streaming event produced by an AgentRuntime during execution.

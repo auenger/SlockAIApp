@@ -1031,10 +1031,10 @@ impl AgentRuntime for ClaudeCodeRuntime {
             );
         }
 
-        // Route based on session_id presence:
-        //   session_id = Some → Thread mode: persistent process (reuse or spawn)
-        //   session_id = None → Channel mode: one-shot (fresh process each time)
-        if params.session_id.is_some() {
+        // Route based on persistent flag:
+        //   persistent = true  → Thread mode: persistent process (reuse or spawn)
+        //   persistent = false → Channel mode: one-shot (fresh process each time)
+        if params.persistent {
             log::info!(
                 "[ClaudeCodeRuntime] Thread mode: agent={}, session_id={:?}",
                 params.agent_id,
