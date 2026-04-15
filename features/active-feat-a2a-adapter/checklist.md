@@ -33,3 +33,4 @@
 | Date | Status | Results | Evidence |
 |------|--------|---------|----------|
 | 2026-04-15 | PASS | 202/202 tests pass, 6/6 Gherkin scenarios verified, Task 5 deferred per spec | evidence/verification-report.md |
+| 2026-04-15 | PASS | Re-verification: 202/202 tests, 0 errors, 4 pre-existing warnings, 6/6 Gherkin PASS, no regression | evidence/verification-report.md |
