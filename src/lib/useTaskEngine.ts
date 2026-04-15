@@ -263,6 +263,18 @@ export function useTaskEngine(
           }
         })
       );
+
+      // task://dependency-met — a task was unblocked
+      unlisteners.push(
+        await listen<{ task_id: string; unblocked_by: string }>('task://dependency-met', () => {
+          // Treat as a status change so the UI refreshes
+          onStatusChanged?.({
+            task_id: '',
+            old_status: 'blocked',
+            new_status: 'todo',
+          });
+        })
+      );
     }
 
     setupListeners();

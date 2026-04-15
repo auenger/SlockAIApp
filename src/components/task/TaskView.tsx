@@ -112,6 +112,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
       channelId: data.channelId ?? channelId ?? undefined,
       executionMode: data.executionMode,
       source: 'manual',
+      parentTaskId: data.parentTaskId ?? undefined,
     };
     await createTask(input);
   }, [createTask, userName, channelId]);
@@ -261,6 +262,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
         onClose={() => setDetailTaskId(null)}
         task={detailTask}
         agents={agents}
+        allTasks={tasks}
         onEdit={handleEditTask}
         onDelete={handleDeleteTask}
         onStatusChange={handleStatusChange}
@@ -276,6 +278,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
         onSubmit={handleCreateTask}
         agents={agents}
         channelId={channelId}
+        allTasks={tasks}
       />
     </div>
   );

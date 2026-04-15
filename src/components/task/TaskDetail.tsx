@@ -1,11 +1,11 @@
 /**
  * TaskDetail — Side drawer showing full Task details.
  *
- * Displays all task fields, history timeline, and action buttons
- * (execute, edit, delete, cancel).
+ * Displays all task fields, sub-tasks list, dependency management,
+ * history timeline, and action buttons (execute, edit, delete, cancel).
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   X,
   Pencil,
@@ -19,13 +19,32 @@ import {
   Zap,
   Calendar,
   Link2,
+  Plus,
+  Minus,
+  ChevronRight,
+  AlertTriangle,
+  GitBranch,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { AgentIcon } from '../AgentIcon';
 import { TaskStatusBadge, TaskPriorityBadge } from './TaskStatusBadge';
 import { TaskCreateModal, type TaskFormData } from './TaskCreateModal';
-import { getTaskHistory } from '../../lib/ipc';
-import type { Task, TaskStatus, TaskHistoryEntry, AgentWithRuntime } from '../../types';
+import {
+  getTaskHistory,
+  getTaskDependencies,
+  getDependentTasks,
+  getChildTasks,
+  addTaskDependency,
+  removeTaskDependency,
+  getTask,
+} from '../../lib/ipc';
+import type {
+  Task,
+  TaskStatus,
+  TaskHistoryEntry,
+  TaskDependency,
+  AgentWithRuntime,
+} from '../../types';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -40,6 +59,8 @@ interface TaskDetailProps {
   task: Task | null;
   /** Available agents */
   agents: AgentWithRuntime[];
+  /** All tasks (for dependency picker) */
+  allTasks?: Task[];
   /** Edit callback */
   onEdit: (taskId: string, data: TaskFormData) => Promise<void>;
   /** Delete callback */
@@ -63,6 +84,7 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
   onClose,
   task,
   agents,
+  allTasks,
   onEdit,
   onDelete,
   onStatusChange: _onStatusChange,
@@ -74,14 +96,28 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
   const [history, setHistory] = useState<TaskHistoryEntry[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
-  // Load history when task changes
+  // Advanced state
+  const [childTasks, setChildTasks] = useState<Task[]>([]);
+  const [dependencies, setDependencies] = useState<TaskDependency[]>([]);
+  const [dependents, setDependents] = useState<TaskDependency[]>([]);
+  const [showAddDependency, setShowAddDependency] = useState(false);
+  const [addDepTargetId, setAddDepTargetId] = useState('');
+  const [depError, setDepError] = useState<string | null>(null);
+
+  // Load data when task changes
   useEffect(() => {
     if (task?.id) {
-      getTaskHistory(task.id)
-        .then(setHistory)
-        .catch(() => setHistory([]));
+      getTaskHistory(task.id).then(setHistory).catch(() => setHistory([]));
+      getChildTasks(task.id).then(setChildTasks).catch(() => setChildTasks([]));
+      getTaskDependencies(task.id).then(setDependencies).catch(() => setDependencies([]));
+      getDependentTasks(task.id).then(setDependents).catch(() => setDependents([]));
+      setDepError(null);
+      setShowAddDependency(false);
     } else {
       setHistory([]);
+      setChildTasks([]);
+      setDependencies([]);
+      setDependents([]);
     }
   }, [task?.id]);
 
@@ -103,6 +139,49 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
     task.assigneeId;
 
   const canCancel = onCancelExecution && isExecuting;
+
+  // --- Dependency management ---
+
+  const handleAddDependency = useCallback(async () => {
+    if (!addDepTargetId || !task) return;
+    setDepError(null);
+    try {
+      await addTaskDependency(task.id, addDepTargetId);
+      // Refresh dependencies
+      const newDeps = await getTaskDependencies(task.id);
+      setDependencies(newDeps);
+      // Refresh the task (status may have changed to blocked)
+      const updated = await getTask(task.id);
+      // Trigger parent refresh by calling onStatusChange with the updated status
+      _onStatusChange(task.id, updated.status as TaskStatus);
+      setShowAddDependency(false);
+      setAddDepTargetId('');
+    } catch (err) {
+      setDepError(err instanceof Error ? err.message : String(err));
+    }
+  }, [task, addDepTargetId, _onStatusChange]);
+
+  const handleRemoveDependency = useCallback(async (dependsOnId: string) => {
+    if (!task) return;
+    try {
+      await removeTaskDependency(task.id, dependsOnId);
+      const newDeps = await getTaskDependencies(task.id);
+      setDependencies(newDeps);
+    } catch (err) {
+      console.error('Failed to remove dependency:', err);
+    }
+  }, [task]);
+
+  // Filter available tasks for dependency picker (exclude self and already-depended-on)
+  const availableForDependency = (allTasks ?? []).filter(
+    t => t.id !== task.id && !dependencies.some(d => d.dependsOnId === t.id)
+  );
+
+  // Resolve dependency/dependent task names
+  const resolveTaskName = (taskId: string): string => {
+    const found = (allTasks ?? []).find(t => t.id === taskId);
+    return found ? found.title : taskId.slice(0, 8) + '...';
+  };
 
   return (
     <>
@@ -139,14 +218,12 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
 
           {/* Fields */}
           <div className="space-y-2">
-            {/* Priority */}
             <div className="flex items-center gap-2 text-xs">
               <Zap size={12} className="text-gray-400" />
               <span className="text-gray-500 font-bold w-20">Priority</span>
               <TaskPriorityBadge priority={task.priority} />
             </div>
 
-            {/* Assignee */}
             <div className="flex items-center gap-2 text-xs">
               <Bot size={12} className="text-gray-400" />
               <span className="text-gray-500 font-bold w-20">Assignee</span>
@@ -165,7 +242,6 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
               )}
             </div>
 
-            {/* Creator */}
             <div className="flex items-center gap-2 text-xs">
               <User size={12} className="text-gray-400" />
               <span className="text-gray-500 font-bold w-20">Creator</span>
@@ -174,7 +250,14 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
               </span>
             </div>
 
-            {/* Channel */}
+            {task.parentTaskId && (
+              <div className="flex items-center gap-2 text-xs">
+                <GitBranch size={12} className="text-gray-400" />
+                <span className="text-gray-500 font-bold w-20">Parent</span>
+                <span className="font-mono text-[10px]">{resolveTaskName(task.parentTaskId)}</span>
+              </div>
+            )}
+
             {task.channelId && (
               <div className="flex items-center gap-2 text-xs">
                 <Hash size={12} className="text-gray-400" />
@@ -183,7 +266,6 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
               </div>
             )}
 
-            {/* Execution Mode */}
             <div className="flex items-center gap-2 text-xs">
               <Play size={12} className="text-gray-400" />
               <span className="text-gray-500 font-bold w-20">Mode</span>
@@ -195,14 +277,12 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
               </span>
             </div>
 
-            {/* Source */}
             <div className="flex items-center gap-2 text-xs">
               <Link2 size={12} className="text-gray-400" />
               <span className="text-gray-500 font-bold w-20">Source</span>
               <span className="text-[10px] font-mono text-gray-600 uppercase">{task.source}</span>
             </div>
 
-            {/* Dates */}
             <div className="flex items-center gap-2 text-xs">
               <Calendar size={12} className="text-gray-400" />
               <span className="text-gray-500 font-bold w-20">Created</span>
@@ -245,13 +325,123 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
           {task.childTaskCount > 0 && (
             <div>
               <div className="text-[10px] font-black uppercase text-gray-500 mb-1">
-                Sub Tasks ({task.childTaskCount})
+                Sub Tasks ({childTasks.length})
               </div>
-              <div className="text-xs text-gray-400 italic">
-                Expand to view sub-tasks
+              <div className="space-y-1">
+                {childTasks.map(child => (
+                  <div
+                    key={child.id}
+                    className="flex items-center gap-2 p-1.5 brutal-border text-xs bg-white hover:bg-gray-50 transition-colors"
+                  >
+                    <TaskStatusBadge status={child.status} />
+                    <span className="font-bold flex-1 truncate">{child.title}</span>
+                    {child.assigneeId && (
+                      <span className="text-[9px] text-gray-400">
+                        @{agents.find(a => a.agent.agent_id === child.assigneeId)?.agent.name ?? child.assigneeId}
+                      </span>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           )}
+
+          {/* Dependencies */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-[10px] font-black uppercase text-gray-500">
+                Dependencies ({dependencies.length})
+              </div>
+              <button
+                onClick={() => setShowAddDependency(!showAddDependency)}
+                className="p-0.5 brutal-border hover:bg-gray-100 transition-colors"
+                title="Add dependency"
+              >
+                {showAddDependency ? <Minus size={10} /> : <Plus size={10} />}
+              </button>
+            </div>
+
+            {depError && (
+              <div className="flex items-center gap-1 p-1.5 bg-red-50 text-red-600 text-[10px] mb-1 brutal-border">
+                <AlertTriangle size={10} />
+                {depError}
+              </div>
+            )}
+
+            {showAddDependency && (
+              <div className="flex items-center gap-1 mb-1">
+                <select
+                  value={addDepTargetId}
+                  onChange={e => setAddDepTargetId(e.target.value)}
+                  className="flex-1 brutal-border bg-white px-1.5 py-1 text-[10px] focus:outline-none"
+                >
+                  <option value="">Select task...</option>
+                  {availableForDependency.map(t => (
+                    <option key={t.id} value={t.id}>{t.title}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleAddDependency}
+                  disabled={!addDepTargetId}
+                  className={cn(
+                    'px-2 py-1 brutal-border text-[10px] font-black',
+                    addDepTargetId
+                      ? 'bg-brutal-cyan hover:bg-brutal-cyan/80'
+                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  )}
+                >
+                  Add
+                </button>
+              </div>
+            )}
+
+            {dependencies.length > 0 ? (
+              <div className="space-y-1">
+                {dependencies.map(dep => (
+                  <div
+                    key={dep.dependsOnId}
+                    className="flex items-center gap-2 p-1.5 brutal-border text-xs bg-white"
+                  >
+                    <ChevronRight size={10} className="text-gray-400" />
+                    <span className="font-bold flex-1 truncate">
+                      {resolveTaskName(dep.dependsOnId)}
+                    </span>
+                    <button
+                      onClick={() => handleRemoveDependency(dep.dependsOnId)}
+                      className="p-0.5 hover:bg-red-100 transition-colors"
+                      title="Remove dependency"
+                    >
+                      <X size={10} className="text-gray-400 hover:text-red-500" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-gray-400 italic">No dependencies</div>
+            )}
+
+            {/* Tasks that depend on this one (reverse deps) */}
+            {dependents.length > 0 && (
+              <div className="mt-2">
+                <div className="text-[10px] font-black uppercase text-gray-400 mb-1">
+                  Blocks ({dependents.length})
+                </div>
+                <div className="space-y-1">
+                  {dependents.map(dep => (
+                    <div
+                      key={dep.taskId}
+                      className="flex items-center gap-2 p-1.5 brutal-border text-xs bg-gray-50"
+                    >
+                      <span className="text-gray-400 text-[10px]">blocks</span>
+                      <span className="font-bold flex-1 truncate">
+                        {resolveTaskName(dep.taskId)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* History Timeline */}
           {history.length > 0 && (
@@ -260,7 +450,7 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
                 Activity
               </div>
               <div className="space-y-1">
-                {history.slice(0, 10).map((entry) => (
+                {history.slice(0, 20).map((entry) => (
                   <div
                     key={entry.id}
                     className="flex items-start gap-2 text-[10px] py-1 brutal-border border-transparent border-l-2 hover:border-l-black pl-2 transition-colors"
@@ -279,7 +469,9 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
                         <>: {entry.newValue}</>
                       ) : null}
                     </span>
-                    <span className="text-gray-400 ml-auto shrink-0">{entry.changedBy}</span>
+                    <span className="text-gray-400 ml-auto shrink-0 truncate max-w-[80px]" title={entry.changedBy}>
+                      {entry.changedBy}
+                    </span>
                   </div>
                 ))}
               </div>
