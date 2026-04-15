@@ -6,6 +6,7 @@
 use crate::storage::db_helpers;
 use crate::commands::AppState;
 use serde::{Deserialize, Serialize};
+use tauri::Emitter;
 
 // ---------------------------------------------------------------------------
 // Types shared across commands
@@ -13,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 /// Task returned to the frontend.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskInfo {
     pub id: String,
     pub title: String,
@@ -66,6 +68,7 @@ impl TaskInfo {
 
 /// Task history entry returned to the frontend.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskHistoryInfo {
     pub id: i64,
     pub task_id: String,
@@ -92,6 +95,7 @@ impl TaskHistoryInfo {
 
 /// Task dependency info returned to the frontend.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskDependencyInfo {
     pub task_id: String,
     pub depends_on_id: String,
@@ -462,8 +466,14 @@ pub fn delete_task(
 }
 
 /// Update only the status of a task (convenience command for drag-and-drop).
+///
+/// After updating, triggers cascade rules:
+/// - If task becomes `done`: check parent cascade (all children done -> parent in_review)
+/// - If task becomes `done`: check dependency unlock (unblock tasks that depend on this one)
+/// - If task becomes `cancelled` and has parent: cascade cancel to children
 #[tauri::command]
 pub fn update_task_status(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     task_id: String,
     status: String,
@@ -497,6 +507,30 @@ pub fn update_task_status(
     )
     .map_err(|e| format!("insert history failed: {e}"))?;
 
+    // --- Cascade rules ---
+    match status.as_str() {
+        "done" => {
+            // Check parent cascade: if all siblings are done, move parent to in_review
+            if let Some(ref parent_id) = current.parent_task_id {
+                if let Err(e) = check_parent_cascade(&conn, parent_id, &changed_by) {
+                    log::warn!("[Task] Parent cascade check failed for {}: {}", parent_id, e);
+                }
+            }
+
+            // Check dependency unlock: find tasks that depend on this one
+            if let Err(e) = check_dependency_unlock(&app, &conn, &task_id) {
+                log::warn!("[Task] Dependency unlock check failed for {}: {}", task_id, e);
+            }
+        }
+        "cancelled" => {
+            // Cascade cancel to all child tasks
+            if let Err(e) = cascade_cancel_children(&app, &conn, &task_id, &changed_by) {
+                log::warn!("[Task] Cascade cancel failed for {}: {}", task_id, e);
+            }
+        }
+        _ => {}
+    }
+
     let updated = db_helpers::get_task(&conn, &task_id)
         .map_err(|e| format!("get updated task failed: {e}"))?
         .ok_or_else(|| format!("task not found after update: {task_id}"))?;
@@ -508,6 +542,165 @@ pub fn update_task_status(
         task_id
     );
     task_row_to_info(&conn, &updated)
+}
+
+/// Check if all children of a parent task are done/in_review/cancelled.
+/// If so, move the parent to `in_review`.
+fn check_parent_cascade(
+    conn: &rusqlite::Connection,
+    parent_id: &str,
+    changed_by: &str,
+) -> Result<(), String> {
+    let children = db_helpers::list_tasks_filtered(conn, None, None, None, Some(parent_id))
+        .map_err(|e| format!("list children failed: {e}"))?;
+
+    if children.is_empty() {
+        return Ok(());
+    }
+
+    // Check if all children are in a "completed" state (done, in_review, or cancelled)
+    let all_done = children.iter().all(|c| {
+        matches!(c.status.as_str(), "done" | "in_review" | "cancelled")
+    });
+
+    if all_done {
+        let parent = db_helpers::get_task(conn, parent_id)
+            .map_err(|e| format!("get parent failed: {e}"))?;
+
+        if let Some(p) = parent {
+            if p.status != "in_review" && p.status != "done" && p.status != "cancelled" {
+                let now = db_helpers::chrono_now_iso();
+                db_helpers::update_task_status_with_completed(
+                    conn, parent_id, "in_review", None, &now,
+                ).map_err(|e| format!("update parent status failed: {e}"))?;
+
+                db_helpers::insert_task_history(
+                    conn, parent_id, "status", Some(&p.status), Some("in_review"),
+                    &format!("system:parent-cascade"),
+                ).unwrap_or_else(|e| log::warn!("[Task] history insert failed: {e}"));
+
+                log::info!(
+                    "[Task] Parent cascade: all children done, parent {} -> in_review",
+                    parent_id
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Check tasks that depend on the completed task. If all their dependencies are done,
+/// unblock them (change status from `blocked` to `todo`).
+fn check_dependency_unlock(
+    app: &tauri::AppHandle,
+    conn: &rusqlite::Connection,
+    completed_task_id: &str,
+) -> Result<(), String> {
+    use tauri::Emitter;
+
+    // Find all tasks that depend on the completed task
+    let dependents = db_helpers::get_dependent_tasks(conn, completed_task_id)
+        .map_err(|e| format!("get dependents failed: {e}"))?;
+
+    for dep in &dependents {
+        // Only consider tasks that are currently blocked
+        let dep_task = db_helpers::get_task(conn, &dep.task_id)
+            .map_err(|e| format!("get dep task failed: {e}"))?;
+
+        if let Some(task) = dep_task {
+            if task.status != "blocked" {
+                continue;
+            }
+
+            // Check if ALL dependencies are now done
+            let all_deps = db_helpers::get_task_dependencies(conn, &task.id)
+                .map_err(|e| format!("get all deps failed: {e}"))?;
+
+            let all_met = all_deps.iter().all(|d| {
+                match db_helpers::get_task(conn, &d.depends_on_id) {
+                    Ok(Some(dt)) => dt.status == "done",
+                    _ => false,
+                }
+            });
+
+            if all_met {
+                let now = db_helpers::chrono_now_iso();
+                db_helpers::update_task_status_with_completed(
+                    conn, &task.id, "todo", None, &now,
+                ).map_err(|e| format!("unblock task failed: {e}"))?;
+
+                db_helpers::insert_task_history(
+                    conn, &task.id, "status", Some("blocked"), Some("todo"),
+                    "system:dependency-met",
+                ).unwrap_or_else(|e| log::warn!("[Task] history insert failed: {e}"));
+
+                // Emit dependency-met event
+                let _ = app.emit(
+                    "task://dependency-met",
+                    serde_json::json!({
+                        "task_id": task.id,
+                        "unblocked_by": completed_task_id,
+                    }),
+                );
+
+                log::info!(
+                    "[Task] Dependency unlock: task {} unblocked (all deps done)",
+                    task.id
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Cascade cancel to all child tasks of a given parent.
+fn cascade_cancel_children(
+    app: &tauri::AppHandle,
+    conn: &rusqlite::Connection,
+    parent_id: &str,
+    _changed_by: &str,
+) -> Result<(), String> {
+    use tauri::Emitter;
+
+    let children = db_helpers::list_tasks_filtered(conn, None, None, None, Some(parent_id))
+        .map_err(|e| format!("list children failed: {e}"))?;
+
+    for child in &children {
+        // Skip already cancelled/done children
+        if matches!(child.status.as_str(), "cancelled" | "done") {
+            continue;
+        }
+
+        let now = db_helpers::chrono_now_iso();
+        db_helpers::update_task_status_with_completed(
+            conn, &child.id, "cancelled", Some(&now), &now,
+        ).map_err(|e| format!("cancel child failed: {e}"))?;
+
+        db_helpers::insert_task_history(
+            conn, &child.id, "status", Some(&child.status), Some("cancelled"),
+            &format!("system:parent-cancelled"),
+        ).unwrap_or_else(|e| log::warn!("[Task] history insert failed: {e}"));
+
+        // Emit event
+        let _ = app.emit(
+            "task://status-changed",
+            serde_json::json!({
+                "task_id": child.id,
+                "old_status": child.status,
+                "new_status": "cancelled",
+            }),
+        );
+
+        log::info!(
+            "[Task] Cascade cancel: child {} -> cancelled (parent {} cancelled)",
+            child.id,
+            parent_id
+        );
+    }
+
+    Ok(())
 }
 
 /// Assign or reassign a task to an agent.
@@ -556,11 +749,12 @@ pub fn assign_task(
 /// Cancel a task (sets status to 'cancelled').
 #[tauri::command]
 pub fn cancel_task(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     task_id: String,
 ) -> Result<TaskInfo, String> {
     // cancel_task is a convenience wrapper that sets status to 'cancelled'
-    update_task_status(state, task_id, "cancelled".to_string())
+    update_task_status(app, state, task_id, "cancelled".to_string())
 }
 
 /// Add a dependency between two tasks.
@@ -644,6 +838,69 @@ pub fn get_task_history(
         .map_err(|e| format!("get task history failed: {e}"))?;
 
     Ok(rows.iter().map(TaskHistoryInfo::from_row).collect())
+}
+
+/// Get dependencies for a task (tasks that this task depends on).
+#[tauri::command]
+pub fn get_task_dependencies(
+    state: tauri::State<'_, AppState>,
+    task_id: String,
+) -> Result<Vec<TaskDependencyInfo>, String> {
+    let conn = state
+        .db_conn
+        .lock()
+        .map_err(|e| format!("lock error: {e}"))?;
+
+    let rows = db_helpers::get_task_dependencies(&conn, &task_id)
+        .map_err(|e| format!("get dependencies failed: {e}"))?;
+
+    Ok(rows.iter().map(|r| TaskDependencyInfo {
+        task_id: r.task_id.clone(),
+        depends_on_id: r.depends_on_id.clone(),
+    }).collect())
+}
+
+/// Get tasks that depend on a given task (reverse dependencies).
+#[tauri::command]
+pub fn get_dependent_tasks(
+    state: tauri::State<'_, AppState>,
+    task_id: String,
+) -> Result<Vec<TaskDependencyInfo>, String> {
+    let conn = state
+        .db_conn
+        .lock()
+        .map_err(|e| format!("lock error: {e}"))?;
+
+    let rows = db_helpers::get_dependent_tasks(&conn, &task_id)
+        .map_err(|e| format!("get dependent tasks failed: {e}"))?;
+
+    Ok(rows.iter().map(|r| TaskDependencyInfo {
+        task_id: r.task_id.clone(),
+        depends_on_id: r.depends_on_id.clone(),
+    }).collect())
+}
+
+/// Get child tasks of a parent task.
+#[tauri::command]
+pub fn get_child_tasks(
+    state: tauri::State<'_, AppState>,
+    parent_task_id: String,
+) -> Result<Vec<TaskInfo>, String> {
+    let conn = state
+        .db_conn
+        .lock()
+        .map_err(|e| format!("lock error: {e}"))?;
+
+    let rows = db_helpers::list_tasks_filtered(
+        &conn, None, None, None, Some(&parent_task_id),
+    )
+    .map_err(|e| format!("get child tasks failed: {e}"))?;
+
+    let mut infos = Vec::new();
+    for row in &rows {
+        infos.push(task_row_to_info(&conn, row)?);
+    }
+    Ok(infos)
 }
 
 // ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@
  * TaskCreateModal — Dialog for creating and editing Tasks.
  *
  * Supports all Task fields: title, description, priority,
- * assignee, execution mode, and channel binding.
+ * assignee, execution mode, channel binding, and parent task selection.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -28,6 +28,8 @@ interface TaskCreateModalProps {
   task?: Task | null;
   /** Channel ID to pre-bind (from Channel context) */
   channelId?: string;
+  /** All tasks (for parent task picker) */
+  allTasks?: Task[];
 }
 
 export interface TaskFormData {
@@ -37,6 +39,7 @@ export interface TaskFormData {
   assigneeId: string | null;
   executionMode: TaskExecutionMode;
   channelId: string | null;
+  parentTaskId?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -50,6 +53,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
   agents,
   task = null,
   channelId,
+  allTasks,
 }) => {
   const isEditing = !!task;
 
@@ -59,6 +63,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [executionMode, setExecutionMode] = useState<TaskExecutionMode>('realtime');
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(channelId ?? null);
+  const [parentTaskId, setParentTaskId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Populate form when editing
@@ -70,6 +75,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
       setAssigneeId(task.assigneeId ?? null);
       setExecutionMode(task.executionMode);
       setSelectedChannelId(task.channelId ?? null);
+      setParentTaskId(task.parentTaskId ?? null);
     } else {
       setTitle('');
       setDescription('');
@@ -77,6 +83,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
       setAssigneeId(null);
       setExecutionMode('realtime');
       setSelectedChannelId(channelId ?? null);
+      setParentTaskId(null);
     }
   }, [task, channelId, isOpen]);
 
@@ -91,6 +98,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
         assigneeId,
         executionMode,
         channelId: selectedChannelId,
+        parentTaskId,
       });
       onClose();
     } finally {
@@ -99,6 +107,14 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
   };
 
   if (!isOpen) return null;
+
+  // Filter available parent tasks (exclude self and own children to prevent cycles)
+  const availableParentTasks = (allTasks ?? []).filter(t => {
+    if (task && t.id === task.id) return false;
+    // Simple guard: don't allow tasks that already have this task as parent
+    if (task && t.parentTaskId === task.id) return false;
+    return true;
+  });
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
@@ -212,6 +228,25 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
               ))}
             </div>
           </div>
+
+          {/* Parent Task (for sub-task creation) */}
+          {availableParentTasks.length > 0 && (
+            <div>
+              <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">
+                Parent Task (optional)
+              </label>
+              <select
+                value={parentTaskId ?? ''}
+                onChange={e => setParentTaskId(e.target.value || null)}
+                className="w-full brutal-border bg-white px-3 py-1.5 text-xs focus:outline-none focus:bg-brutal-bg"
+              >
+                <option value="">None (top-level)</option>
+                {availableParentTasks.map(t => (
+                  <option key={t.id} value={t.id}>{t.title}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Channel (optional) */}
           {!channelId && (

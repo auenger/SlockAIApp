@@ -172,6 +172,9 @@ pub fn create_suggestion_message(
 ///
 /// For each selected suggestion, creates a Task with source=conversation
 /// and binds it to the channel and source message.
+///
+/// Supports A2A task creation: if `source` is "agent_created", the `agent_id`
+/// field is used as the creator_id, enabling Agent-to-Agent task delegation.
 #[tauri::command]
 pub fn confirm_task_suggestions(
     app: tauri::AppHandle,
@@ -179,10 +182,15 @@ pub fn confirm_task_suggestions(
     message_id: String,
     channel_id: String,
     selected: Vec<SuggestedTask>,
+    agent_id: Option<String>,
+    source: Option<String>,
 ) -> Result<Vec<crate::commands::task::TaskInfo>, String> {
     if selected.is_empty() {
         return Err("No tasks selected".to_string());
     }
+
+    let task_source = source.unwrap_or_else(|| "conversation".to_string());
+    let creator_id = agent_id.unwrap_or_else(|| "agent".to_string());
 
     let channels_dir = {
         let manager = state
@@ -232,13 +240,13 @@ pub fn confirm_task_suggestions(
                 status: "todo".to_string(),
                 priority: suggestion.priority as i64,
                 creator_type: "agent".to_string(),
-                creator_id: "agent".to_string(),
+                creator_id: creator_id.clone(),
                 assignee_id: suggestion.assignee.clone(),
                 channel_id: Some(channel_id.clone()),
                 thread_id: None,
                 parent_task_id: None,
                 execution_mode: "realtime".to_string(),
-                source: "conversation".to_string(),
+                source: task_source.clone(),
                 source_message_id: Some(message_id.clone()),
                 result: None,
                 created_at: now.clone(),
@@ -256,7 +264,7 @@ pub fn confirm_task_suggestions(
                 "status",
                 None,
                 Some("todo"),
-                &format!("agent:agent"),
+                &format!("agent:{}", creator_id),
             ).map_err(|e| format!("insert history failed: {e}"))?;
 
             let child_count = db_helpers::count_child_tasks(&conn, &task_row.id)
@@ -295,11 +303,29 @@ pub fn confirm_task_suggestions(
         }),
     );
 
+    // For A2A tasks, emit task://assigned events for each created task
+    if task_source == "agent_created" {
+        for task_info in &created_tasks {
+            if let Some(ref assignee) = task_info.assignee_id {
+                let _ = app.emit(
+                    "task://assigned",
+                    serde_json::json!({
+                        "task_id": task_info.id,
+                        "agent_id": assignee,
+                        "creator_id": creator_id,
+                        "channel_id": channel_id,
+                    }),
+                );
+            }
+        }
+    }
+
     log::info!(
-        "[task_suggestion] Confirmed {} tasks from message {} in channel {}",
+        "[task_suggestion] Confirmed {} tasks from message {} in channel {} (source={})",
         created_tasks.len(),
         message_id,
-        channel_id
+        channel_id,
+        task_source
     );
 
     Ok(created_tasks)

@@ -30,6 +30,7 @@ import type {
   ListActivitiesResult,
   Task,
   TaskHistoryEntry,
+  TaskDependency,
   CreateTaskInput,
   UpdateTaskInput,
   SuggestedTask,
@@ -562,6 +563,27 @@ export async function getTaskHistory(
   return invoke<TaskHistoryEntry[]>("get_task_history", { taskId });
 }
 
+/** Get dependencies for a task (tasks that this task depends on). */
+export async function getTaskDependencies(
+  taskId: string
+): Promise<TaskDependency[]> {
+  return invoke<TaskDependency[]>("get_task_dependencies", { taskId });
+}
+
+/** Get tasks that depend on a given task (reverse dependencies). */
+export async function getDependentTasks(
+  taskId: string
+): Promise<TaskDependency[]> {
+  return invoke<TaskDependency[]>("get_dependent_tasks", { taskId });
+}
+
+/** Get child tasks of a parent task. */
+export async function getChildTasks(
+  parentTaskId: string
+): Promise<Task[]> {
+  return invoke<Task[]>("get_child_tasks", { parentTaskId });
+}
+
 // ---------------------------------------------------------------------------
 // Task Engine execution commands
 // ---------------------------------------------------------------------------
@@ -614,9 +636,17 @@ export async function getTaskEngineStatus(): Promise<{
 export async function confirmTaskSuggestions(
   messageId: string,
   channelId: string,
-  selected: SuggestedTask[]
+  selected: SuggestedTask[],
+  agentId?: string,
+  source?: string
 ): Promise<Task[]> {
-  return invoke<Task[]>("confirm_task_suggestions", { messageId, channelId, selected });
+  return invoke<Task[]>("confirm_task_suggestions", {
+    messageId,
+    channelId,
+    selected,
+    agentId: agentId ?? null,
+    source: source ?? null,
+  });
 }
 
 /** Dismiss task suggestions — marks the suggestion message as dismissed. */
