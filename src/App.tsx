@@ -16,8 +16,8 @@ export default function App() {
   const [selectedAgent, setSelectedAgent] = useState<AgentWithRuntime | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
 
-  // Thread chat hook (shared between Sidebar and MainContent)
-  const { threads, loadAllThreads, createNewThread, selectThread, activeThread, send: sendThreadMessage, removeThread, renameThreadAction } = useThreadChat();
+  // Thread chat hook (shared between Sidebar and MainContent — SINGLE instance)
+  const { threads, loadAllThreads, createNewThread, selectThread, activeThread, send: sendThreadMessage, removeThread, renameThreadAction, isStreaming: threadIsStreaming, isThinking: threadIsThinking, streamingText: threadStreamingText, clearActive: clearActiveThread } = useThreadChat();
 
   // Channel hook
   const {
@@ -178,6 +178,7 @@ export default function App() {
     setActiveChannel(null);
     _clearActiveChannel();
     setActiveThreadId(null);
+    clearActiveThread(); // Clear thread state (activeThread, streaming, thinking)
     setIsThreadOpen(false);
     setActiveTab('CHAT');
   };
@@ -245,6 +246,13 @@ export default function App() {
         onDeleteAgent={handleDeleteAgent}
         onRefresh={handleRefresh}
         onStopSession={handleStopSession}
+        threadActiveThread={activeThread}
+        threadIsStreaming={threadIsStreaming}
+        threadIsThinking={threadIsThinking}
+        threadStreamingText={threadStreamingText}
+        threadSend={sendThreadMessage}
+        threadCreateNewThread={createNewThread}
+        threadSelectThread={selectThread}
       />
 
       {/* Right Thread Panel */}

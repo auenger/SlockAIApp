@@ -35,10 +35,9 @@ import {
   Wrench,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { TabType, Task, Message, AgentWithRuntime, Channel, ChannelMessage, ContentBlock } from '../types';
+import { TabType, Task, Message, AgentWithRuntime, Channel, ChannelMessage, ContentBlock, Thread } from '../types';
 import { getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
 import { useAgentProfile } from '../lib/useAgentProfile';
-import { useThreadChat } from '../lib/useThreadChat';
 import { useWorkspace } from '../lib/useWorkspace';
 import { openWorkspaceInFinder } from '../lib/ipc';
 import { useSkills } from '../lib/useSkills';
@@ -334,6 +333,20 @@ interface MainContentProps {
   onRefresh?: () => void;
   /** Stop the currently running agent session */
   onStopSession?: () => void;
+  /** Active thread from App-level useThreadChat (single instance) */
+  threadActiveThread?: Thread | null;
+  /** Whether a thread message is streaming (from App-level hook) */
+  threadIsStreaming?: boolean;
+  /** Whether the thread agent is thinking (from App-level hook) */
+  threadIsThinking?: boolean;
+  /** Buffered streaming text for thread (from App-level hook) */
+  threadStreamingText?: string;
+  /** Send a message in a thread (from App-level hook) */
+  threadSend?: (agentId: string, threadId: string, message: string) => Promise<void>;
+  /** Create a new thread (from App-level hook) */
+  threadCreateNewThread?: (agentId: string, agentName: string) => Promise<Thread>;
+  /** Select a thread (from App-level hook) */
+  threadSelectThread?: (agentId: string, threadId: string) => Promise<void>;
 }
 
 export const MainContent: React.FC<MainContentProps> = ({
@@ -353,6 +366,13 @@ export const MainContent: React.FC<MainContentProps> = ({
   onDeleteAgent,
   onRefresh,
   onStopSession,
+  threadActiveThread = null,
+  threadIsStreaming = false,
+  threadIsThinking = false,
+  threadStreamingText = '',
+  threadSend,
+  threadCreateNewThread,
+  threadSelectThread,
 }) => {
   const [taskFilter, setTaskFilter] = useState('All');
   const [inputValue, setInputValue] = useState('');
@@ -455,16 +475,11 @@ export const MainContent: React.FC<MainContentProps> = ({
     agentColorMap.set(member.agent_id, colorIdx++);
   }
 
-  // Thread chat hook
-  const {
-    activeThread,
-    isStreaming,
-    isThinking,
-    streamingText,
-    createNewThread,
-    selectThread,
-    send,
-  } = useThreadChat();
+  // Thread state from App-level useThreadChat (single instance — no local hook)
+  const activeThread = threadActiveThread;
+  const isStreaming = threadIsStreaming;
+  const isThinking = threadIsThinking;
+  const streamingText = threadStreamingText;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -538,7 +553,7 @@ export const MainContent: React.FC<MainContentProps> = ({
     // If no active thread, create one
     if (!threadId) {
       try {
-        const newThread = await createNewThread(agentId, selectedAgent.agent.name);
+        const newThread = await threadCreateNewThread!(agentId, selectedAgent.agent.name);
         threadId = newThread.id;
         onThreadCreated?.(threadId);
       } catch (err) {
@@ -550,7 +565,7 @@ export const MainContent: React.FC<MainContentProps> = ({
     setInputValue('');
 
     try {
-      await send(agentId, threadId, userInput);
+      await threadSend!(agentId, threadId, userInput);
     } catch (error) {
       console.error("Agent Error:", error);
     }
@@ -780,7 +795,7 @@ export const MainContent: React.FC<MainContentProps> = ({
                 await onRefresh();
                 // Re-select thread in thread mode to reload messages
                 if (!isChannelMode && selectedAgent && activeThreadId) {
-                  selectThread(selectedAgent.agent.agent_id, activeThreadId);
+                  threadSelectThread?.(selectedAgent.agent.agent_id, activeThreadId);
                 }
               } finally {
                 // Brief animation delay
