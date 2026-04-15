@@ -1,10 +1,124 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-15T21:00:00+08:00"
-  version: 34
-  total_completed: 34
+  last_updated: "2026-04-16T17:00:00+08:00"
+  version: 39
+  total_completed: 39
 
 records:
+  - id: feat-a2a-transport
+    name: "A2A 协议类型定义 + Transport 基础设施"
+    completed: "2026-04-16T17:00:00+08:00"
+    tag: feat-a2a-transport-20260416
+    merge_commit: "bcb5474"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-a2a-transport
+    worktree_deleted: true
+    worktree_path: ../SlockAI-feat-a2a-transport
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 6
+      scenarios_passed: 6
+    stats:
+      started: "2026-04-16T16:00:00+08:00"
+      duration: "~1h"
+      commits: 1
+      files_changed: 14
+      lines_added: 3268
+
+  - id: feat-claude-control-protocol
+    name: "Claude Code Control Protocol Runtime（双向持久会话 + 权限交互）"
+    completed: "2026-04-15T15:30:00+08:00"
+    tag: feat-claude-control-protocol-20260415
+    merge_commit: "fe948c8"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-claude-control-protocol
+    worktree_deleted: true
+    worktree_path: ../SlockAI-feat-claude-control-protocol
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 7
+      scenarios_passed: 6
+    stats:
+      started: "2026-04-15T15:00:00+08:00"
+      duration: "30m"
+      commits: 3
+      files_changed: 4
+  - id: feat-task-advanced
+    name: "高级 Task 协作（子任务 + 依赖 + A2A 传递）"
+    completed: "2026-04-16T14:03:00+08:00"
+    tag: feat-task-advanced-20260416
+    merge_commit: "fe948c8"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-task-advanced
+    worktree_deleted: true
+    worktree_path: ../SlockAI-feat-task-advanced
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-16T11:00:00+08:00"
+      duration: "3h"
+      commits: 1
+      files_changed: 9
+  - id: feat-task-conversation-bind
+    name: "对话驱动 Task 生成 + 上下文绑定"
+    completed: "2026-04-16T10:00:00+08:00"
+    tag: feat-task-conversation-bind-20260416
+    merge_commit: "c7772a07"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-task-conversation-bind
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-task-conversation-bind
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 6
+      scenarios_passed: 6
+    stats:
+      started: "2026-04-16T09:00:00+08:00"
+      duration: "1h"
+      commits: 1
+      files_changed: 12
+
+  - id: feat-task-ui-board
+    name: "Task 看板 + 列表 + 详情 UI（可与执行引擎并行）"
+    completed: "2026-04-15T22:30:00+08:00"
+    tag: feat-task-ui-board-20260415b
+    merge_commit: "1b01a12"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-task-ui-board
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-task-ui-board
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 7
+      scenarios_passed: 7
+    stats:
+      started: "2026-04-15T22:00:00+08:00"
+      duration: "~30min"
+      commits: 2
+      files_changed: 1
+
   - id: feat-task-execution
     name: "Task 执行引擎（实时 + 异步双模式，可与 UI 并行）"
     completed: "2026-04-15T21:00:00+08:00"

@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-16T16:00:00+08:00'
-  version: 123
+  last_updated: '2026-04-16T17:00:00+08:00'
+  version: 124
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -32,16 +32,7 @@ parents:
   - feat-task-execution
   - feat-task-conversation-bind
   - feat-task-advanced
-active:
-- id: feat-a2a-transport
-  name: A2A 协议类型定义 + Transport 基础设施
-  priority: 80
-  created_at: '2026-04-14'
-  parent: feat-a2a-runtime
-  depends_on: []
-  branch: feature/feat-a2a-transport
-  worktree: ../SlockAI-feat-a2a-transport
-  started_at: '2026-04-16T16:00:00+08:00'
+active: []
 pending:
 - id: feat-a2a-adapter
   name: 本地 Runtime → A2A Server Adapter（CLI 包装为 A2A 端点）
@@ -73,6 +64,10 @@ pending:
   - feat-a2a-remote-client
 blocked: []
 completed:
+- id: feat-a2a-transport
+  name: A2A 协议类型定义 + Transport 基础设施
+  completed_at: '2026-04-16T17:00:00+08:00'
+  tag: feat-a2a-transport-20260416
 - id: feat-claude-control-protocol
   name: Claude Code Control Protocol Runtime（双向持久会话 + 权限交互）
   completed_at: '2026-04-15T15:30:00+08:00'

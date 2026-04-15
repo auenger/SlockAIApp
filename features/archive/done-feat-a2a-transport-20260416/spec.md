@@ -99,7 +99,20 @@ Agent 不再绑定到一个本地 CLI 二进制，而是绑定到一个"连接�
 
 ## Technical Solution
 
-<!-- 待实现时填充 -->
+### Merge Record
+
+| Field | Value |
+|-------|-------|
+| Completed | 2026-04-16T17:00:00+08:00 |
+| Branch | feature/feat-a2a-transport |
+| Merge Commit | bcb5474 |
+| Feature Commit | f5f1c0e |
+| Archive Tag | feat-a2a-transport-20260416 |
+| Conflicts | None |
+| Verification | 78/78 tests passed, 6/6 Gherkin scenarios verified |
+| Duration | ~1 hour |
+| Files Changed | 14 (6 new Rust modules, 1 Cargo.toml, 1 mod.rs, 6 feature docs) |
+| Lines Added | 3268 |
 
 ### 架构概要
 

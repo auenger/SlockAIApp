@@ -277,3 +277,19 @@ And 下次请求时重新启动（--resume）
 - [ ] cargo build 通过
 - [ ] 手动测试：单 Agent 多轮对话
 - [ ] 手动测试：多 Agent 并发
+
+## Merge Record
+
+- **Completed**: 2026-04-15
+- **Merged to**: main (code was already merged in prior commits: a68d80f, f8d68ba, 2909962)
+- **Archive tag**: feat-claude-control-protocol-20260415
+- **Conflicts**: None
+- **Verification**: PASS (6/7 Gherkin scenarios PASS, 1 PARTIAL - permission handling deferred to v1)
+- **Evidence**: features/archive/done-feat-claude-control-protocol-20260415/evidence/verification-report.md
+- **Key changes**:
+  - ClaudeCodeRuntime: stateful with process pool (`Arc<Mutex<HashMap<String, ProcessHandle>>>`)
+  - Dual execution mode: persistent (Thread) via stdin/stdout JSON, one-shot (Channel) via --print
+  - LRU eviction (max 5 concurrent processes), idle timeout (300s)
+  - Crash recovery via --resume session_id
+  - ExecuteParams gained `persistent: bool` and `agent_id: String` fields
+  - Zero frontend change (StreamEvent interface unchanged)
