@@ -6,7 +6,6 @@
 use crate::storage::db_helpers;
 use crate::commands::AppState;
 use serde::{Deserialize, Serialize};
-use tauri::Manager;
 
 // ---------------------------------------------------------------------------
 // Types shared across commands
@@ -645,4 +644,89 @@ pub fn get_task_history(
         .map_err(|e| format!("get task history failed: {e}"))?;
 
     Ok(rows.iter().map(TaskHistoryInfo::from_row).collect())
+}
+
+// ---------------------------------------------------------------------------
+// Task execution commands (TaskEngine integration)
+// ---------------------------------------------------------------------------
+
+/// Execute a task via the TaskEngine.
+///
+/// Dispatches to realtime or async execution based on the task's `execution_mode`.
+/// The TaskEngine handles dependency checks, agent busy state, and emits
+/// task://* events for the frontend.
+#[tauri::command]
+pub fn execute_task(
+    task_engine: tauri::State<'_, crate::task_engine::TaskEngine>,
+    state: tauri::State<'_, AppState>,
+    task_id: String,
+) -> Result<(), String> {
+    // Load task to determine execution mode
+    let conn = state
+        .db_conn
+        .lock()
+        .map_err(|e| format!("lock error: {e}"))?;
+
+    let task = db_helpers::get_task(&conn, &task_id)
+        .map_err(|e| format!("get task failed: {e}"))?
+        .ok_or_else(|| format!("task not found: {task_id}"))?;
+
+    let mode = task.execution_mode.clone();
+
+    // Release the DB lock before submitting (TaskEngine will acquire it again)
+    drop(conn);
+
+    task_engine.submit(&task_id, &mode)?;
+
+    log::info!("[Task] Execution submitted: task_id={}, mode={}", task_id, mode);
+    Ok(())
+}
+
+/// Cancel a running task execution via the TaskEngine.
+///
+/// This is different from `cancel_task` which just sets status to 'cancelled'.
+/// This command signals the TaskEngine to interrupt an active execution.
+#[tauri::command]
+pub fn cancel_task_execution(
+    task_engine: tauri::State<'_, crate::task_engine::TaskEngine>,
+    task_id: String,
+) -> Result<(), String> {
+    task_engine.cancel_running_task(&task_id)?;
+    log::info!("[Task] Execution cancelled: task_id={}", task_id);
+    Ok(())
+}
+
+/// Report task completion to the TaskEngine (called by frontend after agent responds).
+#[tauri::command]
+pub fn report_task_completed(
+    task_engine: tauri::State<'_, crate::task_engine::TaskEngine>,
+    task_id: String,
+    result: String,
+) -> Result<(), String> {
+    task_engine.on_task_completed(&task_id, &result)?;
+    log::info!("[Task] Completion reported: task_id={}, result_len={}", task_id, result.len());
+    Ok(())
+}
+
+/// Report task failure to the TaskEngine.
+#[tauri::command]
+pub fn report_task_failed(
+    task_engine: tauri::State<'_, crate::task_engine::TaskEngine>,
+    task_id: String,
+    error: String,
+) -> Result<(), String> {
+    task_engine.on_task_failed(&task_id, &error)?;
+    log::info!("[Task] Failure reported: task_id={}, error={}", task_id, error);
+    Ok(())
+}
+
+/// Get active task execution status from the TaskEngine.
+#[tauri::command]
+pub fn get_task_engine_status(
+    task_engine: tauri::State<'_, crate::task_engine::TaskEngine>,
+) -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({
+        "active_tasks": task_engine.get_active_tasks_info(),
+        "queue_length": task_engine.queue_length(),
+    }))
 }
