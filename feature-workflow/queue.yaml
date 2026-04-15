@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-15T10:00:00+08:00'
-  version: 107
+  last_updated: '2026-04-15T21:00:00+08:00'
+  version: 114
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -60,6 +60,11 @@ pending:
   parent: feat-a2a-runtime
   depends_on:
   - feat-a2a-transport
+- id: feat-thread-ux-polish
+  name: Thread 面板 UX 打磨（Thinking/Streaming 动画 + 宽度调整优化）
+  priority: 75
+  created_at: '2026-04-15'
+  depends_on: []
 - id: feat-a2a-multi-agent
   name: 多 Agent A2A 协作（Push Notification + 任务委托）
   priority: 70
@@ -68,13 +73,6 @@ pending:
   depends_on:
   - feat-a2a-adapter
   - feat-a2a-remote-client
-- id: feat-task-execution
-  name: Task 执行引擎（实时 + 异步双模式，可与 UI 并行）
-  priority: 85
-  created_at: '2026-04-14'
-  parent: feat-agent-task-system
-  depends_on:
-  - feat-task-data-model
 - id: feat-task-ui-board
   name: Task 看板 + 列表 + 详情 UI（可与执行引擎并行）
   priority: 85
@@ -98,6 +96,14 @@ pending:
   - feat-task-conversation-bind
 blocked: []
 completed:
+- id: feat-task-execution
+  name: Task 执行引擎（实时 + 异步双模式，可与 UI 并行）
+  completed_at: '2026-04-15T21:00:00+08:00'
+  tag: feat-task-execution-20260415
+- id: fix-thread-agent-switch
+  name: Thread 状态隔离 — Agent 切换时对话残留修复
+  completed_at: '2026-04-15T19:30:00+08:00'
+  tag: fix-thread-agent-switch-20260415
 - id: feat-task-data-model
   name: Task 数据模型 + 后端 CRUD + IPC Commands
   completed_at: '2026-04-14T16:30:00+08:00'

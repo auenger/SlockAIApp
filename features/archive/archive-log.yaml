@@ -1,10 +1,56 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-14T15:34:00+08:00"
-  version: 32
-  total_completed: 32
+  last_updated: "2026-04-15T21:00:00+08:00"
+  version: 34
+  total_completed: 34
 
 records:
+  - id: feat-task-execution
+    name: "Task 执行引擎（实时 + 异步双模式，可与 UI 并行）"
+    completed: "2026-04-15T21:00:00+08:00"
+    tag: feat-task-execution-20260415
+    merge_commit: "53c77a6"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-task-execution
+    worktree_deleted: true
+    worktree_path: ../SlockAI-feat-task-execution
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 5
+      scenarios_passed: 5
+    stats:
+      started: "2026-04-15T20:00:00+08:00"
+      duration: "~1h"
+      commits: 1
+      files_changed: 6
+
+  - id: fix-thread-agent-switch
+    name: "Thread 状态隔离 — Agent 切换时对话残留修复"
+    completed: "2026-04-15T19:30:00+08:00"
+    tag: fix-thread-agent-switch-20260415
+    merge_commit: de84f7e
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/fix-thread-agent-switch
+    worktree_deleted: true
+    worktree_path: ../SlockAI-fix-thread-agent-switch
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 3
+      scenarios_passed: 3
+    stats:
+      started: "2026-04-15T19:00:00+08:00"
+      duration: "30min"
+      commits: 1
+      files_changed: 2
+
   - id: fix-channel-state-isolation
     name: "Channel 切换时 Agent Thinking/Streaming 状态隔离"
     completed: "2026-04-14T15:34:00+08:00"

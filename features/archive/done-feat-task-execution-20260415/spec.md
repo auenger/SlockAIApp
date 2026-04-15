@@ -256,3 +256,16 @@ Then 分配被拒绝（Agent busy）
 When Claude 在 Channel "other" 无任务
 Then 可以在 Channel "other" 分配给 Claude
 ```
+
+---
+
+## Merge Record
+
+- **Completed**: 2026-04-15T04:20:00+08:00
+- **Merged Branch**: feature/feat-task-execution
+- **Merge Commit**: 53c77a6
+- **Archive Tag**: feat-task-execution-20260415
+- **Conflicts**: none
+- **Verification**: PASS (34/34 tasks, 5/5 ACs satisfied)
+- **Evidence**: features/archive/done-feat-task-execution-20260415/evidence/verification-report.md
+- **Stats**: 10 files changed, 2190 insertions, 1 deletion
