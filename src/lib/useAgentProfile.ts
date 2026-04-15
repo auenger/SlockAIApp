@@ -23,6 +23,7 @@ const MOCK_IDENTITY: IdentitySummary = {
   creature: "AI",
   vibe: "专业",
   runtime_type: "claude_code",
+  connection_mode: "local",
 };
 
 const MOCK_CONTEXT: AgentContextResult = {

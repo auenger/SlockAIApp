@@ -13,6 +13,7 @@ use super::agent::AgentWorkspace;
 use super::identity::AgentIdentity;
 use super::templates::WorkspaceTemplates;
 use crate::runtime::RuntimeType;
+use crate::runtime::a2a::types::ConnectionMode;
 
 // ---------------------------------------------------------------------------
 // Agent record
@@ -43,6 +44,7 @@ impl Agent {
             enabled: self.enabled,
             session_count: self.session_count,
             runtime_type: self.identity.runtime_type.clone(),
+            connection_mode: self.identity.connection_mode.clone(),
         }
     }
 }
@@ -62,6 +64,9 @@ pub struct AgentSummary {
     /// The runtime type this agent is bound to.
     #[serde(default = "default_runtime_type")]
     pub runtime_type: RuntimeType,
+    /// Connection mode: Local (default) or Remote.
+    #[serde(default)]
+    pub connection_mode: ConnectionMode,
 }
 
 fn default_runtime_type() -> RuntimeType {
@@ -165,6 +170,7 @@ impl AgentManager {
                 None,
                 None,
                 RuntimeType::ClaudeCode,
+                ConnectionMode::Local,
             )?;
             true
         } else {
@@ -267,6 +273,7 @@ impl AgentManager {
         avatar: Option<&str>,
         icon: Option<&str>,
         runtime_type: RuntimeType,
+        connection_mode: ConnectionMode,
     ) -> Result<&Agent, ManagerError> {
         let agent_id = name_to_id(name);
 
@@ -278,7 +285,7 @@ impl AgentManager {
 
         let avatar_str = avatar.map(|s| s.to_string());
         let icon_str = icon.map(|s| s.to_string());
-        self.create_agent_internal(&agent_id, name, creature, vibe, emoji, avatar_str, icon_str, runtime_type)?;
+        self.create_agent_internal(&agent_id, name, creature, vibe, emoji, avatar_str, icon_str, runtime_type, connection_mode)?;
 
         let identity = self.load_identity(&agent_id)?;
         let agent = Agent {
@@ -308,6 +315,7 @@ impl AgentManager {
         avatar: Option<String>,
         icon: Option<String>,
         runtime_type: RuntimeType,
+        connection_mode: ConnectionMode,
     ) -> Result<(), ManagerError> {
         let agent_dir = self.agents_dir.join(agent_id);
 
@@ -315,10 +323,11 @@ impl AgentManager {
         let workspace = AgentWorkspace::new(&agent_dir);
         workspace.initialize()?;
 
-        // Create identity with runtime type
+        // Create identity with runtime type and connection mode
         let mut identity = AgentIdentity::with_runtime_type(agent_id, name, creature, vibe, emoji, runtime_type);
         identity.avatar = avatar;
         identity.icon = icon;
+        identity.connection_mode = connection_mode;
         identity
             .write_to_file(&workspace.identity_file())
             .map_err(|e| ManagerError::IdentityError {
@@ -687,8 +696,8 @@ mod tests {
         manager.initialize_workspace().unwrap();
         manager.load().unwrap();
 
-        manager.create_agent("Claude", "AI", "sharp", "sparkles", None, None, RuntimeType::ClaudeCode).unwrap();
-        manager.create_agent("Codex", "AI", "calm", "code", None, None, RuntimeType::Codex).unwrap();
+        manager.create_agent("Claude", "AI", "sharp", "sparkles", None, None, RuntimeType::ClaudeCode, ConnectionMode::Local).unwrap();
+        manager.create_agent("Codex", "AI", "calm", "code", None, None, RuntimeType::Codex, ConnectionMode::Local).unwrap();
 
         let agents = manager.list_agents();
         assert_eq!(agents.len(), 3); // default + claude + codex
@@ -701,7 +710,7 @@ mod tests {
         manager.initialize_workspace().unwrap();
         manager.load().unwrap();
 
-        manager.create_agent("Claude", "AI", "sharp", "sparkles", None, None, RuntimeType::ClaudeCode).unwrap();
+        manager.create_agent("Claude", "AI", "sharp", "sparkles", None, None, RuntimeType::ClaudeCode, ConnectionMode::Local).unwrap();
 
         let agent = manager.switch_agent("claude").unwrap();
         assert_eq!(agent.agent_id, "claude");
@@ -715,7 +724,7 @@ mod tests {
         manager.initialize_workspace().unwrap();
         manager.load().unwrap();
 
-        manager.create_agent("ToDelete", "AI", "calm", "x", None, None, RuntimeType::ClaudeCode).unwrap();
+        manager.create_agent("ToDelete", "AI", "calm", "x", None, None, RuntimeType::ClaudeCode, ConnectionMode::Local).unwrap();
 
         // Switch away first so it's not active
         manager.switch_agent("default").unwrap();
@@ -744,7 +753,7 @@ mod tests {
         manager.load().unwrap();
 
         // Try to create "Default" which normalizes to "default"
-        let result = manager.create_agent("Default", "AI", "helpful", "robot", None, None, RuntimeType::ClaudeCode);
+        let result = manager.create_agent("Default", "AI", "helpful", "robot", None, None, RuntimeType::ClaudeCode, ConnectionMode::Local);
         assert!(result.is_err());
     }
 
@@ -756,7 +765,7 @@ mod tests {
         let mut m1 = AgentManager::new(dir.path());
         m1.initialize_workspace().unwrap();
         m1.load().unwrap();
-        m1.create_agent("Claude", "AI", "sharp", "sparkles", None, None, RuntimeType::ClaudeCode).unwrap();
+        m1.create_agent("Claude", "AI", "sharp", "sparkles", None, None, RuntimeType::ClaudeCode, ConnectionMode::Local).unwrap();
 
         // Second manager: should load existing agents
         let mut m2 = AgentManager::new(dir.path());

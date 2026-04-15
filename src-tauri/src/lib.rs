@@ -172,6 +172,13 @@ pub fn run() {
             commands::task::get_task_engine_status,
             commands::task_suggestion::confirm_task_suggestions,
             commands::task_suggestion::dismiss_task_suggestions,
+            commands::remote_connection::remote_connection_create,
+            commands::remote_connection::remote_connection_list,
+            commands::remote_connection::remote_connection_update,
+            commands::remote_connection::remote_connection_delete,
+            commands::remote_connection::remote_connection_test,
+            commands::remote_connection::remote_connection_health_all,
+            commands::remote_connection::remote_connection_get_agent_card,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

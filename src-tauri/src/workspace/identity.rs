@@ -10,6 +10,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::runtime::RuntimeType;
+use crate::runtime::a2a::types::ConnectionMode;
 
 /// Agent identity metadata, stored in `IDENTITY.md`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -32,6 +33,9 @@ pub struct AgentIdentity {
     /// The runtime backend this agent is bound to (defaults to ClaudeCode).
     #[serde(default)]
     pub runtime_type: RuntimeType,
+    /// Connection mode: Local (default) or Remote { connection_id }.
+    #[serde(default)]
+    pub connection_mode: ConnectionMode,
 }
 
 impl AgentIdentity {
@@ -52,6 +56,7 @@ impl AgentIdentity {
             avatar: None,
             icon: None,
             runtime_type: RuntimeType::ClaudeCode,
+            connection_mode: ConnectionMode::Local,
         }
     }
 
@@ -73,6 +78,7 @@ impl AgentIdentity {
             avatar: None,
             icon: None,
             runtime_type,
+            connection_mode: ConnectionMode::Local,
         }
     }
 
@@ -90,6 +96,7 @@ impl AgentIdentity {
             avatar: None,
             icon: None,
             runtime_type: RuntimeType::ClaudeCode,
+            connection_mode: ConnectionMode::Local,
         }
     }
 
@@ -121,6 +128,7 @@ impl AgentIdentity {
         let mut avatar: Option<String> = None;
         let mut icon: Option<String> = None;
         let mut runtime_type: Option<RuntimeType> = None;
+        let mut connection_mode: Option<ConnectionMode> = None;
 
         for line in content.lines() {
             let line = line.trim();
@@ -165,6 +173,9 @@ impl AgentIdentity {
                         "runtime type" | "runtime_type" => {
                             runtime_type = Some(parse_runtime_type(&value));
                         }
+                        "connection mode" | "connection_mode" => {
+                            connection_mode = Some(parse_connection_mode(&value));
+                        }
                         _ => {}
                     }
                 }
@@ -190,6 +201,9 @@ impl AgentIdentity {
                         }
                         "runtime type" | "runtime_type" if runtime_type.is_none() => {
                             runtime_type = Some(parse_runtime_type(&value));
+                        }
+                        "connection mode" | "connection_mode" if connection_mode.is_none() => {
+                            connection_mode = Some(parse_connection_mode(&value));
                         }
                         _ => {}
                     }
@@ -217,6 +231,7 @@ impl AgentIdentity {
             avatar,
             icon,
             runtime_type: runtime_type.unwrap_or_default(),
+            connection_mode: connection_mode.unwrap_or_default(),
         })
     }
 
@@ -239,6 +254,10 @@ impl AgentIdentity {
         let vibe = &self.vibe;
         let emoji = &self.emoji;
         let runtime_type = self.runtime_type.as_str();
+        let connection_mode = match &self.connection_mode {
+            ConnectionMode::Local => "local".to_string(),
+            ConnectionMode::Remote { connection_id } => format!("remote:{}", connection_id),
+        };
 
         format!(
             r#"# IDENTITY.md - Who Am I?
@@ -253,6 +272,7 @@ _Fill this in during your first conversation. Make it yours._
 - **Icon**: {icon}
 - **Avatar**: {avatar}
 - **Runtime Type**: {runtime_type}
+- **Connection Mode**: {connection_mode}
 
 ---
 
@@ -307,6 +327,7 @@ _This file is yours to evolve. As you learn who you are, update it._
             creature: self.creature.clone(),
             vibe: self.vibe.clone(),
             runtime_type: self.runtime_type.clone(),
+            connection_mode: self.connection_mode.clone(),
         }
     }
 }
@@ -326,6 +347,9 @@ pub struct IdentitySummary {
     /// The runtime backend type this agent is bound to.
     #[serde(default = "default_runtime_type")]
     pub runtime_type: RuntimeType,
+    /// Connection mode: Local (default) or Remote.
+    #[serde(default)]
+    pub connection_mode: ConnectionMode,
 }
 
 fn default_runtime_type() -> RuntimeType {
@@ -347,6 +371,26 @@ fn parse_runtime_type(value: &str) -> RuntimeType {
         "codex" => RuntimeType::Codex,
         "gemini" => RuntimeType::Gemini,
         other => RuntimeType::Custom(other.to_string()),
+    }
+}
+
+/// Parse a connection mode string into a `ConnectionMode` enum variant.
+///
+/// Accepts "local" (default), "remote" or "remote:<connection_id>".
+fn parse_connection_mode(value: &str) -> ConnectionMode {
+    let trimmed = value.trim().to_lowercase();
+    if trimmed.starts_with("remote") {
+        // "remote" or "remote:conn-id"
+        if let Some(conn_id) = trimmed.strip_prefix("remote:") {
+            let conn_id = conn_id.trim();
+            if !conn_id.is_empty() {
+                return ConnectionMode::Remote { connection_id: conn_id.to_string() };
+            }
+        }
+        // "remote" without connection_id — default to a placeholder
+        ConnectionMode::Remote { connection_id: String::new() }
+    } else {
+        ConnectionMode::Local
     }
 }
 

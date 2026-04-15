@@ -5,6 +5,7 @@
 
 pub mod activity;
 pub mod channel;
+pub mod remote_connection;
 pub mod task;
 pub mod task_suggestion;
 pub mod thread;
@@ -16,6 +17,7 @@ use std::sync::Mutex;
 use crate::context::ContextBuilder;
 use crate::runtime::registry::RuntimeRegistry;
 use crate::runtime::RuntimeType;
+use crate::runtime::a2a::types::ConnectionMode;
 use crate::storage::activity::{ActivityStore, ActivityType, create_entry};
 use crate::workspace::manager::{AgentManager, AgentSummary, ManagerStatus, AgentHealthInfo};
 use crate::workspace::identity::IdentitySummary;
@@ -224,6 +226,9 @@ pub struct CreateAgentRequest {
     /// Runtime type for the agent (defaults to claude_code).
     #[serde(default)]
     pub runtime_type: Option<RuntimeType>,
+    /// Connection mode for the agent (defaults to local).
+    #[serde(default)]
+    pub connection_mode: Option<ConnectionMode>,
 }
 
 fn default_creature() -> String {
@@ -256,6 +261,7 @@ pub fn create_agent(
             request.avatar.as_deref(),
             request.icon.as_deref(),
             request.runtime_type.clone().unwrap_or_default(),
+            request.connection_mode.clone().unwrap_or_default(),
         )
         .map_err(|e| format!("create failed: {e}"))?;
 

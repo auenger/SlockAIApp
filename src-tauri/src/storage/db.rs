@@ -139,6 +139,11 @@ fn migrations() -> Vec<Migration> {
             description: "tasks v2 full data model",
             sql: include_str!("migrations/V004__tasks_v2.sql"),
         },
+        Migration {
+            version: 5,
+            description: "remote connections table + agents connection_mode",
+            sql: include_str!("migrations/V005__remote_connections.sql"),
+        },
     ]
 }
 

@@ -34,6 +34,11 @@ import type {
   CreateTaskInput,
   UpdateTaskInput,
   SuggestedTask,
+  RemoteConnectionInfo,
+  CreateRemoteConnectionRequest,
+  UpdateRemoteConnectionRequest,
+  TestConnectionResult,
+  RemoteAgentCard,
 } from "../types";
 
 /**
@@ -655,4 +660,52 @@ export async function dismissTaskSuggestions(
   channelId: string
 ): Promise<void> {
   return invoke<void>("dismiss_task_suggestions", { messageId, channelId });
+}
+
+// ---------------------------------------------------------------------------
+// Remote Connection commands
+// ---------------------------------------------------------------------------
+
+/** Create a new remote A2A connection. */
+export async function remoteConnectionCreate(
+  request: CreateRemoteConnectionRequest
+): Promise<RemoteConnectionInfo> {
+  return invoke<RemoteConnectionInfo>("remote_connection_create", { request });
+}
+
+/** List all remote connections. */
+export async function remoteConnectionList(): Promise<RemoteConnectionInfo[]> {
+  return invoke<RemoteConnectionInfo[]>("remote_connection_list");
+}
+
+/** Update a remote connection. */
+export async function remoteConnectionUpdate(
+  id: string,
+  request: UpdateRemoteConnectionRequest
+): Promise<RemoteConnectionInfo> {
+  return invoke<RemoteConnectionInfo>("remote_connection_update", { id, request });
+}
+
+/** Delete a remote connection. */
+export async function remoteConnectionDelete(id: string): Promise<void> {
+  return invoke<void>("remote_connection_delete", { id });
+}
+
+/** Test a remote connection (health check). */
+export async function remoteConnectionTest(
+  id: string
+): Promise<TestConnectionResult> {
+  return invoke<TestConnectionResult>("remote_connection_test", { id });
+}
+
+/** Batch health check all remote connections. */
+export async function remoteConnectionHealthAll(): Promise<RemoteConnectionInfo[]> {
+  return invoke<RemoteConnectionInfo[]>("remote_connection_health_all");
+}
+
+/** Get the cached AgentCard for a remote connection. */
+export async function remoteConnectionGetAgentCard(
+  id: string
+): Promise<RemoteAgentCard | null> {
+  return invoke<RemoteAgentCard | null>("remote_connection_get_agent_card", { id });
 }
