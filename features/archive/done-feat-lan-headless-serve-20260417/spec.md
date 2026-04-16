@@ -107,7 +107,18 @@ And 进程以非零退出码退出
 ```
 
 ### General Checklist
-- [ ] 不影响 GUI 模式的正常启动
-- [ ] CLI 参数有 --help 输出
-- [ ] 日志输出到 stdout/stderr
-- [ ] 复用 feat-lan-a2a-access 的核心代码
+- [x] 不影响 GUI 模式的正常启动
+- [x] CLI 参数有 --help 输出
+- [x] 日志输出到 stdout/stderr
+- [x] 复用 feat-lan-a2a-access 的核心代码
+
+## Merge Record
+
+- **Completed**: 2026-04-17T04:30:00+08:00
+- **Merged Branch**: feature/feat-lan-headless-serve
+- **Merge Commit**: 80dc1a2
+- **Archive Tag**: feat-lan-headless-serve-20260417
+- **Conflicts**: None
+- **Verification**: PASS (258/258 tests, 3/3 Gherkin scenarios)
+- **Duration**: ~30 minutes
+- **Files Changed**: 10 (6 new, 4 modified)

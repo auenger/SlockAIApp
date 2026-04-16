@@ -1,10 +1,35 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-17T03:00:00+08:00"
-  version: 48
-  total_completed: 48
+  last_updated: "2026-04-17T04:30:00+08:00"
+  version: 49
+  total_completed: 49
 
 records:
+  - id: feat-lan-headless-serve
+    name: "Headless A2A Server CLI 模式（方式2）"
+    completed: "2026-04-17T04:30:00+08:00"
+    tag: feat-lan-headless-serve-20260417
+    merge_commit: "80dc1a2"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-lan-headless-serve
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-lan-headless-serve
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 3
+      scenarios_passed: 3
+    stats:
+      started: "2026-04-17T04:00:00+08:00"
+      duration: "~30min"
+      commits: 2
+      files_changed: 10
+      lines_added: 681
+      lines_deleted: 25
+
   - id: feat-lan-a2a-access
     name: "LAN A2A 服务端 + GUI 开关（方式1）"
     completed: "2026-04-17T03:00:00+08:00"
