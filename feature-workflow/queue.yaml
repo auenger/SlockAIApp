@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-16T21:30:00+08:00'
-  version: 132
+  last_updated: '2026-04-16T02:30:00+08:00'
+  version: 133
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -32,8 +32,31 @@ parents:
   - feat-task-execution
   - feat-task-conversation-bind
   - feat-task-advanced
+- id: feat-task-exec-runtime
+  name: Task 执行 Runtime 接入（Channel 选择 + Realtime/Async 执行）
+  split: true
+  children:
+  - feat-task-channel-selector
+  - feat-task-realtime-exec
+  - feat-task-async-exec
 active: []
-pending: []
+pending:
+- id: fix-thread-streaming-ux
+  name: Thread/Agent Chat Thinking & Streaming 效果对齐 Channel
+  priority: 75
+  created_at: '2026-04-16T22:30:00+08:00'
+- id: feat-task-channel-selector
+  name: Task Channel 选择器 + Agent 智能过滤
+  priority: 70
+  created_at: '2026-04-16T02:30:00+08:00'
+- id: feat-task-realtime-exec
+  name: Task Realtime 执行 — Channel 消息流接入
+  priority: 70
+  created_at: '2026-04-16T02:30:00+08:00'
+- id: feat-task-async-exec
+  name: Task Async 执行 — 后台 Runtime 执行 + 结果投递
+  priority: 65
+  created_at: '2026-04-16T02:30:00+08:00'
 blocked: []
 completed:
 - id: feat-a2a-multi-agent

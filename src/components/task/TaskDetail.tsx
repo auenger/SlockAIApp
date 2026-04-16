@@ -121,26 +121,7 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
     }
   }, [task?.id]);
 
-  if (!isOpen || !task) return null;
-
-  const assignee = agents.find(a => a.agent.agent_id === task.assigneeId);
-
-  const handleDelete = async () => {
-    await onDelete(task.id);
-    onClose();
-  };
-
-  const handleEdit = async (data: TaskFormData) => {
-    await onEdit(task.id, data);
-  };
-
-  const canExecute = onExecute && !isExecuting &&
-    (task.status === 'todo' || task.status === 'blocked') &&
-    task.assigneeId;
-
-  const canCancel = onCancelExecution && isExecuting;
-
-  // --- Dependency management ---
+  // --- Dependency management (all hooks must be called before any early return) ---
 
   const handleAddDependency = useCallback(async () => {
     if (!addDepTargetId || !task) return;
@@ -171,6 +152,27 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
       console.error('Failed to remove dependency:', err);
     }
   }, [task]);
+
+  // --- Early return AFTER all hooks ---
+
+  if (!isOpen || !task) return null;
+
+  const assignee = agents.find(a => a.agent.agent_id === task.assigneeId);
+
+  const handleDelete = async () => {
+    await onDelete(task.id);
+    onClose();
+  };
+
+  const handleEdit = async (data: TaskFormData) => {
+    await onEdit(task.id, data);
+  };
+
+  const canExecute = onExecute && !isExecuting &&
+    (task.status === 'todo' || task.status === 'blocked') &&
+    task.assigneeId;
+
+  const canCancel = onCancelExecution && isExecuting;
 
   // Filter available tasks for dependency picker (exclude self and already-depended-on)
   const availableForDependency = (allTasks ?? []).filter(
