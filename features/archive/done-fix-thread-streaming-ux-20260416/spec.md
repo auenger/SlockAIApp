@@ -138,7 +138,18 @@ And 应与 Channel 的 AgentStreamBubble 风格对齐
 - Status 消息：灰色等宽字体斜体显示
 
 ### General Checklist
-- [ ] 不影响 Channel 现有的 thinking/streaming 效果
-- [ ] Thread 和 Agent Chat 的效果与 Channel 视觉一致
-- [ ] ContentBlock 卡片与 Channel 复用同一组件
-- [ ] streaming 结束后 contentBlocks 正确清理
+- [x] 不影响 Channel 现有的 thinking/streaming 效果
+- [x] Thread 和 Agent Chat 的效果与 Channel 视觉一致
+- [x] ContentBlock 卡片与 Channel 复用同一组件
+- [x] streaming 结束后 contentBlocks 正确清理
+
+## Merge Record
+
+- **Completed**: 2026-04-16T12:25:00+08:00
+- **Merged Branch**: feature/fix-thread-streaming-ux
+- **Merge Commit**: eab56ab
+- **Archive Tag**: fix-thread-streaming-ux-20260416
+- **Conflicts**: None
+- **Verification**: passed (4/4 Gherkin scenarios, tsc + vite build + cargo check all clean)
+- **Files Changed**: 5 files, +224/-22 lines
+- **Duration**: ~1h25m

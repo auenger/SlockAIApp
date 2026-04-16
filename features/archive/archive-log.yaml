@@ -1,10 +1,33 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-16T21:30:00+08:00"
-  version: 43
-  total_completed: 43
+  last_updated: "2026-04-16T12:25:00+08:00"
+  version: 44
+  total_completed: 44
 
 records:
+  - id: fix-thread-streaming-ux
+    name: "Thread/Agent Chat Thinking & Streaming 效果对齐 Channel"
+    completed: "2026-04-16T12:25:00+08:00"
+    tag: fix-thread-streaming-ux-20260416
+    merge_commit: "eab56ab"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/fix-thread-streaming-ux
+    worktree_deleted: true
+    worktree_path: ../SlockAI-fix-thread-streaming-ux
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-16T23:00:00+08:00"
+      duration: "~1h25m"
+      commits: 1
+      files_changed: 5
+
   - id: feat-a2a-multi-agent
     name: "多 Agent A2A 协作（Push Notification + 任务委托 + Artifact 共享）"
     completed: "2026-04-16T21:30:00+08:00"
