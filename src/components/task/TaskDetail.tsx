@@ -211,6 +211,16 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
               <h2 className="font-black text-lg flex-1 leading-tight">{task.title}</h2>
               <TaskStatusBadge status={task.status} />
             </div>
+            {/* Active execution indicator */}
+            {isExecuting && (
+              <div className="flex items-center gap-1.5 mb-2 p-1.5 bg-brutal-cyan/20 brutal-border text-xs">
+                <span className="inline-block w-1.5 h-1.5 bg-brutal-cyan rounded-full animate-pulse" />
+                <span className="font-bold text-brutal-cyan">Executing...</span>
+                {task.executionMode === 'realtime' && (
+                  <span className="text-gray-500 text-[10px]">in channel</span>
+                )}
+              </div>
+            )}
             {task.description && (
               <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">
                 {task.description}
