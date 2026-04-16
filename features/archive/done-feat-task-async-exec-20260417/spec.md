@@ -193,3 +193,13 @@ And 重试次数耗尽后标记为 blocked
 - Agent busy 状态正确管理
 - CancellationToken 在 async 模式下工作
 - 不影响 Realtime 模式
+
+## Merge Record
+
+- **Completed**: 2026-04-17
+- **Merged Branch**: feature/feat-task-async-exec
+- **Archive Tag**: feat-task-async-exec-20260417
+- **Conflicts**: None
+- **Verification**: passed (9/9 tests, 5/5 Gherkin scenarios)
+- **Files Changed**: 9 (Rust: 1, React: 5, Docs: 3)
+- **Duration**: ~1 session

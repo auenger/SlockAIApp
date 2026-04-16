@@ -1,10 +1,35 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-16T23:30:00+08:00"
-  version: 46
-  total_completed: 46
+  last_updated: "2026-04-17T01:00:00+08:00"
+  version: 47
+  total_completed: 47
 
 records:
+  - id: feat-task-async-exec
+    name: "Task Async 执行 — 后台 Runtime 执行 + 结果投递"
+    completed: "2026-04-17T01:00:00+08:00"
+    tag: feat-task-async-exec-20260417
+    merge_commit: "54ef759"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-task-async-exec
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-task-async-exec
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 5
+      scenarios_passed: 5
+    stats:
+      started: "2026-04-17T00:00:00+08:00"
+      duration: "~1h"
+      commits: 1
+      files_changed: 9
+      lines_added: 997
+      lines_deleted: 260
+
   - id: feat-task-realtime-exec
     name: "Task Realtime 执行 — Channel 消息流接入"
     completed: "2026-04-16T23:30:00+08:00"
