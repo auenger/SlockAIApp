@@ -40,9 +40,10 @@ interface SortableTaskCardProps {
   task: Task;
   agents: AgentWithRuntime[];
   onClick: (taskId: string) => void;
+  isExecuting?: boolean;
 }
 
-function SortableTaskCard({ task, agents, onClick }: SortableTaskCardProps) {
+function SortableTaskCard({ task, agents, onClick, isExecuting }: SortableTaskCardProps) {
   const {
     attributes,
     listeners,
@@ -66,6 +67,7 @@ function SortableTaskCard({ task, agents, onClick }: SortableTaskCardProps) {
         onClick={() => onClick(task.id)}
         dragHandleProps={listeners}
         isDragging={isDragging}
+        isExecuting={isExecuting}
       />
     </div>
   );
@@ -81,9 +83,10 @@ interface KanbanColumnProps {
   agents: AgentWithRuntime[];
   onTaskClick: (taskId: string) => void;
   onCreateInColumn: (status: TaskStatus) => void;
+  executingTaskIds?: Set<string>;
 }
 
-function KanbanColumn({ status, tasks, agents, onTaskClick, onCreateInColumn }: KanbanColumnProps) {
+function KanbanColumn({ status, tasks, agents, onTaskClick, onCreateInColumn, executingTaskIds }: KanbanColumnProps) {
   const config = STATUS_CONFIG[status];
 
   return (
@@ -103,6 +106,7 @@ function KanbanColumn({ status, tasks, agents, onTaskClick, onCreateInColumn }: 
               task={task}
               agents={agents}
               onClick={onTaskClick}
+              isExecuting={executingTaskIds?.has(task.id)}
             />
           ))}
         </SortableContext>
@@ -144,6 +148,8 @@ interface TaskBoardProps {
   onCreateTask: (data: TaskFormData) => Promise<void>;
   /** Channel ID for context */
   channelId?: string;
+  /** Set of task IDs currently being executed */
+  executingTaskIds?: Set<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -157,6 +163,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   onTaskClick,
   onCreateTask,
   channelId,
+  executingTaskIds,
 }) => {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -243,6 +250,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
               agents={agents}
               onTaskClick={onTaskClick}
               onCreateInColumn={() => setShowCreateModal(true)}
+              executingTaskIds={executingTaskIds}
             />
           ))}
         </div>

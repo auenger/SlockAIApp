@@ -79,6 +79,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
   // Task engine for execution
   const {
     isTaskActive,
+    activeTasks,
     executeTask: engineExecute,
     cancelTask: engineCancel,
   } = useTaskEngine(
@@ -115,6 +116,15 @@ export const TaskView: React.FC<TaskViewProps> = ({
       t.description.toLowerCase().includes(q)
     );
   }, [tasks, searchQuery]);
+
+  // Build set of executing task IDs for UI indicators
+  const executingTaskIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const [taskId] of activeTasks) {
+      ids.add(taskId);
+    }
+    return ids;
+  }, [activeTasks]);
 
   // Detail task
   const detailTask = detailTaskId ? tasks.find(t => t.id === detailTaskId) ?? null : null;
@@ -265,6 +275,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
             onTaskClick={setDetailTaskId}
             onCreateTask={handleCreateTask}
             channelId={channelId}
+            executingTaskIds={executingTaskIds}
           />
         ) : (
           <TaskList
@@ -275,6 +286,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
             onStatusChange={handleStatusChange}
             onCreateTask={handleCreateTask}
             channelId={channelId}
+            executingTaskIds={executingTaskIds}
           />
         )
       )}
