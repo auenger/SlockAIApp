@@ -3,6 +3,7 @@
 //! Each command handles a specific domain of IPC calls from the frontend.
 //! Commands are registered in lib.rs via `invoke_handler`.
 
+pub mod a2a_server;
 pub mod activity;
 pub mod channel;
 pub mod collaboration;
@@ -41,6 +42,8 @@ pub struct AppState {
     pub agent_manager: Mutex<AgentManager>,
     /// SQLite database connection for structured metadata.
     pub db_conn: Mutex<Connection>,
+    /// A2A LAN server state (start/stop lifecycle).
+    pub a2a_server: Mutex<a2a_server::A2AServerState>,
 }
 
 /// State tracking for an active agent session.

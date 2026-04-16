@@ -386,6 +386,95 @@ pub fn start_tcp_listener(
     Ok(listener)
 }
 
+/// Run the adapter server accept loop in a background thread.
+///
+/// Spawns a background thread that continuously accepts incoming TCP connections.
+/// Each connection is handled in its own thread for concurrency. Graceful shutdown
+/// is controlled via the `shutdown` flag and a completion signal is sent on the
+/// `done_tx` channel when the loop exits.
+///
+/// Returns `(JoinHandle, shutdown_flag)` so the caller can signal shutdown and
+/// wait for completion.
+pub fn run_adapter_server_loop(
+    server: Arc<AdapterServer>,
+    config: ListenerConfig,
+) -> Result<(std::thread::JoinHandle<()>, Arc<AtomicBool>, std::sync::mpsc::Receiver<()>), A2AError> {
+    let addr = format!("{}:{}", config.bind_address, config.port);
+    let listener = TcpListener::bind(&addr)
+        .map_err(|e| A2AError::internal_error(format!("Failed to bind to {}: {}", addr, e)))?;
+
+    let actual_port = listener.local_addr()
+        .map(|a| a.port())
+        .unwrap_or(config.port);
+
+    log::info!(
+        "[AdapterServer] TCP server listening on {}:{}",
+        config.bind_address,
+        actual_port
+    );
+
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown_clone = shutdown.clone();
+    let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
+
+    // Set non-blocking so we can poll the shutdown flag
+    listener
+        .set_nonblocking(true)
+        .map_err(|e| A2AError::internal_error(format!("Failed to set non-blocking: {}", e)))?;
+
+    let handle = std::thread::Builder::new()
+        .name("a2a-server-loop".to_string())
+        .spawn(move || {
+            log::info!("[AdapterServer] Accept loop started on port {}", actual_port);
+
+            while !shutdown_clone.load(Ordering::Relaxed) {
+                match listener.accept() {
+                    Ok((mut stream, peer_addr)) => {
+                        log::info!("[AdapterServer] New connection from {}", peer_addr);
+
+                        let server = server.clone();
+                        match std::thread::Builder::new()
+                            .name(format!("a2a-conn-{}", peer_addr))
+                            .spawn(move || {
+                                if let Err(e) = handle_tcp_connection(&server, &mut stream) {
+                                    log::warn!(
+                                        "[AdapterServer] Error handling connection from {}: {}",
+                                        peer_addr,
+                                        e
+                                    );
+                                }
+                            }) {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    log::error!(
+                                        "[AdapterServer] Failed to spawn connection thread: {}",
+                                        e
+                                    );
+                                }
+                            }
+                    }
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        // No pending connection — briefly sleep and retry
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                    }
+                    Err(e) => {
+                        if shutdown_clone.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        log::error!("[AdapterServer] Accept error: {}", e);
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                    }
+                }
+            }
+
+            log::info!("[AdapterServer] Accept loop stopped");
+            let _ = done_tx.send(());
+        })
+        .map_err(|e| A2AError::internal_error(format!("Failed to spawn server thread: {}", e)))?;
+
+    Ok((handle, shutdown, done_rx))
+}
+
 /// Handle a single TCP connection.
 pub fn handle_tcp_connection(
     server: &AdapterServer,
@@ -1101,5 +1190,80 @@ mod tests {
         drop(conn2);
 
         accept_handle.join().unwrap();
+    }
+
+    // --- run_adapter_server_loop tests ---
+
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+
+    fn make_test_server() -> Arc<AdapterServer> {
+        let adapter = Box::new(ClaudeCodeAdapter::new());
+        Arc::new(AdapterServer::new(adapter, test_agent_card()))
+    }
+
+    #[test]
+    fn test_server_loop_starts_and_stops() {
+        let server = make_test_server();
+        let config = ListenerConfig::tcp("127.0.0.1", 0);
+
+        let (_handle, shutdown, done_rx) = run_adapter_server_loop(server, config).unwrap();
+
+        // Signal shutdown
+        shutdown.store(true, Ordering::Relaxed);
+
+        // Should receive done signal within a reasonable time
+        let result = done_rx.recv_timeout(std::time::Duration::from_secs(5));
+        assert!(result.is_ok(), "Server loop should stop after shutdown signal");
+    }
+
+    #[test]
+    fn test_server_loop_handles_request() {
+        let server = make_test_server();
+        let config = ListenerConfig::tcp("127.0.0.1", 0);
+
+        // Bind a separate listener to find a free port, then release it
+        let temp_listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = temp_listener.local_addr().unwrap().port();
+        drop(temp_listener);
+
+        let config = ListenerConfig::tcp("127.0.0.1", port);
+        let (_handle, shutdown, _done_rx) = run_adapter_server_loop(server, config).unwrap();
+
+        // Give the server a moment to start
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        // Connect and send a request
+        let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
+        let request = format!(
+            "GET /agent-card HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n"
+        );
+        stream.write_all(request.as_bytes()).unwrap();
+        stream.flush().unwrap();
+
+        // Read response
+        let mut response = vec![0u8; 4096];
+        stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+        let n = stream.read(&mut response).unwrap();
+        let response_str = String::from_utf8_lossy(&response[..n]);
+        assert!(response_str.contains("HTTP/1.1 200 OK"));
+        assert!(response_str.contains("TestAdapter"));
+
+        // Shutdown
+        shutdown.store(true, Ordering::Relaxed);
+    }
+
+    #[test]
+    fn test_server_loop_port_in_use() {
+        let server = make_test_server();
+
+        // Bind a port so it's occupied
+        let blocker = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = blocker.local_addr().unwrap().port();
+
+        let config = ListenerConfig::tcp("127.0.0.1", port);
+        let result = run_adapter_server_loop(server, config);
+
+        assert!(result.is_err(), "Should fail when port is already in use");
     }
 }

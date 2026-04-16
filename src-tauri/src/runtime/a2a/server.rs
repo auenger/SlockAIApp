@@ -23,10 +23,10 @@ pub struct A2AServerConfig {
 }
 
 impl A2AServerConfig {
-    /// Create a default config listening on localhost:8080.
+    /// Create a default config listening on 0.0.0.0:8080 (LAN-accessible).
     pub fn new(agent_card: AgentCard) -> Self {
         Self {
-            host: "127.0.0.1".to_string(),
+            host: "0.0.0.0".to_string(),
             port: 8080,
             agent_card,
         }
@@ -242,7 +242,7 @@ mod tests {
     #[test]
     fn test_server_config_default() {
         let config = A2AServerConfig::new(test_agent_card());
-        assert_eq!(config.host, "127.0.0.1");
+        assert_eq!(config.host, "0.0.0.0");
         assert_eq!(config.port, 8080);
     }
 

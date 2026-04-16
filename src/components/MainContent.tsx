@@ -33,6 +33,7 @@ import {
   FolderOpen,
   Wrench,
 } from 'lucide-react';
+import LanAccessPanel from './settings/LanAccessPanel';
 import { cn } from '../lib/utils';
 import { TabType, Message, AgentWithRuntime, Channel, ChannelMessage, ContentBlock, Thread } from '../types';
 import { getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
@@ -1701,6 +1702,14 @@ export const MainContent: React.FC<MainContentProps> = ({
                         </div>
                       </div>
                     )}
+                  </div>
+                </section>
+
+                {/* LAN Access Section */}
+                <section className="space-y-2">
+                  <h3 className="font-black text-xs uppercase tracking-widest text-gray-500">LAN Access</h3>
+                  <div className="brutal-card">
+                    <LanAccessPanel />
                   </div>
                 </section>
               </>

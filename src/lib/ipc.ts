@@ -825,3 +825,29 @@ export async function collaborationUnregisterPushUrl(
 ): Promise<boolean> {
   return invoke<boolean>("collaboration_unregister_push_url", { configId });
 }
+
+// ---------------------------------------------------------------------------
+// LAN A2A Server commands
+// ---------------------------------------------------------------------------
+
+import type { LanServerInfo } from "../types";
+
+/** Start the A2A LAN server on the given port. */
+export async function startA2aServer(port: number): Promise<LanServerInfo> {
+  return invoke<LanServerInfo>("start_a2a_server", { port });
+}
+
+/** Stop the A2A LAN server. */
+export async function stopA2aServer(): Promise<void> {
+  return invoke<void>("stop_a2a_server");
+}
+
+/** Get the current status of the A2A LAN server. */
+export async function getA2aServerStatus(): Promise<LanServerInfo> {
+  return invoke<LanServerInfo>("get_a2a_server_status");
+}
+
+/** Get the local IP addresses of this machine. */
+export async function getLocalIpAddresses(): Promise<string[]> {
+  return invoke<string[]>("get_local_ip_addresses");
+}
