@@ -1,10 +1,35 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-17T01:00:00+08:00"
-  version: 47
-  total_completed: 47
+  last_updated: "2026-04-17T03:00:00+08:00"
+  version: 48
+  total_completed: 48
 
 records:
+  - id: feat-lan-a2a-access
+    name: "LAN A2A 服务端 + GUI 开关（方式1）"
+    completed: "2026-04-17T03:00:00+08:00"
+    tag: feat-lan-a2a-access-20260417
+    merge_commit: "8fc83bf"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-lan-a2a-access
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-lan-a2a-access
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-17T02:00:00+08:00"
+      duration: "~1h"
+      commits: 1
+      files_changed: 10
+      lines_added: 794
+      lines_deleted: 3
+
   - id: feat-task-async-exec
     name: "Task Async 执行 — 后台 Runtime 执行 + 结果投递"
     completed: "2026-04-17T01:00:00+08:00"

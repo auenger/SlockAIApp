@@ -136,8 +136,18 @@ And 提供 "复制连接地址" 按钮，点击后复制 "http://192.168.1.10:78
 ```
 
 ### General Checklist
-- [ ] TCP 服务不阻塞 UI 线程
-- [ ] 优雅关闭：停止时不丢失进行中的请求
-- [ ] 多个远程客户端可同时连接
-- [ ] 日志记录：连接/断开/错误均有 log 输出
-- [ ] 不影响现有本地 Runtime 功能
+- [x] TCP 服务不阻塞 UI 线程
+- [x] 优雅关闭：停止时不丢失进行中的请求
+- [x] 多个远程客户端可同时连接
+- [x] 日志记录：连接/断开/错误均有 log 输出
+- [x] 不影响现有本地 Runtime 功能
+
+## Merge Record
+
+- **Completed**: 2026-04-17T03:00:00+08:00
+- **Merged Branch**: feature/feat-lan-a2a-access
+- **Merge Commit**: 8fc83bf
+- **Archive Tag**: feat-lan-a2a-access-20260417
+- **Conflicts**: None
+- **Verification**: Passed (22/22 tasks, 249/249 Rust tests, 4/4 Gherkin scenarios)
+- **Stats**: 10 files changed, 794 lines added, 3 lines deleted
