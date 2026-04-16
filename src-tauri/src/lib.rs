@@ -1,26 +1,35 @@
+pub mod bridge;
 pub mod cli;
-pub mod commands;
 pub mod context;
 pub mod runtime;
-pub mod storage;
-pub mod task_engine;
 pub mod workspace;
 
+#[cfg(feature = "tauri-app")]
+pub mod commands;
+#[cfg(feature = "tauri-app")]
+pub mod storage;
+#[cfg(feature = "tauri-app")]
+pub mod task_engine;
+
+#[cfg(feature = "tauri-app")]
 use commands::AppState;
-// RuntimeRegistry is used at runtime; import kept for future use.
+#[cfg(feature = "tauri-app")]
 use std::sync::Mutex;
+#[cfg(feature = "tauri-app")]
 use tauri::Manager;
+#[cfg(feature = "tauri-app")]
 use workspace::manager::AgentManager;
 
 /// Resolve the workspace root path.
 ///
 /// Uses `~/.agentszone/` as the unified data directory across all platforms.
-fn resolve_workspace_root() -> std::path::PathBuf {
+pub fn resolve_workspace_root() -> std::path::PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join(".agentszone")
 }
 
+#[cfg(feature = "tauri-app")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let registry = runtime::registry::create_default_registry();

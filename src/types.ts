@@ -782,3 +782,41 @@ export interface LanServerInfo {
   /** URL for the agent card endpoint */
   agent_card_url: string | null;
 }
+
+// ===========================================================================
+// Bridge Workspace types (remote workspace gateway)
+// ===========================================================================
+
+/** Remote workspace info from bridge.getWorkspaceInfo */
+export interface BridgeWorkspaceInfo {
+  workspace_root: string;
+  total_agents: number;
+  enabled_agents: number;
+  active_agent_id: string | null;
+}
+
+/** Remote agent info from bridge.getAgents */
+export interface BridgeAgent {
+  agent_id: string;
+  name: string;
+  emoji: string;
+  creature: string;
+  vibe: string;
+  runtime_type: string;
+}
+
+/** File entry from bridge.listFiles */
+export interface BridgeFileEntry {
+  name: string;
+  is_dir: boolean;
+  size: number;
+  modified: number;
+}
+
+/** File content from bridge.readFile */
+export interface BridgeFileContent {
+  name: string;
+  size: number;
+  mime_type: string;
+  content: string;
+}

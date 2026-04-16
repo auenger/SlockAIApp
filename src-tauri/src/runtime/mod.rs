@@ -6,6 +6,7 @@
 pub mod a2a;
 pub mod claude;
 pub mod codex;
+#[cfg(feature = "tauri-app")]
 pub mod commands;
 pub mod registry;
 

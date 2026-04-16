@@ -7,6 +7,7 @@
 
 import React, { useState } from "react";
 import { useRemoteConnections } from "../../lib/useRemoteConnections";
+import BridgeWorkspacePanel from "./BridgeWorkspacePanel";
 import type {
   RemoteConnectionInfo,
   RemoteConnectionStatus,
@@ -250,6 +251,11 @@ function ConnectionCard({
         <div className="mt-2 text-xs text-gray-500">
           Last check: {new Date(conn.last_health_check_at).toLocaleString()}
         </div>
+      )}
+
+      {/* Bridge Workspace Panel — shows if remote supports bridge.* operations */}
+      {conn.status === "online" && (
+        <BridgeWorkspacePanel connection={conn} />
       )}
     </div>
   );
