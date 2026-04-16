@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { Thread, ThreadInfo, StreamEvent } from "../types";
+import type { Thread, ThreadInfo, StreamEvent, ContentBlock } from "../types";
 import {
   createThread,
   listThreads,
@@ -42,6 +42,12 @@ export interface ThreadChatState {
   isThinking: boolean;
   /** Buffered streaming text from the current response */
   streamingText: string;
+  /** Structured content blocks (tool_use / tool_result) collected during streaming */
+  contentBlocks: ContentBlock[];
+  /** Status message from system events (e.g., "Session initialized · claude-sonnet-4") */
+  statusMessage: string;
+  /** Whether the agent response is done */
+  isDone: boolean;
   /** Loading state for async operations */
   loading: boolean;
   /** Error message (if any) */
@@ -76,12 +82,16 @@ export function useThreadChat(): ThreadChatState {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [streamingText, setStreamingText] = useState("");
+  const [contentBlocks, setContentBlocks] = useState<ContentBlock[]>([]);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [isDone, setIsDone] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const unlistenChunkRef = useRef<(() => void) | null>(null);
   const unlistenResponseRef = useRef<(() => void) | null>(null);
   const unlistenRuntimeErrorRef = useRef<(() => void) | null>(null);
+  const unlistenAgentStartRef = useRef<(() => void) | null>(null);
 
   // Clean up listeners on unmount
   useEffect(() => {
@@ -89,6 +99,7 @@ export function useThreadChat(): ThreadChatState {
       if (unlistenChunkRef.current) unlistenChunkRef.current();
       if (unlistenResponseRef.current) unlistenResponseRef.current();
       if (unlistenRuntimeErrorRef.current) unlistenRuntimeErrorRef.current();
+      if (unlistenAgentStartRef.current) unlistenAgentStartRef.current();
     };
   }, []);
 
@@ -231,7 +242,10 @@ export function useThreadChat(): ThreadChatState {
   const send = useCallback(async (agentId: string, threadId: string, message: string) => {
     setIsThinking(true);
     setIsStreaming(true);
+    setIsDone(false);
     setStreamingText("");
+    setContentBlocks([]);
+    setStatusMessage("");
     setError(null);
 
     try {
@@ -247,6 +261,10 @@ export function useThreadChat(): ThreadChatState {
       if (unlistenRuntimeErrorRef.current) {
         unlistenRuntimeErrorRef.current();
         unlistenRuntimeErrorRef.current = null;
+      }
+      if (unlistenAgentStartRef.current) {
+        unlistenAgentStartRef.current();
+        unlistenAgentStartRef.current = null;
       }
 
       if (!isTauri) {
@@ -306,14 +324,39 @@ export function useThreadChat(): ThreadChatState {
       const { listen } = await import("@tauri-apps/api/event");
 
       let accumulatedText = "";
+      let accumulatedBlocks: ContentBlock[] = [];
+
+      // 0. Listen for agent start event to set statusMessage
+      const unlistenAgentStart = await listen<{
+        thread_id: string;
+        agent_id: string;
+        runtime_id: string;
+        runtime_name: string;
+      }>("agent://thread-agent-start", (event) => {
+        const payload = event.payload;
+        if (payload.thread_id !== threadId) return;
+        setStatusMessage(`${payload.runtime_name} initializing...`);
+      });
+      unlistenAgentStartRef.current = unlistenAgentStart;
 
       // 1. Listen for streaming chunk events (register BEFORE IPC call)
       const unlistenChunk = await listen<StreamEvent>("agent://chunk", (event) => {
         const payload = event.payload;
-        if (payload.type === "assistant" && payload.text) {
+        const eventType = payload.type;
+        const newBlocks: ContentBlock[] = payload.content_blocks ?? [];
+
+        if (eventType === "assistant" && payload.text) {
           accumulatedText += payload.text;
           setStreamingText(accumulatedText);
           setIsThinking(false); // We received first text chunk
+
+          // Collect content blocks
+          if (newBlocks.length > 0) {
+            accumulatedBlocks = [...accumulatedBlocks, ...newBlocks];
+            setContentBlocks([...accumulatedBlocks]);
+          }
+          // Clear status message once text starts arriving
+          setStatusMessage((prev) => prev && !accumulatedText ? prev : "");
 
           // Directly update activeThread messages so the agent response
           // appears immediately in the chat (like the reference project).
@@ -335,10 +378,26 @@ export function useThreadChat(): ThreadChatState {
             }
             return { ...prev, messages: msgs };
           });
+        } else if (eventType === "assistant" && newBlocks.length > 0) {
+          // Assistant event with content_blocks but no text (e.g. tool_use during thinking)
+          accumulatedBlocks = [...accumulatedBlocks, ...newBlocks];
+          setContentBlocks([...accumulatedBlocks]);
+        } else if (eventType === "user" && newBlocks.length > 0) {
+          // User events carry tool_result blocks
+          accumulatedBlocks = [...accumulatedBlocks, ...newBlocks];
+          setContentBlocks([...accumulatedBlocks]);
+        } else if (eventType === "system" && payload.text) {
+          // System events carry initialization status
+          setStatusMessage(payload.text);
         }
+
         if (payload.is_done) {
           setIsStreaming(false);
           setIsThinking(false);
+          setIsDone(true);
+          // Clear contentBlocks on done (they were ephemeral)
+          setContentBlocks([]);
+          setStatusMessage("");
         }
       });
       unlistenChunkRef.current = unlistenChunk;
@@ -356,8 +415,9 @@ export function useThreadChat(): ThreadChatState {
         setError(`${runtime_name}: ${runtimeError}${install_hint ? `\nInstall: ${install_hint}` : ""}`);
         setIsStreaming(false);
         setIsThinking(false);
-
-        unlistenRuntimeError();
+        setIsDone(false);
+        setContentBlocks([]);
+        setStatusMessage("");
         unlistenRuntimeErrorRef.current = null;
       });
       unlistenRuntimeErrorRef.current = unlistenRuntimeError;
@@ -385,9 +445,11 @@ export function useThreadChat(): ThreadChatState {
         unlistenChunk();
         unlistenResponse();
         unlistenRuntimeError();
+        unlistenAgentStart();
         unlistenChunkRef.current = null;
         unlistenResponseRef.current = null;
         unlistenRuntimeErrorRef.current = null;
+        unlistenAgentStartRef.current = null;
       });
       unlistenResponseRef.current = unlistenResponse;
 
@@ -408,6 +470,9 @@ export function useThreadChat(): ThreadChatState {
     setStreamingText("");
     setIsStreaming(false);
     setIsThinking(false);
+    setIsDone(false);
+    setContentBlocks([]);
+    setStatusMessage("");
   }, []);
 
   return {
@@ -416,6 +481,9 @@ export function useThreadChat(): ThreadChatState {
     isStreaming,
     isThinking,
     streamingText,
+    contentBlocks,
+    statusMessage,
+    isDone,
     loading,
     error,
     createNewThread,

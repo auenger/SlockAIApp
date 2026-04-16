@@ -18,7 +18,7 @@ export default function App() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
 
   // Thread chat hook (shared between Sidebar and MainContent — SINGLE instance)
-  const { threads, loadAllThreads, createNewThread, selectThread, activeThread, send: sendThreadMessage, removeThread, renameThreadAction, isStreaming: threadIsStreaming, isThinking: threadIsThinking, streamingText: threadStreamingText, clearActive: clearActiveThread } = useThreadChat();
+  const { threads, loadAllThreads, createNewThread, selectThread, activeThread, send: sendThreadMessage, removeThread, renameThreadAction, isStreaming: threadIsStreaming, isThinking: threadIsThinking, streamingText: threadStreamingText, contentBlocks: threadContentBlocks, statusMessage: threadStatusMessage, isDone: threadIsDone, clearActive: clearActiveThread } = useThreadChat();
 
   // Channel hook
   const {
@@ -271,6 +271,9 @@ export default function App() {
         threadIsStreaming={threadIsStreaming}
         threadIsThinking={threadIsThinking}
         threadStreamingText={threadStreamingText}
+        threadContentBlocks={threadContentBlocks}
+        threadStatusMessage={threadStatusMessage}
+        threadIsDone={threadIsDone}
         threadSend={sendThreadMessage}
         threadCreateNewThread={createNewThread}
         threadSelectThread={selectThread}
@@ -287,6 +290,9 @@ export default function App() {
         isThinking={threadIsThinking}
         isStreaming={threadIsStreaming}
         streamingText={threadStreamingText}
+        contentBlocks={threadContentBlocks}
+        statusMessage={threadStatusMessage}
+        isDone={threadIsDone}
         style={threadResize.style}
         resizeHandleRef={threadResize.handleRef}
       />

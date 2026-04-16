@@ -535,9 +535,26 @@ pub async fn send_message(
         };
 
         // Resolve the agent's runtime_type for routing
-        let runtime_id = manager.get_agent(&agent_id)
-            .ok_or_else(|| format!("agent not found: {agent_id}"))?
-            .identity.runtime_type.runtime_id().to_string();
+        let agent = manager.get_agent(&agent_id)
+            .ok_or_else(|| format!("agent not found: {agent_id}"))?;
+        let runtime_id = agent.identity.runtime_type.runtime_id().to_string();
+        let runtime_name = {
+            let registry = state
+                .agent_runtime_registry
+                .lock()
+                .map_err(|e| e.to_string())?;
+            registry.get_runtime(&runtime_id)
+                .map(|r| r.name.clone())
+                .unwrap_or_else(|| runtime_id.clone())
+        };
+
+        // Emit agent://thread-agent-start event so frontend can show thinking state
+        let _ = app.emit("agent://thread-agent-start", serde_json::json!({
+            "thread_id": thread_id,
+            "agent_id": agent_id,
+            "runtime_id": runtime_id,
+            "runtime_name": runtime_name,
+        }));
 
         // Get runtime for execution -- route based on agent's runtime_type
         let receiver = {

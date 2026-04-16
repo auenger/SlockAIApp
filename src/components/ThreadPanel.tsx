@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, User } from 'lucide-react';
 import { AgentIcon } from './AgentIcon';
 import { MarkdownRenderer } from './markdown';
-import type { Thread, ThreadMessageData, AgentWithRuntime } from '../types';
+import { ContentBlockCard } from './MainContent';
+import type { Thread, ThreadMessageData, AgentWithRuntime, ContentBlock } from '../types';
 
 interface ThreadPanelProps {
   isOpen: boolean;
@@ -18,6 +19,12 @@ interface ThreadPanelProps {
   isStreaming?: boolean;
   /** Buffered streaming text from the current response */
   streamingText?: string;
+  /** Structured content blocks (tool_use / tool_result) collected during streaming */
+  contentBlocks?: ContentBlock[];
+  /** Status message from system events (e.g., "Session initialized · claude-sonnet-4") */
+  statusMessage?: string;
+  /** Whether the agent response is done */
+  isDone?: boolean;
   /** Resizable width style from parent */
   style?: React.CSSProperties;
   /** Resize handle ref from parent */
@@ -34,6 +41,9 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
   isThinking,
   isStreaming,
   streamingText,
+  contentBlocks,
+  statusMessage,
+  isDone,
   style,
   resizeHandleRef,
 }) => {
@@ -213,9 +223,9 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
           ))
         )}
 
-        {/* Thinking indicator — bouncing pulse, no text yet */}
+        {/* Thinking indicator — Channel-style bouncing dots + statusMessage */}
         {isThinking && !streamingText && (
-          <div className="flex gap-2 animate-pulse">
+          <div className="flex gap-2">
             <AgentIcon
               icon={agent?.agent.icon}
               emoji={agent?.agent.emoji}
@@ -225,14 +235,32 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <span className="font-black text-xs">{agentName}</span>
-                <span className="text-[8px] text-gray-500 uppercase italic">Thinking...</span>
+                <span className="text-[8px] text-gray-500 uppercase italic flex items-center gap-1">
+                  Thinking
+                  <span className="inline-flex gap-[2px]">
+                    <span className="w-[3px] h-[3px] bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-[3px] h-[3px] bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-[3px] h-[3px] bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </span>
+                </span>
               </div>
-              <div className="h-4 bg-gray-200 w-2/3 brutal-border-b" />
+              {statusMessage && (
+                <div className="text-[10px] text-gray-500 font-mono italic mb-1">
+                  {statusMessage}
+                </div>
+              )}
+              {contentBlocks && contentBlocks.length > 0 && (
+                <div className="mt-1 space-y-1">
+                  {contentBlocks.slice(-5).map((block, idx) => (
+                    <ContentBlockCard key={`${block.type}-${block.id || block.tool_use_id || idx}`} block={block} />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* Streaming indicator — real-time text + bouncing dots */}
+        {/* Streaming indicator — Channel-style with ContentBlock cards + cyan bouncing dots */}
         {isStreaming && streamingText && (
           <div className="flex gap-2">
             <AgentIcon
@@ -253,6 +281,31 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
                   <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                   <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                 </span>
+              </div>
+              {contentBlocks && contentBlocks.length > 0 && (
+                <div className="mt-1 space-y-1">
+                  {contentBlocks.slice(-5).map((block, idx) => (
+                    <ContentBlockCard key={`${block.type}-${block.id || block.tool_use_id || idx}`} block={block} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Done indicator — green "Done" label */}
+        {isDone && !isStreaming && !isThinking && (
+          <div className="flex gap-2">
+            <AgentIcon
+              icon={agent?.agent.icon}
+              emoji={agent?.agent.emoji}
+              size="md"
+              bgColor="bg-brutal-cyan"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-black text-xs">{agentName}</span>
+                <span className="text-[8px] text-brutal-green uppercase italic">Done</span>
               </div>
             </div>
           </div>
