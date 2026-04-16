@@ -87,6 +87,7 @@ pub fn run() {
                 agent_session: Mutex::new(commands::AgentSessionState::default()),
                 agent_manager: Mutex::new(agent_manager),
                 db_conn: Mutex::new(db_conn),
+                a2a_server: Mutex::new(commands::a2a_server::A2AServerState::new()),
             });
 
             // Initialize TaskEngine and start background poll thread
@@ -196,6 +197,10 @@ pub fn run() {
             commands::collaboration::collaboration_list_push_configs,
             commands::collaboration::collaboration_unregister_push_url,
             commands::collaboration::collaboration_process_push_event,
+            commands::a2a_server::start_a2a_server,
+            commands::a2a_server::stop_a2a_server,
+            commands::a2a_server::get_a2a_server_status,
+            commands::a2a_server::get_local_ip_addresses,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

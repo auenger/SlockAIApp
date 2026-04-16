@@ -763,3 +763,22 @@ export interface DelegationCreatedEvent {
   from_agent_id: string;
   to_agent_id: string;
 }
+
+// ===========================================================================
+// LAN A2A Server types
+// ===========================================================================
+
+/** LAN A2A server status */
+export type LanServerStatus = 'running' | 'stopped' | { error: string };
+
+/** Information about the running LAN A2A server */
+export interface LanServerInfo {
+  /** Status of the server */
+  status: LanServerStatus;
+  /** Port the server is bound to */
+  port: number;
+  /** Local IP addresses that can reach this server */
+  local_ips: string[];
+  /** URL for the agent card endpoint */
+  agent_card_url: string | null;
+}
