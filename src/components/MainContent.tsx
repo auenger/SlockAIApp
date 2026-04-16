@@ -99,9 +99,10 @@ function getToolIcon(name: string): React.ElementType {
 
 // ---------------------------------------------------------------------------
 // ContentBlockCard — renders a single tool_use / tool_result block
+// Shared between Channel and Thread UIs — exported for reuse.
 // ---------------------------------------------------------------------------
 
-interface ContentBlockCardProps {
+export interface ContentBlockCardProps {
   block: ContentBlock;
 }
 
@@ -139,7 +140,7 @@ function formatResultPreview(content?: string | unknown[]): string {
   return '';
 }
 
-const ContentBlockCard: React.FC<ContentBlockCardProps> = ({ block }) => {
+export const ContentBlockCard: React.FC<ContentBlockCardProps> = ({ block }) => {
   const [expanded, setExpanded] = useState(false);
 
   if (block.type === 'tool_use') {
@@ -342,6 +343,12 @@ interface MainContentProps {
   threadIsThinking?: boolean;
   /** Buffered streaming text for thread (from App-level hook) */
   threadStreamingText?: string;
+  /** Structured content blocks for thread streaming (from App-level hook) */
+  threadContentBlocks?: ContentBlock[];
+  /** Status message for thread streaming (from App-level hook) */
+  threadStatusMessage?: string;
+  /** Whether the thread agent response is done (from App-level hook) */
+  threadIsDone?: boolean;
   /** Send a message in a thread (from App-level hook) */
   threadSend?: (agentId: string, threadId: string, message: string) => Promise<void>;
   /** Create a new thread (from App-level hook) */
@@ -371,6 +378,9 @@ export const MainContent: React.FC<MainContentProps> = ({
   threadIsStreaming = false,
   threadIsThinking = false,
   threadStreamingText = '',
+  threadContentBlocks = [],
+  threadStatusMessage = '',
+  threadIsDone = false,
   threadSend,
   threadCreateNewThread,
   threadSelectThread,
@@ -480,6 +490,9 @@ export const MainContent: React.FC<MainContentProps> = ({
   const isStreaming = threadIsStreaming;
   const isThinking = threadIsThinking;
   const streamingText = threadStreamingText;
+  const threadBlocks = threadContentBlocks;
+  const threadStatus = threadStatusMessage;
+  const threadDone = threadIsDone;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1148,7 +1161,7 @@ export const MainContent: React.FC<MainContentProps> = ({
                   </div>
                 )}
 
-                {/* Streaming text display (thread mode) */}
+                {/* Streaming text display (thread mode) — Channel-aligned style */}
                 {!isChannelMode && streamingText && (
                   <div className="flex gap-3 px-2">
                     <AgentIcon
@@ -1170,25 +1183,70 @@ export const MainContent: React.FC<MainContentProps> = ({
                           <span className="w-[3px] h-[3px] bg-brutal-cyan rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                         </span>
                       </div>
+                      {/* ContentBlock cards during streaming */}
+                      {threadBlocks && threadBlocks.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {threadBlocks.slice(-10).map((block, idx) => (
+                            <ContentBlockCard key={`${block.type}-${block.id || block.tool_use_id || idx}`} block={block} />
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
 
-                {/* Thinking indicator (thread mode) */}
+                {/* Thinking indicator (thread mode) — Channel-aligned style */}
                 {!isChannelMode && isThinking && !streamingText && (
-                  <div className="flex gap-3 px-2 animate-pulse">
+                  <div className="flex gap-3 px-2">
                     <AgentIcon
                       icon={selectedAgent?.agent.icon}
                       emoji={selectedAgent?.agent.emoji}
                       size="md"
                       bgColor="bg-brutal-cyan"
                     />
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-black text-xs">{agentName}</span>
-                        <span className="text-[8px] text-gray-500 uppercase italic">Thinking...</span>
+                        <span className="text-[8px] text-gray-500 uppercase italic flex items-center gap-1">
+                          Thinking
+                          <span className="inline-flex gap-[2px]">
+                            <span className="w-[3px] h-[3px] bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <span className="w-[3px] h-[3px] bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                            <span className="w-[3px] h-[3px] bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                          </span>
+                        </span>
                       </div>
-                      <div className="h-4 bg-gray-200 w-2/3 brutal-border-b" />
+                      {threadStatus && (
+                        <div className="text-[10px] text-gray-500 font-mono italic mb-1">
+                          {threadStatus}
+                        </div>
+                      )}
+                      {/* ContentBlock cards during thinking (tool calls happening) */}
+                      {threadBlocks && threadBlocks.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {threadBlocks.slice(-10).map((block, idx) => (
+                            <ContentBlockCard key={`${block.type}-${block.id || block.tool_use_id || idx}`} block={block} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Done indicator (thread mode) */}
+                {!isChannelMode && threadDone && !isStreaming && !isThinking && (
+                  <div className="flex gap-3 px-2">
+                    <AgentIcon
+                      icon={selectedAgent?.agent.icon}
+                      emoji={selectedAgent?.agent.emoji}
+                      size="md"
+                      bgColor="bg-brutal-cyan"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-black text-xs">{agentName}</span>
+                        <span className="text-[8px] text-brutal-green uppercase italic">Done</span>
+                      </div>
                     </div>
                   </div>
                 )}
