@@ -3,6 +3,7 @@
  *
  * Used in both the Kanban board columns and the list view rows.
  * Displays status, title, priority, assignee, and channel.
+ * Shows async execution animation when task is actively executing.
  */
 
 import React from 'react';
@@ -26,6 +27,8 @@ interface TaskCardProps {
   dragHandleProps?: Record<string, unknown>;
   /** Whether this card is being dragged */
   isDragging?: boolean;
+  /** Whether this task is currently being executed (async) */
+  isExecuting?: boolean;
   /** Additional CSS classes */
   className?: string;
 }
@@ -40,6 +43,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onClick,
   dragHandleProps,
   isDragging = false,
+  isExecuting = false,
   className,
 }) => {
   const assignee = agents.find(a => a.agent.agent_id === task.assigneeId);
@@ -51,13 +55,20 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       className={cn(
         'brutal-border bg-white p-2.5 cursor-pointer transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:brutal-shadow-sm',
         isDragging && 'opacity-70 brutal-shadow rotate-2',
+        isExecuting && 'ring-2 ring-brutal-cyan/50 ring-offset-1',
         className
       )}
     >
-      {/* Top row: priority + status */}
+      {/* Top row: priority + status + async indicator */}
       <div className="flex items-center gap-1.5 mb-1.5">
         <TaskPriorityBadge priority={task.priority} />
         <TaskStatusBadge status={task.status} />
+        {isExecuting && task.executionMode === 'async' && (
+          <span className="flex items-center gap-0.5 ml-auto">
+            <span className="inline-block w-1.5 h-1.5 bg-brutal-cyan rounded-full animate-pulse" />
+            <span className="text-[8px] font-black text-brutal-cyan uppercase">Async</span>
+          </span>
+        )}
       </div>
 
       {/* Title */}
@@ -111,6 +122,7 @@ interface TaskListRowProps {
   onClick?: () => void;
   selected?: boolean;
   onToggleSelect?: () => void;
+  isExecuting?: boolean;
 }
 
 export const TaskListRow: React.FC<TaskListRowProps> = ({
@@ -119,6 +131,7 @@ export const TaskListRow: React.FC<TaskListRowProps> = ({
   onClick,
   selected = false,
   onToggleSelect,
+  isExecuting = false,
 }) => {
   const assignee = agents.find(a => a.agent.agent_id === task.assigneeId);
 
@@ -126,7 +139,8 @@ export const TaskListRow: React.FC<TaskListRowProps> = ({
     <div
       className={cn(
         'flex items-center gap-3 px-3 py-2 brutal-border bg-white hover:bg-gray-50 transition-colors cursor-pointer',
-        selected && 'bg-brutal-yellow/20 border-l-4 border-l-brutal-pink'
+        selected && 'bg-brutal-yellow/20 border-l-4 border-l-brutal-pink',
+        isExecuting && 'ring-2 ring-brutal-cyan/50 ring-offset-1'
       )}
       onClick={onClick}
     >
@@ -147,6 +161,13 @@ export const TaskListRow: React.FC<TaskListRowProps> = ({
 
       {/* Priority */}
       <TaskPriorityBadge priority={task.priority} />
+
+      {/* Async execution indicator */}
+      {isExecuting && task.executionMode === 'async' && (
+        <span className="flex items-center gap-0.5">
+          <span className="inline-block w-1.5 h-1.5 bg-brutal-cyan rounded-full animate-pulse" />
+        </span>
+      )}
 
       {/* Title */}
       <span className="font-bold text-xs flex-1 truncate">{task.title}</span>

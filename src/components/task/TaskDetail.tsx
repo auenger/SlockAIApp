@@ -5,7 +5,7 @@
  * history timeline, and action buttons (execute, edit, delete, cancel).
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X,
   Pencil,
@@ -24,7 +24,9 @@ import {
   ChevronRight,
   AlertTriangle,
   GitBranch,
+  Terminal,
 } from 'lucide-react';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { cn } from '../../lib/utils';
 import { AgentIcon } from '../AgentIcon';
 import { TaskStatusBadge, TaskPriorityBadge } from './TaskStatusBadge';
@@ -104,6 +106,10 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
   const [addDepTargetId, setAddDepTargetId] = useState('');
   const [depError, setDepError] = useState<string | null>(null);
 
+  // Execution log state
+  const [executionLog, setExecutionLog] = useState<string[]>([]);
+  const execLogRef = useRef<HTMLDivElement>(null);
+
   // Load data when task changes
   useEffect(() => {
     if (task?.id) {
@@ -113,13 +119,49 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
       getDependentTasks(task.id).then(setDependents).catch(() => setDependents([]));
       setDepError(null);
       setShowAddDependency(false);
+      setExecutionLog([]); // Reset execution log when task changes
     } else {
       setHistory([]);
       setChildTasks([]);
       setDependencies([]);
       setDependents([]);
+      setExecutionLog([]);
     }
   }, [task?.id]);
+
+  // Listen for task://progress events for execution log
+  useEffect(() => {
+    if (!task?.id || !isExecuting) return;
+
+    let unlisten: UnlistenFn | undefined;
+
+    const taskId = task.id;
+    listen<{ task_id?: string; text: string; accumulated_len?: number }>(
+      'task://progress',
+      (event) => {
+        if (event.payload.task_id === taskId) {
+          setExecutionLog((prev) => {
+            // Keep last 200 lines to prevent memory issues
+            const next = [...prev, event.payload.text];
+            return next.length > 200 ? next.slice(-200) : next;
+          });
+        }
+      }
+    ).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      unlisten?.();
+    };
+  }, [task?.id, isExecuting]);
+
+  // Auto-scroll execution log to bottom
+  useEffect(() => {
+    if (execLogRef.current) {
+      execLogRef.current.scrollTop = execLogRef.current.scrollHeight;
+    }
+  }, [executionLog]);
 
   // --- Dependency management (all hooks must be called before any early return) ---
 
@@ -329,6 +371,35 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
                 task.result.startsWith('FAILED:') ? 'bg-red-50 text-red-700' : 'bg-brutal-bg'
               )}>
                 {task.result.startsWith('FAILED:') ? task.result.slice(7) : task.result}
+              </div>
+            </div>
+          )}
+
+          {/* Execution Log — live progress during async execution */}
+          {(isExecuting || executionLog.length > 0) && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1">
+                <Terminal size={10} className="text-gray-500" />
+                <span className="text-[10px] font-black uppercase text-gray-500">
+                  Execution Log
+                </span>
+                {isExecuting && (
+                  <span className="inline-block w-1.5 h-1.5 bg-brutal-cyan rounded-full animate-pulse ml-1" />
+                )}
+              </div>
+              <div
+                ref={execLogRef}
+                className="bg-black text-green-400 p-2 brutal-border text-[10px] font-mono leading-relaxed max-h-[200px] overflow-y-auto"
+              >
+                {executionLog.length === 0 && isExecuting ? (
+                  <span className="text-gray-500 animate-pulse">Waiting for output...</span>
+                ) : (
+                  executionLog.map((line, idx) => (
+                    <div key={idx} className="whitespace-pre-wrap break-all">
+                      {line}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}

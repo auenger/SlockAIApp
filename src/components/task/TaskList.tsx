@@ -30,6 +30,8 @@ interface TaskListProps {
   onCreateTask: (data: TaskFormData) => Promise<void>;
   /** Channel ID for context */
   channelId?: string;
+  /** Set of task IDs currently being executed */
+  executingTaskIds?: Set<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -51,6 +53,7 @@ export const TaskList: React.FC<TaskListProps> = ({
   onStatusChange,
   onCreateTask,
   channelId,
+  executingTaskIds,
 }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<SortField>('createdAt');
@@ -208,6 +211,7 @@ export const TaskList: React.FC<TaskListProps> = ({
               onClick={() => onTaskClick(task.id)}
               selected={selectedIds.has(task.id)}
               onToggleSelect={() => toggleSelect(task.id)}
+              isExecuting={executingTaskIds?.has(task.id)}
             />
           ))
         )}
