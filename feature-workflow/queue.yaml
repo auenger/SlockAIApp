@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-16T12:25:00+08:00'
-  version: 135
+  last_updated: '2026-04-16T22:00:00+08:00'
+  version: 136
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -39,12 +39,17 @@ parents:
   - feat-task-channel-selector
   - feat-task-realtime-exec
   - feat-task-async-exec
-active: []
-pending:
+active:
 - id: feat-task-channel-selector
   name: Task Channel 选择器 + Agent 智能过滤
   priority: 70
   created_at: '2026-04-16T02:30:00+08:00'
+  started_at: '2026-04-16T22:00:00+08:00'
+  branch: feature/feat-task-channel-selector
+  worktree: ../SlockAI-feat-task-channel-selector
+  size: M
+  parent: feat-task-exec-runtime
+pending:
 - id: feat-task-realtime-exec
   name: Task Realtime 执行 — Channel 消息流接入
   priority: 70
