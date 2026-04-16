@@ -1,10 +1,35 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-16T12:25:00+08:00"
-  version: 44
-  total_completed: 44
+  last_updated: "2026-04-16T22:35:00+08:00"
+  version: 45
+  total_completed: 45
 
 records:
+  - id: feat-task-channel-selector
+    name: "Task Channel 选择器 + Agent 智能过滤"
+    completed: "2026-04-16T22:35:00+08:00"
+    tag: feat-task-channel-selector-20260416
+    merge_commit: "2f9ae14"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-task-channel-selector
+    worktree_deleted: true
+    worktree_path: ../SlockAI-feat-task-channel-selector
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 5
+      scenarios_passed: 5
+    stats:
+      started: "2026-04-16T22:00:00+08:00"
+      duration: "~35min"
+      commits: 1
+      files_changed: 1
+      lines_added: 101
+      lines_deleted: 21
+
   - id: fix-thread-streaming-ux
     name: "Thread/Agent Chat Thinking & Streaming 效果对齐 Channel"
     completed: "2026-04-16T12:25:00+08:00"

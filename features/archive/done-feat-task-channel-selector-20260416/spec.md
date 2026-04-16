@@ -121,3 +121,12 @@ Then 显示系统中所有 Agent
 - 不破坏已有 channelId prop 传入时的自动绑定逻辑
 - 保持 `executionMode` 选择不受影响
 - 编辑模式（TaskCreateModal with task prop）正确回填 Channel 和 Agent
+
+## Merge Record
+- **Completed**: 2026-04-16
+- **Merged Branch**: feature/feat-task-channel-selector
+- **Merge Commit**: 2f9ae14
+- **Archive Tag**: feat-task-channel-selector-20260416
+- **Conflicts**: none
+- **Verification**: passed (5/5 Gherkin scenarios, tsc 0 errors)
+- **Files Changed**: 1 (src/components/task/TaskCreateModal.tsx)
