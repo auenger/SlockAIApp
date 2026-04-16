@@ -3,13 +3,17 @@
  *
  * Supports all Task fields: title, description, priority,
  * assignee, execution mode, channel binding, and parent task selection.
+ *
+ * Channel selector: loads channels via listChannels(), and when a channel
+ * is selected the agent dropdown is filtered to only show members of that channel.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { TaskAssignDropdown } from './TaskAssignDropdown';
-import type { Task, TaskPriority, TaskExecutionMode, AgentWithRuntime } from '../../types';
+import { listChannels, getChannel } from '../../lib/ipc';
+import type { Task, TaskPriority, TaskExecutionMode, AgentWithRuntime, ChannelInfo } from '../../types';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -56,6 +60,8 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
   allTasks,
 }) => {
   const isEditing = !!task;
+  // When channelId prop is provided, channel selector is hidden (pre-bound).
+  const isChannelPrebound = !!channelId;
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -66,7 +72,64 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
   const [parentTaskId, setParentTaskId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Populate form when editing
+  // Channel selector state
+  const [channels, setChannels] = useState<ChannelInfo[]>([]);
+  const [channelMemberIds, setChannelMemberIds] = useState<string[]>([]);
+
+  // Load channel list on mount / open
+  useEffect(() => {
+    if (!isOpen) return;
+    listChannels()
+      .then(setChannels)
+      .catch(() => setChannels([]));
+  }, [isOpen]);
+
+  // Load channel members when a channel is selected
+  const loadChannelMembers = useCallback(async (chId: string | null) => {
+    if (!chId) {
+      setChannelMemberIds([]);
+      return;
+    }
+    try {
+      const ch = await getChannel(chId);
+      setChannelMemberIds(ch.members.map(m => m.agent_id));
+    } catch {
+      setChannelMemberIds([]);
+    }
+  }, []);
+
+  // When selectedChannelId changes (and modal is open), load members
+  useEffect(() => {
+    if (!isOpen) return;
+    loadChannelMembers(selectedChannelId);
+  }, [selectedChannelId, isOpen, loadChannelMembers]);
+
+  // Compute filtered agents based on selected channel
+  const filteredAgents: AgentWithRuntime[] = (() => {
+    if (!selectedChannelId || channelMemberIds.length === 0) {
+      return agents;
+    }
+    return agents.filter(a => channelMemberIds.includes(a.agent.agent_id));
+  })();
+
+  // Auto-select agent when channel changes
+  useEffect(() => {
+    if (!isOpen) return;
+    // Only react to explicit channel member changes, not initial load
+    if (channelMemberIds.length === 0 && !selectedChannelId) return;
+
+    if (channelMemberIds.length === 1) {
+      // Single agent in channel → auto-select
+      setAssigneeId(channelMemberIds[0]);
+    } else if (assigneeId && channelMemberIds.length > 0 && !channelMemberIds.includes(assigneeId)) {
+      // Current agent not in new channel → reset
+      setAssigneeId(null);
+    }
+    // If current agent IS in the new channel members, keep it (no action needed)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelMemberIds, selectedChannelId, isOpen]);
+
+  // Populate form when editing or creating
   useEffect(() => {
     if (task) {
       setTitle(task.title);
@@ -103,6 +166,15 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
       onClose();
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Handle channel selection change
+  const handleChannelChange = (newChannelId: string) => {
+    if (newChannelId === '') {
+      setSelectedChannelId(null);
+    } else {
+      setSelectedChannelId(newChannelId);
     }
   };
 
@@ -166,6 +238,27 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
             />
           </div>
 
+          {/* Channel selector (hidden when channelId prop pre-binds it) */}
+          {!isChannelPrebound && (
+            <div>
+              <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">
+                Channel (optional)
+              </label>
+              <select
+                value={selectedChannelId ?? ''}
+                onChange={(e) => handleChannelChange(e.target.value)}
+                className="w-full brutal-border bg-white px-3 py-1.5 text-xs focus:outline-none focus:bg-brutal-bg"
+              >
+                <option value="">None</option>
+                {channels.map(ch => (
+                  <option key={ch.id} value={ch.id}>
+                    {ch.name} ({ch.member_count} agent{ch.member_count !== 1 ? 's' : ''})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Priority */}
           <div>
             <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">
@@ -193,15 +286,18 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
             </div>
           </div>
 
-          {/* Assignee */}
+          {/* Assignee (filtered by channel members) */}
           <div>
             <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">
               Assignee
             </label>
             <TaskAssignDropdown
-              agents={agents}
+              agents={filteredAgents}
               value={assigneeId}
               onChange={setAssigneeId}
+              placeholder={selectedChannelId && filteredAgents.length === 0
+                ? 'No agents in this channel...'
+                : 'Assign to agent...'}
             />
           </div>
 
@@ -245,22 +341,6 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
                   <option key={t.id} value={t.id}>{t.title}</option>
                 ))}
               </select>
-            </div>
-          )}
-
-          {/* Channel (optional) */}
-          {!channelId && (
-            <div>
-              <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">
-                Channel (optional)
-              </label>
-              <input
-                type="text"
-                value={selectedChannelId ?? ''}
-                onChange={(e) => setSelectedChannelId(e.target.value || null)}
-                placeholder="Channel ID"
-                className="w-full brutal-border bg-white px-3 py-1.5 text-xs font-mono focus:outline-none focus:bg-brutal-bg"
-              />
             </div>
           )}
         </div>
