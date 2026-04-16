@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-17T04:30:00+08:00'
-  version: 146
+  last_updated: '2026-04-17T05:00:00+08:00'
+  version: 147
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -45,13 +45,16 @@ parents:
     children:
     - feat-lan-a2a-access
     - feat-lan-headless-serve
-active: []
-pending:
+active:
 - id: feat-lan-mdns-discovery
   name: mDNS 零配置局域网自动发现（方案B）
   priority: 50
   dependencies:
   - feat-lan-a2a-access
+  branch: feature/feat-lan-mdns-discovery
+  worktree: ../AgentsZone-feat-lan-mdns-discovery
+  started_at: '2026-04-17T05:00:00+08:00'
+pending:
 - id: feat-lan-security
   name: LAN 安全加固 — TLS + 认证（方案C）
   priority: 50
