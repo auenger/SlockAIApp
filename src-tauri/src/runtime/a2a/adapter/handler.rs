@@ -89,6 +89,17 @@ impl AdapterServer {
         self.server.agent_card()
     }
 
+    /// Register a custom JSON-RPC handler for a method.
+    ///
+    /// This is a pass-through to the inner `A2AServer::register_handler`,
+    /// allowing external modules (e.g. bridge handlers) to extend the protocol.
+    pub fn register_handler<F>(&self, method: &str, handler: F)
+    where
+        F: Fn(serde_json::Value) -> Result<serde_json::Value, A2AError> + Send + Sync + 'static,
+    {
+        self.server.register_handler(method, handler);
+    }
+
     /// Register all A2A handlers backed by the adapter.
     ///
     /// This sets up:

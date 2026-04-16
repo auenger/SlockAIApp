@@ -15,8 +15,14 @@ fn main() {
             }
         }
         None => {
-            // Normal GUI mode
+            // Normal GUI mode (requires tauri-app feature)
+            #[cfg(feature = "tauri-app")]
             agentszone_lib::run();
+            #[cfg(not(feature = "tauri-app"))]
+            {
+                eprintln!("GUI mode requires tauri-app feature. Use `agentszone serve` for headless mode.");
+                std::process::exit(1);
+            }
         }
     }
 }
