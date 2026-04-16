@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-17T01:00:00+08:00'
-  version: 141
+  last_updated: '2026-04-16T18:30:00+08:00'
+  version: 142
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -39,8 +39,42 @@ parents:
   - feat-task-channel-selector
   - feat-task-realtime-exec
   - feat-task-async-exec
+  - id: feat-lan-a2a-server
+    name: 'LAN A2A 局域网互联（方式1 GUI + 方式2 Headless）'
+    split: true
+    children:
+    - feat-lan-a2a-access
+    - feat-lan-headless-serve
 active: []
-pending: []
+pending:
+- id: feat-lan-a2a-access
+  name: LAN A2A 服务端 + GUI 开关（方式1）
+  priority: 80
+  dependencies:
+  - feat-a2a-adapter
+  - feat-a2a-remote-client
+  parent: feat-lan-a2a-server
+- id: feat-lan-headless-serve
+  name: Headless A2A Server CLI 模式（方式2）
+  priority: 80
+  dependencies:
+  - feat-lan-a2a-access
+  parent: feat-lan-a2a-server
+- id: feat-lan-mdns-discovery
+  name: mDNS 零配置局域网自动发现（方案B）
+  priority: 50
+  dependencies:
+  - feat-lan-a2a-access
+- id: feat-lan-security
+  name: LAN 安全加固 — TLS + 认证（方案C）
+  priority: 50
+  dependencies:
+  - feat-lan-mdns-discovery
+- id: feat-lan-a2a-bridge
+  name: 独立 A2A Bridge 轻量二进制（方式3）
+  priority: 40
+  dependencies:
+  - feat-lan-a2a-access
 blocked: []
 completed:
 - id: feat-task-async-exec
