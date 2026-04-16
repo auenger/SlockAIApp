@@ -900,6 +900,10 @@ export const MainContent: React.FC<MainContentProps> = ({
             agents={allAgents}
             channelId={activeChannel?.id}
             userName={userProfile.name !== 'User' ? userProfile.name : undefined}
+            onRealtimeExecuteStart={(_channelId) => {
+              // Switch to CHAT tab so the user can see the execution in the channel
+              onTabChange('CHAT');
+            }}
           />
         )}
 

@@ -9,7 +9,11 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { Search, LayoutGrid, List, Filter } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useTasks, type TaskFilters } from '../../lib/useTasks';
-import { useTaskEngine } from '../../lib/useTaskEngine';
+import { useTaskEngine, type TaskExecuteRealtimeEvent } from '../../lib/useTaskEngine';
+import {
+  sendChannelMessage,
+  reportTaskFailed,
+} from '../../lib/ipc';
 import { TaskBoard } from './TaskBoard';
 import { TaskList } from './TaskList';
 import { TaskDetail } from './TaskDetail';
@@ -33,6 +37,8 @@ interface TaskViewProps {
   channelId?: string;
   /** User profile name for creator */
   userName?: string;
+  /** Callback when a realtime task execution starts; parent can switch to the channel view */
+  onRealtimeExecuteStart?: (channelId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -43,6 +49,7 @@ export const TaskView: React.FC<TaskViewProps> = ({
   agents,
   channelId,
   userName,
+  onRealtimeExecuteStart,
 }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('board');
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,6 +88,22 @@ export const TaskView: React.FC<TaskViewProps> = ({
     useCallback(() => { refresh(); }, [refresh]),
     // On failed — refresh list
     useCallback(() => { refresh(); }, [refresh]),
+    // On realtime execute — send task prompt to channel
+    useCallback(async (data: TaskExecuteRealtimeEvent) => {
+      try {
+        await sendChannelMessage(data.channel_id, data.task_prompt, userName);
+        // Notify parent so it can switch to the channel view
+        onRealtimeExecuteStart?.(data.channel_id);
+      } catch (err) {
+        // If sending the message fails, report the task failure
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        try {
+          await reportTaskFailed(data.task_id, errorMsg);
+        } catch (reportErr) {
+          console.error('[TaskView] Failed to report task failure:', reportErr);
+        }
+      }
+    }, [userName, onRealtimeExecuteStart]),
   );
 
   // Filter tasks by search query

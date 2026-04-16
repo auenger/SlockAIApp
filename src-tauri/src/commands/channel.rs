@@ -733,6 +733,9 @@ fn execute_single_agent_inner(
 
     let (tx_done, rx_done) = std::sync::mpsc::channel::<Result<String, String>>();
 
+    // Clone the AppHandle for task completion detection in the response thread
+    let task_app = app.clone();
+
     std::thread::spawn(move || {
         let mut full_response = String::new();
         let mut result_session_id: Option<String> = None;
@@ -925,8 +928,51 @@ fn execute_single_agent_inner(
         let result = if had_error {
             Err("agent execution had error".to_string())
         } else {
-            Ok(full_response)
+            Ok(full_response.clone())
         };
+
+        // --- Task completion detection ---
+        // If the TaskEngine has an active realtime task for this (agent_id, channel_id),
+        // auto-report completion/failure so the task status is updated.
+        if let Some(task_engine) = task_app.try_state::<crate::task_engine::TaskEngine>() {
+            // Find active tasks matching this agent + channel
+            let active_infos = task_engine.get_active_tasks_info();
+            for info in &active_infos {
+                let info_agent = info.get("agent_id").and_then(|v| v.as_str()).unwrap_or("");
+                let info_channel = info.get("channel_id").and_then(|v| v.as_str()).unwrap_or("");
+                let info_mode = info.get("mode").and_then(|v| v.as_str()).unwrap_or("");
+                let info_task_id = info.get("task_id").and_then(|v| v.as_str()).unwrap_or("");
+
+                if info_agent == agent_id_clone
+                    && info_channel == channel_id_clone
+                    && info_mode == "realtime"
+                    && !info_task_id.is_empty()
+                {
+                    if had_error {
+                        if let Err(e) = task_engine.on_task_failed(info_task_id, "agent execution had error") {
+                            log::warn!(
+                                "[response-thread] Failed to report task failure for {}: {}",
+                                info_task_id, e
+                            );
+                        }
+                    } else {
+                        // Extract a result summary (truncate to reasonable length)
+                        let result_summary = if full_response.len() > 500 {
+                            format!("{}... (truncated, {} chars total)", &full_response[..500], full_response.len())
+                        } else {
+                            full_response.clone()
+                        };
+                        if let Err(e) = task_engine.on_task_completed(info_task_id, &result_summary) {
+                            log::warn!(
+                                "[response-thread] Failed to report task completion for {}: {}",
+                                info_task_id, e
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
         let _ = tx_done.send(result);
     });
 

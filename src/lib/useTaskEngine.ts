@@ -109,6 +109,7 @@ export function useTaskEngine(
   onStatusChanged?: (event: TaskStatusChangedEvent) => void,
   onCompleted?: (event: TaskCompletedEvent) => void,
   onFailed?: (event: TaskFailedEvent) => void,
+  onRealtimeExecute?: (data: TaskExecuteRealtimeEvent) => void,
 ) {
   const [state, setState] = useState<TaskEngineState>({
     activeTasks: new Map(),
@@ -160,6 +161,8 @@ export function useTaskEngine(
             });
             return { ...prev, activeTasks: updated };
           });
+          // Trigger the callback so the caller can send the task prompt to the channel
+          onRealtimeExecute?.(data);
         })
       );
 
@@ -282,7 +285,7 @@ export function useTaskEngine(
     return () => {
       unlisteners.forEach((fn) => fn());
     };
-  }, [onStatusChanged, onCompleted, onFailed]);
+  }, [onStatusChanged, onCompleted, onFailed, onRealtimeExecute]);
 
   // ---- Actions ----
 
