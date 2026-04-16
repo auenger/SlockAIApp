@@ -1,0 +1,37 @@
+{
+  "feature_id": "feat-lan-headless-serve",
+  "timestamp": "2026-04-17T04:30:00+08:00",
+  "tests": {
+    "total": 258,
+    "passed": 258,
+    "failed": 0,
+    "ignored": 1,
+    "cli_specific": {
+      "total": 9,
+      "passed": 9,
+      "failed": 0,
+      "tests": [
+        "test_cli_no_subcommand",
+        "test_cli_serve_default",
+        "test_cli_serve_custom_port",
+        "test_cli_serve_custom_bind",
+        "test_cli_help_output",
+        "test_cli_serve_help_output",
+        "test_cli_version",
+        "test_get_local_ip_addresses",
+        "test_serve_invalid_port"
+      ]
+    }
+  },
+  "compilation": {
+    "status": "success",
+    "errors": 0,
+    "warnings_new": 0,
+    "warnings_preexisting": 8
+  },
+  "gherkin_scenarios": {
+    "scenario_1_headless_startup": "PASS",
+    "scenario_2_graceful_shutdown": "PASS",
+    "scenario_3_port_conflict": "PASS"
+  }
+}
