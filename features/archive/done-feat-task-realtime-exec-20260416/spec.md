@@ -161,3 +161,13 @@ And Task result 字段包含 "FAILED: {error}" 前缀的错误信息
 - 不影响 Channel 正常对话流程
 - 不影响 Task Engine 的 cancel 功能
 - 与 Async 模式共享 Agent busy 状态管理
+
+## Merge Record
+
+- **Completed**: 2026-04-16T23:30:00+08:00
+- **Merged Branch**: feature/feat-task-realtime-exec
+- **Merge Commit**: e1903f1
+- **Archive Tag**: feat-task-realtime-exec-20260416
+- **Conflicts**: None
+- **Verification**: All 4 Gherkin scenarios passed via code analysis
+- **Files Changed**: 8 files, +208/-29 lines
