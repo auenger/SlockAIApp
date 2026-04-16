@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-16T18:30:00+08:00'
-  version: 142
+  last_updated: '2026-04-17T02:00:00+08:00'
+  version: 143
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -45,8 +45,7 @@ parents:
     children:
     - feat-lan-a2a-access
     - feat-lan-headless-serve
-active: []
-pending:
+active:
 - id: feat-lan-a2a-access
   name: LAN A2A 服务端 + GUI 开关（方式1）
   priority: 80
@@ -54,6 +53,10 @@ pending:
   - feat-a2a-adapter
   - feat-a2a-remote-client
   parent: feat-lan-a2a-server
+  branch: feature/feat-lan-a2a-access
+  worktree: ../AgentsZone-feat-lan-a2a-access
+  started: '2026-04-17T02:00:00+08:00'
+pending:
 - id: feat-lan-headless-serve
   name: Headless A2A Server CLI 模式（方式2）
   priority: 80
