@@ -1,10 +1,35 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-17T04:30:00+08:00"
-  version: 49
-  total_completed: 49
+  last_updated: "2026-04-17T07:30:00+08:00"
+  version: 50
+  total_completed: 50
 
 records:
+  - id: feat-lan-a2a-bridge
+    name: "远程 Workspace 网关（独立 A2A Bridge 二进制 + 远程 workspace 管理）"
+    completed: "2026-04-17T07:30:00+08:00"
+    tag: feat-lan-a2a-bridge-20260417
+    merge_commit: "67bd2e1"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-lan-a2a-bridge
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-lan-a2a-bridge
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 12
+      scenarios_passed: 12
+    stats:
+      started: "2026-04-17T07:00:00+08:00"
+      duration: "~30min"
+      commits: 1
+      files_changed: 18
+      lines_added: 1256
+      lines_deleted: 12
+
   - id: feat-lan-headless-serve
     name: "Headless A2A Server CLI 模式（方式2）"
     completed: "2026-04-17T04:30:00+08:00"

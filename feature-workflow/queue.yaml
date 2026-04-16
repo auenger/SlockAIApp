@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-17T05:00:00+08:00'
-  version: 147
+  last_updated: '2026-04-17T07:30:00+08:00'
+  version: 150
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -54,19 +54,18 @@ active:
   branch: feature/feat-lan-mdns-discovery
   worktree: ../AgentsZone-feat-lan-mdns-discovery
   started_at: '2026-04-17T05:00:00+08:00'
-pending:
+blocked:
 - id: feat-lan-security
   name: LAN 安全加固 — TLS + 认证（方案C）
   priority: 50
   dependencies:
   - feat-lan-mdns-discovery
-- id: feat-lan-a2a-bridge
-  name: 独立 A2A Bridge 轻量二进制（方式3）
-  priority: 40
-  dependencies:
-  - feat-lan-a2a-access
-blocked: []
+  reason: 'Manually blocked — 暂缓开发'
 completed:
+- id: feat-lan-a2a-bridge
+  name: 远程 Workspace 网关（独立 A2A Bridge 二进制 + 远程 workspace 管理）
+  completed_at: '2026-04-17T07:30:00+08:00'
+  tag: feat-lan-a2a-bridge-20260417
 - id: feat-lan-headless-serve
   name: Headless A2A Server CLI 模式（方式2）
   completed_at: '2026-04-17T04:30:00+08:00'
