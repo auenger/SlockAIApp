@@ -141,7 +141,18 @@ impl AgentRuntime for RemoteA2ARuntime {
     fn execute(&self, params: ExecuteParams) -> Result<Receiver<StreamEvent>, String> {
         let client = self.build_a2a_client()?;
 
-        let task_id = Self::generate_task_id();
+        let task_id = match &params.session_id {
+            Some(sid) if params.persistent => {
+                // Thread mode: reuse session as task context
+                log::info!(
+                    "[RemoteA2ARuntime] Resuming session on '{}' (session: {})",
+                    self.connection.name,
+                    sid
+                );
+                sid.clone()
+            }
+            _ => Self::generate_task_id(),
+        };
 
         log::info!(
             "[RemoteA2ARuntime] Executing on '{}' (task: {}): {}",
@@ -150,8 +161,18 @@ impl AgentRuntime for RemoteA2ARuntime {
             &params.message[..params.message.len().min(80)]
         );
 
-        // Build user message
-        let message = Message::user_text(&params.message);
+        // Build user message with optional system context
+        let mut message = Message::user_text(&params.message);
+
+        // Pass system_prompt as message metadata so remote agent has context
+        if let Some(ref prompt) = params.system_prompt {
+            message.metadata = Some(serde_json::json!({
+                "system_context": prompt,
+                "agent_id": params.agent_id,
+                "persistent": params.persistent,
+                "workspace": params.workspace,
+            }));
+        }
 
         // Use streaming via SSE
         let receiver = client

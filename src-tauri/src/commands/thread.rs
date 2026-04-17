@@ -25,7 +25,7 @@ use crate::storage::jsonl::JsonlStore;
 use crate::storage::activity::{ActivityStore, ActivityType, create_entry};
 use crate::storage::db_helpers;
 use crate::AppState;
-use crate::runtime::ExecuteParams;
+use crate::runtime::{AgentRuntime, ExecuteParams};
 use crate::workspace::thread::{self, Thread, ThreadInfo, ThreadMessage, ThreadStore};
 use tauri::{AppHandle, Emitter};
 
@@ -556,49 +556,119 @@ pub async fn send_message(
             "runtime_name": runtime_name,
         }));
 
-        // Get runtime for execution -- route based on agent's runtime_type
+        // Get runtime for execution -- route based on agent's connection_mode
         let receiver = {
-            let registry = state
-                .agent_runtime_registry
-                .lock()
-                .map_err(|e| e.to_string())?;
+            let agent_connection_mode = agent.identity.connection_mode.clone();
 
-            let runtime = registry.get_runtime_instance(&runtime_id)?;
+            match agent_connection_mode {
+                crate::runtime::a2a::types::ConnectionMode::Remote { .. } => {
+                    // Remote agent: create RemoteA2ARuntime dynamically
+                    let db_conn = state
+                        .db_conn
+                        .lock()
+                        .map_err(|e| e.to_string())?;
 
-            // Health check: verify the runtime is available before executing
-            if !runtime.is_ready() {
-                let info = registry.get_runtime(&runtime_id);
-                let install_hint = info
-                    .map(|i| i.install_hint.clone())
-                    .unwrap_or_default();
-                let error_msg = format!(
-                    "{} runtime is not available. Please install: {}",
-                    runtime.name(),
-                    install_hint,
-                );
-                // Emit runtime unavailable event for frontend UX
-                let _ = app.emit("runtime://unavailable", serde_json::json!({
-                    "agent_id": agent_id,
-                    "thread_id": thread_id,
-                    "runtime_id": runtime_id,
-                    "runtime_name": runtime.name(),
-                    "install_hint": install_hint,
-                    "error": error_msg,
-                }));
-                return Err(error_msg);
+                    let resolved = crate::runtime::registry::resolve_runtime_for_agent(
+                        &agent_connection_mode,
+                        &db_conn,
+                    );
+
+                    match resolved {
+                        Ok(crate::runtime::registry::ResolvedRuntime::Remote { runtime }) => {
+                            let params = ExecuteParams {
+                                agent_id: agent_id.clone(),
+                                message,
+                                session_id,
+                                workspace: Some(workspace_path),
+                                system_prompt: Some(context_prefix),
+                                timeout_secs: 120,
+                                persistent: true,
+                            };
+
+                            match runtime.execute(params) {
+                                Ok(rx) => rx,
+                                Err(e) => {
+                                    let error_msg = format!("远程执行失败: {}", e);
+                                    log::warn!(
+                                        "[send_message] Remote agent {} execution failed: {}",
+                                        agent_id, e
+                                    );
+                                    let _ = app.emit("agent://chunk", serde_json::json!({
+                                        "text": error_msg.clone(),
+                                        "is_done": true,
+                                        "error": Some(error_msg.clone()),
+                                        "type": "error",
+                                        "session_id": null,
+                                        "content_blocks": null,
+                                    }));
+                                    return Err(error_msg);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            // Connection not found or offline — emit friendly error
+                            log::warn!(
+                                "[send_message] Remote agent {} resolution failed: {}",
+                                agent_id, e
+                            );
+                            let _ = app.emit("agent://chunk", serde_json::json!({
+                                "text": e.clone(),
+                                "is_done": true,
+                                "error": Some(e.clone()),
+                                "type": "error",
+                                "session_id": null,
+                                "content_blocks": null,
+                            }));
+                            return Err(e);
+                        }
+                        _ => return Err("Expected remote runtime but got local".to_string()),
+                    }
+                }
+                _ => {
+                    // Local agent: use existing registry
+                    let registry = state
+                        .agent_runtime_registry
+                        .lock()
+                        .map_err(|e| e.to_string())?;
+
+                    let runtime = registry.get_runtime_instance(&runtime_id)?;
+
+                    // Health check: verify the runtime is available before executing
+                    if !runtime.is_ready() {
+                        let info = registry.get_runtime(&runtime_id);
+                        let install_hint = info
+                            .map(|i| i.install_hint.clone())
+                            .unwrap_or_default();
+                        let error_msg = format!(
+                            "{} runtime is not available. Please install: {}",
+                            runtime.name(),
+                            install_hint,
+                        );
+                        // Emit runtime unavailable event for frontend UX
+                        let _ = app.emit("runtime://unavailable", serde_json::json!({
+                            "agent_id": agent_id,
+                            "thread_id": thread_id,
+                            "runtime_id": runtime_id,
+                            "runtime_name": runtime.name(),
+                            "install_hint": install_hint,
+                            "error": error_msg,
+                        }));
+                        return Err(error_msg);
+                    }
+
+                    let params = ExecuteParams {
+                        agent_id: agent_id.clone(),
+                        message,
+                        session_id,
+                        workspace: Some(workspace_path),
+                        system_prompt: Some(context_prefix),
+                        timeout_secs: 120,
+                        persistent: true, // Thread: persistent process, context kept in-process
+                    };
+
+                    runtime.execute(params)?
+                }
             }
-
-            let params = ExecuteParams {
-                agent_id: agent_id.clone(),
-                message,
-                session_id,
-                workspace: Some(workspace_path),
-                system_prompt: Some(context_prefix),
-                timeout_secs: 120,
-                persistent: true, // Thread: persistent process, context kept in-process
-            };
-
-            runtime.execute(params)?
         };
 
         // Spawn thread to forward streaming events to frontend

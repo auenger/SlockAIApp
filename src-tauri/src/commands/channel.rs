@@ -16,6 +16,7 @@ use crate::workspace::mention;
 use crate::context::a2a_trigger::{self, TriggerContext};
 use crate::storage::activity::{ActivityStore, ActivityType, create_entry};
 use crate::storage::db_helpers;
+use crate::runtime::AgentRuntime;
 use tauri::{AppHandle, Emitter, Manager};
 
 // ---------------------------------------------------------------------------
@@ -683,47 +684,142 @@ fn execute_single_agent_inner(
 
     // Start runtime execution for this agent
     let receiver = {
-        let registry = state
-            .agent_runtime_registry
-            .lock()
-            .map_err(|e| e.to_string())?;
-
-        let runtime = registry.get_runtime_instance(&runtime_id)?;
-
-        // Health check: verify the runtime is available before executing
-        if !runtime.is_ready() {
-            let info = registry.get_runtime(&runtime_id);
-            let install_hint = info
-                .map(|i| i.install_hint.clone())
-                .unwrap_or_default();
-            let error_msg = format!(
-                "{} runtime is not available for agent {}. Please install: {}",
-                runtime.name(),
-                agent_id,
-                install_hint,
-            );
-            let _ = app.emit("runtime://unavailable", serde_json::json!({
-                "channel_id": channel_id,
-                "agent_id": agent_id,
-                "runtime_id": runtime_id,
-                "runtime_name": runtime.name(),
-                "install_hint": install_hint,
-                "error": error_msg,
-            }));
-            return Err(error_msg);
-        }
-
-        let params = crate::runtime::ExecuteParams {
-            agent_id: agent_id.clone(),
-            message: message.clone(),
-            session_id: None,
-            workspace: Some(workspace_path),
-            system_prompt,
-            timeout_secs: 120,
-            persistent: false, // Channel: one-shot, context reconstructed each time
+        // Resolve runtime based on connection_mode (local vs remote)
+        let agent_connection_mode = {
+            let manager = state
+                .agent_manager
+                .lock()
+                .map_err(|e| e.to_string())?;
+            let agent = manager
+                .get_agent(&agent_id)
+                .ok_or_else(|| format!("agent not found: {agent_id}"))?;
+            agent.identity.connection_mode.clone()
         };
 
-        runtime.execute(params)?
+        match agent_connection_mode {
+            crate::runtime::a2a::types::ConnectionMode::Remote { .. } => {
+                // Remote agent: create RemoteA2ARuntime dynamically
+                let db_conn = state
+                    .db_conn
+                    .lock()
+                    .map_err(|e| e.to_string())?;
+
+                let resolved = crate::runtime::registry::resolve_runtime_for_agent(
+                    &agent_connection_mode,
+                    &db_conn,
+                );
+
+                match resolved {
+                    Ok(crate::runtime::registry::ResolvedRuntime::Remote { runtime }) => {
+                        let params = crate::runtime::ExecuteParams {
+                            agent_id: agent_id.clone(),
+                            message: message.clone(),
+                            session_id: None,
+                            workspace: Some(workspace_path),
+                            system_prompt,
+                            timeout_secs: 120,
+                            persistent: false,
+                        };
+
+                        match runtime.execute(params) {
+                            Ok(rx) => rx,
+                            Err(e) => {
+                                let error_msg = format!("远程执行失败: {}", e);
+                                log::warn!(
+                                    "[execute_single_agent] Remote agent {} execution failed: {}",
+                                    agent_id, e
+                                );
+                                let _ = app.emit("agent://channel-chunk", serde_json::json!({
+                                    "channel_id": channel_id,
+                                    "agent_id": agent_id,
+                                    "agent_index": agent_idx,
+                                    "total_agents": total_agents,
+                                    "event": {
+                                        "text": error_msg.clone(),
+                                        "is_done": true,
+                                        "error": Some(error_msg.clone()),
+                                        "type": "error",
+                                        "session_id": null,
+                                        "content_blocks": null,
+                                    },
+                                }));
+                                return Err(error_msg);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        // Connection not found or offline — emit friendly error
+                        log::warn!(
+                            "[execute_single_agent] Remote agent {} resolution failed: {}",
+                            agent_id, e
+                        );
+                        let _ = app.emit("agent://channel-chunk", serde_json::json!({
+                            "channel_id": channel_id,
+                            "agent_id": agent_id,
+                            "agent_index": agent_idx,
+                            "total_agents": total_agents,
+                            "event": {
+                                "text": e.clone(),
+                                "is_done": true,
+                                "error": Some(e.clone()),
+                                "type": "error",
+                                "session_id": null,
+                                "content_blocks": null,
+                            },
+                        }));
+                        let _ = app.emit("agent://channel-session-complete", serde_json::json!({
+                            "channel_id": channel_id,
+                        }));
+                        return Err(e);
+                    }
+                    _ => return Err("Expected remote runtime but got local".to_string()),
+                }
+            }
+            _ => {
+                // Local agent: use existing registry
+                let registry = state
+                    .agent_runtime_registry
+                    .lock()
+                    .map_err(|e| e.to_string())?;
+
+                let runtime = registry.get_runtime_instance(&runtime_id)?;
+
+                // Health check: verify the runtime is available before executing
+                if !runtime.is_ready() {
+                    let info = registry.get_runtime(&runtime_id);
+                    let install_hint = info
+                        .map(|i| i.install_hint.clone())
+                        .unwrap_or_default();
+                    let error_msg = format!(
+                        "{} runtime is not available for agent {}. Please install: {}",
+                        runtime.name(),
+                        agent_id,
+                        install_hint,
+                    );
+                    let _ = app.emit("runtime://unavailable", serde_json::json!({
+                        "channel_id": channel_id,
+                        "agent_id": agent_id,
+                        "runtime_id": runtime_id,
+                        "runtime_name": runtime.name(),
+                        "install_hint": install_hint,
+                        "error": error_msg,
+                    }));
+                    return Err(error_msg);
+                }
+
+                let params = crate::runtime::ExecuteParams {
+                    agent_id: agent_id.clone(),
+                    message: message.clone(),
+                    session_id: None,
+                    workspace: Some(workspace_path),
+                    system_prompt,
+                    timeout_secs: 120,
+                    persistent: false, // Channel: one-shot, context reconstructed each time
+                };
+
+                runtime.execute(params)?
+            }
+        }
     };
 
     // Spawn thread to forward streaming events and collect response
