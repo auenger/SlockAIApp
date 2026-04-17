@@ -140,6 +140,14 @@ pub fn create_channel(
                     enabled: true,
                     runtime_type: agent.identity.runtime_type.runtime_id().to_string(),
                     description: agent.identity.vibe.clone(),
+                    connection_mode: match &agent.identity.connection_mode {
+                        crate::runtime::a2a::types::ConnectionMode::Local => "local".to_string(),
+                        crate::runtime::a2a::types::ConnectionMode::Remote { connection_id } => format!("remote:{}", connection_id),
+                    },
+                    remote_connection_id: match &agent.identity.connection_mode {
+                        crate::runtime::a2a::types::ConnectionMode::Remote { connection_id } => Some(connection_id.clone()),
+                        _ => None,
+                    },
                     created_at: new_channel.created_at.clone(),
                     updated_at: new_channel.updated_at.clone(),
                 };

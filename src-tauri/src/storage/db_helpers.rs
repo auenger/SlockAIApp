@@ -21,6 +21,8 @@ pub struct AgentRow {
     pub enabled: bool,
     pub runtime_type: String,
     pub description: String,
+    pub connection_mode: String,
+    pub remote_connection_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -35,6 +37,8 @@ impl AgentRow {
             enabled: row.get::<_, i64>("enabled")? != 0,
             runtime_type: row.get("runtime_type")?,
             description: row.get("description")?,
+            connection_mode: row.get("connection_mode").unwrap_or_else(|_| "local".to_string()),
+            remote_connection_id: row.get("remote_connection_id").unwrap_or(None),
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
         })
@@ -44,8 +48,8 @@ impl AgentRow {
 /// Insert an agent into the database.
 pub fn insert_agent(conn: &Connection, agent: &AgentRow) -> Result<(), DbError> {
     conn.execute(
-        "INSERT OR REPLACE INTO agents (id, name, emoji, avatar_path, enabled, runtime_type, description, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT OR REPLACE INTO agents (id, name, emoji, avatar_path, enabled, runtime_type, description, connection_mode, remote_connection_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             agent.id,
             agent.name,
@@ -54,6 +58,8 @@ pub fn insert_agent(conn: &Connection, agent: &AgentRow) -> Result<(), DbError> 
             agent.enabled as i64,
             agent.runtime_type,
             agent.description,
+            agent.connection_mode,
+            agent.remote_connection_id,
             agent.created_at,
             agent.updated_at,
         ],
@@ -1118,6 +1124,105 @@ pub fn delete_remote_connection(conn: &Connection, id: &str) -> Result<(), DbErr
 }
 
 // ===========================================================================
+// Remote agent queries
+// ===========================================================================
+
+/// List all remote agents (connection_mode = 'remote') from the database.
+pub fn list_remote_agents(conn: &Connection) -> Result<Vec<AgentRow>, DbError> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM agents WHERE connection_mode = 'remote' ORDER BY name ASC"
+    )?;
+    let rows = stmt.query_map([], AgentRow::from_row)?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+/// List all remote agents for a specific connection.
+pub fn list_remote_agents_by_connection(
+    conn: &Connection,
+    connection_id: &str,
+) -> Result<Vec<AgentRow>, DbError> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM agents WHERE connection_mode = 'remote' AND remote_connection_id = ?1 ORDER BY name ASC"
+    )?;
+    let rows = stmt.query_map(params![connection_id], AgentRow::from_row)?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+/// Get a remote agent by its connection-scoped ID (format: "remote:{connection_id}:{agent_name}").
+pub fn get_remote_agent(
+    conn: &Connection,
+    agent_id: &str,
+) -> Result<Option<AgentRow>, DbError> {
+    get_agent(conn, agent_id)
+}
+
+/// Upsert a remote agent: insert if not exists, update name/emoji/description if exists.
+pub fn upsert_remote_agent(conn: &Connection, agent: &AgentRow) -> Result<(), DbError> {
+    conn.execute(
+        "INSERT INTO agents (id, name, emoji, avatar_path, enabled, runtime_type, description, connection_mode, remote_connection_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+         ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            emoji = excluded.emoji,
+            description = excluded.description,
+            enabled = excluded.enabled,
+            updated_at = excluded.updated_at",
+        params![
+            agent.id,
+            agent.name,
+            agent.emoji,
+            agent.avatar_path,
+            agent.enabled as i64,
+            agent.runtime_type,
+            agent.description,
+            agent.connection_mode,
+            agent.remote_connection_id,
+            agent.created_at,
+            agent.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Delete all remote agents for a specific connection (cascade on connection delete).
+pub fn delete_remote_agents_by_connection(
+    conn: &Connection,
+    connection_id: &str,
+) -> Result<usize, DbError> {
+    let count = conn.execute(
+        "DELETE FROM agents WHERE connection_mode = 'remote' AND remote_connection_id = ?1",
+        params![connection_id],
+    )?;
+    Ok(count)
+}
+
+/// Mark all remote agents for a connection as disabled (offline).
+pub fn disable_remote_agents_by_connection(
+    conn: &Connection,
+    connection_id: &str,
+) -> Result<usize, DbError> {
+    let now = chrono_now_iso();
+    let count = conn.execute(
+        "UPDATE agents SET enabled = 0, updated_at = ?1 WHERE connection_mode = 'remote' AND remote_connection_id = ?2",
+        params![now, connection_id],
+    )?;
+    Ok(count)
+}
+
+/// Enable all remote agents for a connection (back online).
+pub fn enable_remote_agents_by_connection(
+    conn: &Connection,
+    connection_id: &str,
+) -> Result<usize, DbError> {
+    let now = chrono_now_iso();
+    let count = conn.execute(
+        "UPDATE agents SET enabled = 1, updated_at = ?1 WHERE connection_mode = 'remote' AND remote_connection_id = ?2",
+        params![now, connection_id],
+    )?;
+    Ok(count)
+}
+
+// ===========================================================================
 // Migration helpers
 // ===========================================================================
 
@@ -1157,6 +1262,8 @@ mod tests {
             enabled: true,
             runtime_type: "claude-code".to_string(),
             description: "Default agent".to_string(),
+            connection_mode: "local".to_string(),
+            remote_connection_id: None,
             created_at: "2026-04-10T12:00:00Z".to_string(),
             updated_at: "2026-04-10T12:00:00Z".to_string(),
         }).unwrap();

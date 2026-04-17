@@ -245,6 +245,8 @@ pub fn migrate_from_files(conn: &Connection, workspace_root: &Path) -> Result<()
                     enabled: true,
                     runtime_type: "claude-code".to_string(),
                     description,
+                    connection_mode: "local".to_string(),
+                    remote_connection_id: None,
                     created_at: now.clone(),
                     updated_at: now,
                 };
