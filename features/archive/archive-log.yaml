@@ -1,10 +1,33 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-17T11:55:00+08:00"
-  version: 53
-  total_completed: 53
+  last_updated: "2026-04-17T13:55:00+08:00"
+  version: 54
+  total_completed: 54
 
 records:
+  - id: fix-settings-remote-ui
+    name: "设置页面 Remote Connections UI 优化（样式统一 + Emoji→SVG + 溢出修复）"
+    completed: "2026-04-17T13:55:00+08:00"
+    tag: fix-settings-remote-ui-20260417
+    merge_commit: HEAD
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/fix-settings-remote-ui
+    worktree_deleted: true
+    worktree_path: ../SlockAI-fix-settings-remote-ui
+    conflicts:
+      had_conflict: false
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-17T13:40:00+08:00"
+      duration: "~15min"
+      commits: 2
+      files_changed: 2
+      lines_added: 143
+      lines_deleted: 116
   - id: feat-remote-agent-chat
     name: "远程 Agent 消息通信（A2A 协议发送 + 流式响应 + @mention 触发）"
     completed: "2026-04-17T11:55:00+08:00"

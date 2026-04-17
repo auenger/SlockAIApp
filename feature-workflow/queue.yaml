@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-17T11:55:00+08:00'
-  version: 159
+  last_updated: '2026-04-17T13:55:00+08:00'
+  version: 161
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -70,6 +70,10 @@ blocked:
   - feat-lan-mdns-discovery
   reason: Manually blocked — 暂缓开发
 completed:
+- id: fix-settings-remote-ui
+  name: 设置页面 Remote Connections UI 优化（样式统一 + Emoji→SVG + 溢出修复）
+  completed_at: '2026-04-17T13:55:00+08:00'
+  tag: fix-settings-remote-ui-20260417
 - id: feat-remote-agent-chat
   name: 远程 Agent 消息通信（A2A 协议发送 + 流式响应 + @mention 触发）
   completed_at: '2026-04-17T11:55:00+08:00'
@@ -323,7 +327,3 @@ completed:
   completed_at: '2026-04-12T01:30:00+08:00'
   tag: fix-channel-msg-render-20260412
 pending:
-- id: fix-settings-remote-ui
-  name: 设置页面 Remote Connections UI 优化（样式统一 + Emoji→SVG + 溢出修复）
-  priority: 60
-  dependencies: []
