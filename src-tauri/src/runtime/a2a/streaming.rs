@@ -27,10 +27,11 @@ pub fn open_sse_stream(
 
     let url_owned = url.to_string();
     let auth_headers_owned = auth_headers.clone();
+    let message_owned = _message.clone();
 
     // Spawn background thread for SSE reading
     let _handle = std::thread::spawn(move || {
-        if let Err(e) = sse_reader_loop(&client, &url_owned, &auth_headers_owned, &tx) {
+        if let Err(e) = sse_reader_loop(&client, &url_owned, &message_owned, &auth_headers_owned, &tx) {
             // Send error event before closing
             let _ = tx.send(StreamEvent {
                 text: String::new(),
@@ -50,11 +51,14 @@ pub fn open_sse_stream(
 fn sse_reader_loop(
     client: &reqwest::blocking::Client,
     url: &str,
+    message: &Message,
     auth_headers: &HashMap<String, String>,
     tx: &mpsc::Sender<StreamEvent>,
 ) -> Result<(), A2AError> {
+    let mut task = Task::new("stream-task");
+    task.messages.push(message.clone());
     let request_body = serde_json::to_value(SendMessageRequest {
-        task: Task::new("stream-task"),
+        task,
         stream: Some(true),
     })
     .map_err(|e| A2AError::internal_error(format!("Failed to serialize stream request: {}", e)))?;

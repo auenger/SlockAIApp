@@ -2,7 +2,11 @@
 //!
 //! Thread-safe registry for managing agent runtimes.
 //! Handles registration, detection, querying, and health checking.
+//! Also provides runtime resolution that routes local agents to registered
+//! runtimes and remote agents to dynamically-created RemoteA2ARuntime instances.
 
+use super::a2a::remote_runtime::RemoteA2ARuntime;
+use super::a2a::types::{ConnectionMode, ConnectionStatus, RemoteConnection};
 use super::{AgentRuntime, AgentRuntimeInfo, AgentRuntimeStatus, RuntimeType};
 use std::collections::HashMap;
 
@@ -226,4 +230,77 @@ pub fn create_default_registry() -> RuntimeRegistry {
     registry.register(Box::new(super::claude::ClaudeCodeRuntime::new()));
     registry.register(Box::new(super::codex::CodexRuntime::new()));
     registry
+}
+
+// ===========================================================================
+// Runtime Resolution — routes local vs remote agents
+// ===========================================================================
+
+/// Resolved runtime for agent execution.
+///
+/// Abstracts over whether the agent runs locally or remotely.
+pub enum ResolvedRuntime {
+    /// Agent runs via a locally registered runtime (Claude Code, Codex, etc.).
+    Local {
+        /// Reference to the runtime in the registry.
+        /// The string is the runtime_id used for registry lookup.
+        runtime_id: String,
+    },
+    /// Agent runs on a remote A2A endpoint.
+    Remote {
+        /// The dynamically-created remote runtime instance.
+        runtime: RemoteA2ARuntime,
+    },
+}
+
+/// Resolve the appropriate runtime for an agent based on its connection_mode.
+///
+/// - `Local` agents: returns the runtime_id for registry lookup
+/// - `Remote` agents: loads the connection from SQLite and creates a RemoteA2ARuntime
+///
+/// Returns an error if the agent is remote but the connection is not found or offline.
+pub fn resolve_runtime_for_agent(
+    connection_mode: &ConnectionMode,
+    db_conn: &rusqlite::Connection,
+) -> Result<ResolvedRuntime, String> {
+    match connection_mode {
+        ConnectionMode::Local => {
+            // Local agent: the caller should use runtime_type to look up the registry
+            // We return Local variant and let the caller handle registry lookup
+            Ok(ResolvedRuntime::Local {
+                runtime_id: String::new(), // Caller fills this from agent.runtime_type
+            })
+        }
+        ConnectionMode::Remote { connection_id } => {
+            // Remote agent: load connection from DB and create RemoteA2ARuntime
+            let row = crate::storage::db_helpers::get_remote_connection(db_conn, connection_id)
+                .map_err(|e| format!("Failed to load remote connection: {}", e))?
+                .ok_or_else(|| {
+                    format!(
+                        "远程连接 '{}' 不存在。请在设置中检查 Remote Connections 配置。",
+                        connection_id
+                    )
+                })?;
+
+            let conn = crate::runtime::a2a::remote::row_to_connection(&row);
+
+            // Check connection status
+            if conn.status != ConnectionStatus::Online {
+                return Err(format!(
+                    "{} 当前不可用（远程连接{}）。请检查连接状态或重新进行健康检查。",
+                    conn.name,
+                    match conn.status {
+                        ConnectionStatus::Offline => "已断开",
+                        ConnectionStatus::Error => "出错",
+                        ConnectionStatus::Unknown => "状态未知",
+                        _ => "",
+                    }
+                ));
+            }
+
+            let runtime = RemoteA2ARuntime::new(conn);
+
+            Ok(ResolvedRuntime::Remote { runtime })
+        }
+    }
 }
