@@ -128,18 +128,10 @@ impl BridgeServer {
             shutdown_signal_clone.store(true, std::sync::atomic::Ordering::Relaxed);
         });
 
-        // Wait for shutdown
-        match done_rx.recv_timeout(std::time::Duration::from_secs(10)) {
-            Ok(()) => {
-                println!("[az-bridge] Server stopped");
-                Ok(())
-            }
-            Err(_) => {
-                shutdown.store(true, std::sync::atomic::Ordering::Relaxed);
-                println!("[az-bridge] Server stopped (forced)");
-                Ok(())
-            }
-        }
+        // Wait for shutdown signal (blocks until Ctrl+C)
+        let _ = done_rx.recv();
+        println!("[az-bridge] Server stopped");
+        Ok(())
     }
 }
 
@@ -194,7 +186,39 @@ fn ctrlc_handler<F: Fn() + Send + 'static>(handler: F) {
         });
     }
 
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        use std::sync::Once;
+        static INIT: Once = Once::new();
+        static mut HANDLER: Option<Box<dyn Fn() + Send + 'static>> = None;
+
+        INIT.call_once(|| {
+            unsafe {
+                HANDLER = Some(Box::new(handler));
+            }
+
+            // Set Windows console Ctrl+C handler
+            extern "system" fn console_ctrl_handler(ctrl_type: u32) -> i32 {
+                if ctrl_type == 0 {
+                    // CTRL_C_EVENT
+                    unsafe {
+                        if let Some(ref h) = HANDLER {
+                            h();
+                        }
+                    }
+                    1
+                } else {
+                    0
+                }
+            }
+
+            unsafe {
+                windows_set_console_ctrl_handler(console_ctrl_handler);
+            }
+        });
+    }
+
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = handler;
     }
@@ -223,3 +247,20 @@ mod unix_signal {
 
 #[cfg(unix)]
 use unix_signal::{libc_signal_init, wait_for_sigint};
+
+#[cfg(windows)]
+fn windows_set_console_ctrl_handler(
+    handler: extern "system" fn(u32) -> i32,
+) {
+    use std::os::raw::c_int;
+    type HandlerRoutine = extern "system" fn(u32) -> i32;
+    extern "system" {
+        fn SetConsoleCtrlHandler(
+            handler_routine: Option<HandlerRoutine>,
+            add: c_int,
+        ) -> c_int;
+    }
+    unsafe {
+        SetConsoleCtrlHandler(Some(handler), 1);
+    }
+}

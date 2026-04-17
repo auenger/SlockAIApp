@@ -10,6 +10,8 @@ import { X, Key, Plus, Trash2, Check, AlertCircle, Loader2, User } from 'lucide-
 import { cn } from '../lib/utils';
 import { useApiKeys } from '../lib/useApiKeys';
 import { useUserProfile } from '../lib/useUserProfile';
+import LanAccessPanel from './settings/LanAccessPanel';
+import RemoteConnectionsPanel from './settings/RemoteConnectionsPanel';
 
 // ---------------------------------------------------------------------------
 // Provider definitions
@@ -236,6 +238,22 @@ export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ isOpen, onClose })
               </div>
             ))
           )}
+        </div>
+
+        {/* LAN Access Section */}
+        <div className="px-4 pt-3 pb-1">
+          <div className="brutal-card p-3">
+            <h3 className="font-black text-xs uppercase tracking-widest text-gray-500 mb-2">LAN Access</h3>
+            <LanAccessPanel />
+          </div>
+        </div>
+
+        {/* Remote Connections Section */}
+        <div className="px-4 pt-1 pb-3">
+          <div className="brutal-card p-3">
+            <h3 className="font-black text-xs uppercase tracking-widest text-gray-500 mb-2">Remote Connections</h3>
+            <RemoteConnectionsPanel />
+          </div>
         </div>
 
         {/* Add Key Form */}

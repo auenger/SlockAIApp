@@ -535,12 +535,19 @@ pub fn handle_tcp_connection(
     let body_str = String::from_utf8_lossy(&body).to_string();
     let response_body = server.handle_http_request(method, path, &body_str);
 
-    // Send HTTP response
-    let response = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-        response_body.len(),
-        response_body
-    );
+    // Send HTTP response with CORS headers
+    let response = if method == "OPTIONS" {
+        // CORS preflight response
+        format!(
+            "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nContent-Length: 0\r\n\r\n"
+        )
+    } else {
+        format!(
+            "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            response_body.len(),
+            response_body
+        )
+    };
 
     stream.write_all(response.as_bytes())
         .map_err(|e| A2AError::internal_error(format!("Failed to write response: {}", e)))?;
