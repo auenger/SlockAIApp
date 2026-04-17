@@ -37,6 +37,7 @@ import LanAccessPanel from './settings/LanAccessPanel';
 import { cn } from '../lib/utils';
 import { TabType, Message, AgentWithRuntime, Channel, ChannelMessage, ContentBlock, Thread } from '../types';
 import { getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
+import { isRemoteAgent, getConnectionId } from '../lib/useAllAgents';
 import { useAgentProfile } from '../lib/useAgentProfile';
 import { useWorkspace } from '../lib/useWorkspace';
 import { openWorkspaceInFinder } from '../lib/ipc';
@@ -318,6 +319,8 @@ interface MainContentProps {
   activeChannel?: Channel | null;
   /** All agents (for resolving channel member names) */
   allAgents?: AgentWithRuntime[];
+  /** Connection ID → name mapping (for remote agent labels) */
+  connectionNames?: Map<string, string>;
   /** Send a message in a channel */
   onSendChannelMessage?: (channelId: string, message: string, userName?: string) => Promise<void>;
   /** Whether a channel message is streaming */
@@ -366,6 +369,7 @@ export const MainContent: React.FC<MainContentProps> = ({
   onThreadCreated,
   activeChannel,
   allAgents = [],
+  connectionNames,
   onSendChannelMessage,
   channelIsStreaming = false,
   channelIsThinking = false,
@@ -736,15 +740,27 @@ export const MainContent: React.FC<MainContentProps> = ({
               <div className="flex items-center gap-1">
                 {activeChannel!.members.slice(0, 5).map((member) => {
                   const memberAgent = agentMap.get(member.agent_id);
+                  const remote = memberAgent ? isRemoteAgent(memberAgent.agent) : false;
+                  const connId = remote ? getConnectionId(memberAgent!.agent) : null;
+                  const connName = connId ? connectionNames?.get(connId) : null;
                   return (
-                    <AgentIcon
-                      key={member.agent_id}
-                      icon={memberAgent?.agent.icon}
-                      emoji={memberAgent?.agent.emoji}
-                      size="sm"
-                      bgColor="bg-brutal-cyan"
-                      title={memberAgent?.agent.name || member.agent_id}
-                    />
+                    <div key={member.agent_id} className="relative" title={
+                      memberAgent
+                        ? `${memberAgent.agent.name}${remote ? ` (remote${connName ? ` via ${connName}` : ''})` : ''}`
+                        : member.agent_id
+                    }>
+                      <AgentIcon
+                        icon={memberAgent?.agent.icon}
+                        emoji={memberAgent?.agent.emoji}
+                        size="sm"
+                        bgColor={remote ? "bg-purple-300" : "bg-brutal-cyan"}
+                      />
+                      {remote && (
+                        <div className="absolute -bottom-0.5 -right-0.5 text-purple-500">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
                 {activeChannel!.members.length > 5 && (

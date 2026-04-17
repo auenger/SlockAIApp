@@ -13,6 +13,8 @@ import {
   Pencil,
   Trash2,
   CheckSquare,
+  Cloud,
+  CloudOff,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAgentStatus, getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
@@ -21,6 +23,8 @@ import { CreateAgentModal } from './CreateAgentModal';
 import { EditAgentModal } from './EditAgentModal';
 import { ApiKeyManager } from './ApiKeyManager';
 import { AgentIcon } from './AgentIcon';
+import { AgentBadge } from './AgentBadge';
+import { isRemoteAgent, getConnectionId } from '../lib/useAllAgents';
 import type { AgentWithRuntime, ThreadInfo, ChannelInfo } from '../types';
 
 interface SidebarProps {
@@ -48,6 +52,8 @@ interface SidebarProps {
   onCreateChannel?: (name: string, memberAgentIds: string[]) => void;
   /** Available agents for channel member selection */
   agents?: AgentWithRuntime[];
+  /** Connection ID → connection name mapping (for remote agent labels) */
+  connectionNames?: Map<string, string>;
   /** Callback when user wants to delete a channel */
   onDeleteChannel?: (channelId: string) => void;
   /** Callback when user wants to delete a thread */
@@ -82,6 +88,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   channels = [],
   onCreateChannel,
   agents: propAgents,
+  connectionNames,
   onDeleteChannel,
   onDeleteThread,
   onDeleteAgent,
@@ -243,18 +250,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="text-[9px] font-bold uppercase text-gray-500">Members</span>
                 {agents.map((awr) => {
                   const checked = selectedMemberIds.includes(awr.agent.agent_id);
+                  const remote = isRemoteAgent(awr.agent);
+                  const connId = remote ? getConnectionId(awr.agent) : null;
+                  const connName = connId ? connectionNames?.get(connId) : null;
+                  const isOfflineRemote = remote && awr.runtime_status !== 'available';
                   return (
                     <label
                       key={awr.agent.agent_id}
-                      className="flex items-center gap-2 px-1 py-0.5 hover:bg-gray-50 cursor-pointer"
+                      className={cn(
+                        "flex items-center gap-2 px-1 py-0.5 hover:bg-gray-50 cursor-pointer",
+                        isOfflineRemote && "opacity-50"
+                      )}
                     >
                       <input
                         type="checkbox"
                         checked={checked}
                         onChange={() => toggleMember(awr.agent.agent_id)}
+                        disabled={isOfflineRemote}
                         className="brutal-border w-3 h-3 accent-black"
                       />
-                      <span className="text-[10px] font-bold">{awr.agent.emoji} {awr.agent.name}</span>
+                      <div className="relative">
+                        <AgentIcon
+                          icon={awr.agent.icon}
+                          emoji={awr.agent.emoji}
+                          size="sm"
+                          bgColor={remote ? "bg-purple-300" : "bg-brutal-cyan"}
+                        />
+                        {remote && (
+                          <div className={cn(
+                            "absolute -bottom-0.5 -right-0.5",
+                            isOfflineRemote ? "text-gray-400" : "text-purple-500"
+                          )}>
+                            {isOfflineRemote ? <CloudOff size={8} /> : <Cloud size={8} />}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-bold">{awr.agent.name}</span>
+                      {remote && (
+                        <span className="text-[8px] text-purple-400 font-mono">
+                          {connName ? `via ${connName}` : 'remote'}
+                        </span>
+                      )}
                     </label>
                   );
                 })}
@@ -437,24 +473,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </button>
               </div>
               <div className="space-y-1 max-h-40 overflow-y-auto">
-                {agents.map((awr) => (
-                  <button
-                    key={awr.agent.agent_id}
-                    onClick={() => {
-                      onCreateThreadWithAgent?.(awr.agent.agent_id);
-                      setShowNewThreadPicker(false);
-                    }}
-                    className="w-full text-left flex items-center gap-2 px-2 py-1 hover:bg-gray-50 brutal-border border-transparent hover:border-black transition-colors"
-                  >
-                    <AgentIcon
-                      icon={awr.agent.icon}
-                      emoji={awr.agent.emoji}
-                      size="sm"
-                      bgColor="bg-brutal-cyan"
-                    />
-                    <span className="text-[10px] font-bold">{awr.agent.name}</span>
-                  </button>
-                ))}
+                {agents.map((awr) => {
+                  const remote = isRemoteAgent(awr.agent);
+                  const connId = remote ? getConnectionId(awr.agent) : null;
+                  const connName = connId ? connectionNames?.get(connId) : null;
+                  const isOfflineRemote = remote && awr.runtime_status !== 'available';
+                  return (
+                    <button
+                      key={awr.agent.agent_id}
+                      onClick={() => {
+                        if (!isOfflineRemote) {
+                          onCreateThreadWithAgent?.(awr.agent.agent_id);
+                          setShowNewThreadPicker(false);
+                        }
+                      }}
+                      disabled={isOfflineRemote}
+                      className={cn(
+                        "w-full text-left flex items-center gap-2 px-2 py-1 brutal-border border-transparent transition-colors",
+                        isOfflineRemote
+                          ? "opacity-40 cursor-not-allowed"
+                          : "hover:bg-gray-50 hover:border-black"
+                      )}
+                    >
+                      <div className="relative">
+                        <AgentIcon
+                          icon={awr.agent.icon}
+                          emoji={awr.agent.emoji}
+                          size="sm"
+                          bgColor={remote ? "bg-purple-300" : "bg-brutal-cyan"}
+                        />
+                        {remote && (
+                          <div className={cn(
+                            "absolute -bottom-0.5 -right-0.5",
+                            isOfflineRemote ? "text-gray-400" : "text-purple-500"
+                          )}>
+                            {isOfflineRemote ? <CloudOff size={8} /> : <Cloud size={8} />}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-bold">{awr.agent.name}</span>
+                      {remote && (
+                        <span className="text-[8px] text-purple-400 font-mono">
+                          {isOfflineRemote ? 'offline' : connName ? `via ${connName}` : 'remote'}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -480,18 +545,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const isSelected = selectedAgentId === agent.agent_id;
               const statusColor = getRuntimeStatusColor(runtime_status);
               const statusLabel = getRuntimeStatusLabel(runtime_status);
+              const remote = isRemoteAgent(agent);
+              const connId = remote ? getConnectionId(agent) : null;
+              const connName = connId ? connectionNames?.get(connId) : null;
+              const isOfflineRemote = remote && runtime_status !== 'available';
 
               return (
                 <div
                   key={agent.agent_id}
-                  className="group relative"
+                  className={cn("group relative", isOfflineRemote && "opacity-60")}
                 >
                   <button
                     onClick={() => onAgentSelect(agentWithRuntime)}
                     title={
                       runtime_status === 'not-installed' && runtime_install_hint
                         ? `${statusLabel}\nInstall: ${runtime_install_hint}`
-                        : statusLabel
+                        : remote
+                          ? `Remote${connName ? ` (${connName})` : ''} — ${statusLabel}`
+                          : statusLabel
                     }
                     className={cn(
                       "w-full text-left px-2 py-1.5 flex items-center gap-2 brutal-border transition-all",
@@ -500,14 +571,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         : "hover:bg-white/50 border-transparent"
                     )}
                   >
-                    <AgentIcon
-                      icon={agent.icon}
-                      emoji={agent.emoji}
-                      size="sm"
-                      bgColor="bg-brutal-cyan"
-                    />
+                    <div className="relative">
+                      <AgentIcon
+                        icon={agent.icon}
+                        emoji={agent.emoji}
+                        size="sm"
+                        bgColor={remote ? "bg-purple-300" : "bg-brutal-cyan"}
+                      />
+                      {remote && (
+                        <div className={cn(
+                          "absolute -bottom-0.5 -right-0.5 p-0",
+                          isOfflineRemote ? "text-gray-400" : "text-purple-500"
+                        )}>
+                          {isOfflineRemote ? <CloudOff size={8} /> : <Cloud size={8} />}
+                        </div>
+                      )}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-black text-sm truncate">{agent.name}</div>
+                      {remote && connName && (
+                        <div className={cn(
+                          "text-[8px] font-mono truncate",
+                          isSelected ? "text-white/60" : "text-purple-400"
+                        )}>
+                          via {connName}
+                        </div>
+                      )}
                     </div>
                     <Circle
                       size={8}
@@ -515,18 +604,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       className="shrink-0"
                     />
                   </button>
-                  {/* Edit button - visible on hover */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingAgentId(agent.agent_id);
-                      setShowEditAgent(true);
-                    }}
-                    className="absolute right-7 top-1/2 -translate-y-1/2 p-0.5 brutal-border bg-white hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Edit Agent"
-                  >
-                    <Pencil size={10} />
-                  </button>
+                  {/* Edit button - only for local agents */}
+                  {!remote && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingAgentId(agent.agent_id);
+                        setShowEditAgent(true);
+                      }}
+                      className="absolute right-7 top-1/2 -translate-y-1/2 p-0.5 brutal-border bg-white hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Edit Agent"
+                    >
+                      <Pencil size={10} />
+                    </button>
+                  )}
                   {/* Delete button - visible on hover */}
                   <button
                     onClick={(e) => {
