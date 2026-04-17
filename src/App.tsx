@@ -5,7 +5,7 @@ import { ThreadPanel } from './components/ThreadPanel';
 import { TabType, AgentWithRuntime } from './types';
 import { useThreadChat } from './lib/useThreadChat';
 import { useChannel } from './lib/useChannel';
-import { useAgentStatus } from './lib/useAgentStatus';
+import { useAllAgents } from './lib/useAllAgents';
 import { useResizable } from './lib/useResizable';
 import { useTasks } from './lib/useTasks';
 import { deleteAgent, invoke } from './lib/ipc';
@@ -36,8 +36,8 @@ export default function App() {
     remove: _removeChannel,
   } = useChannel();
 
-  // Agent status for channel member selection
-  const { agents: allAgents, scan } = useAgentStatus();
+  // Agent status for channel member selection — unified local + remote
+  const { allAgents, connectionNames, refresh: refreshAllAgents } = useAllAgents();
 
   // Task state — track incomplete tasks for sidebar badge
   const { tasks: allTasks } = useTasks();
@@ -173,7 +173,7 @@ export default function App() {
         setActiveThreadId(null);
         setIsThreadOpen(false);
       }
-      scan();
+      refreshAllAgents();
     } catch (err) {
       console.error('Failed to delete agent:', err);
     }
@@ -238,10 +238,11 @@ export default function App() {
         channels={channels}
         onCreateChannel={handleCreateChannel}
         agents={allAgents}
+        connectionNames={connectionNames}
         onDeleteChannel={handleDeleteChannel}
         onDeleteThread={handleDeleteThread}
         onDeleteAgent={handleDeleteAgent}
-        onRefreshAgents={scan}
+        onRefreshAgents={refreshAllAgents}
         isTaskViewActive={activeTab === 'TASKS'}
         onTaskViewOpen={handleTaskViewOpen}
         incompleteTaskCount={incompleteTaskCount}
@@ -258,6 +259,7 @@ export default function App() {
         onThreadCreated={handleThreadCreated}
         activeChannel={activeChannel ? channelData : null}
         allAgents={allAgents}
+        connectionNames={connectionNames}
         onSendChannelMessage={(channelId, message, userName) => sendChannelMessage(channelId, message, allAgents, userName)}
         channelIsStreaming={channelIsStreaming}
         channelIsThinking={channelIsThinking}
