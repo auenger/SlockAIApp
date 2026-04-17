@@ -2,7 +2,7 @@
  * RemoteConnectionsPanel -- UI for managing remote A2A endpoint connections.
  *
  * Provides a card-based list of connections with add/edit/delete/test actions.
- * Displays connection status indicators and cached AgentCard information.
+ * Uses brutalist design system (brutal-border, brutal-shadow, brutal-btn).
  */
 
 import React, { useState } from "react";
@@ -13,6 +13,7 @@ import type {
   RemoteConnectionStatus,
   CreateRemoteConnectionRequest,
 } from "../../types";
+import { Plus, Pencil, Trash2, CheckCircle, AlertCircle } from "lucide-react";
 
 // ===========================================================================
 // Status badge component
@@ -20,16 +21,16 @@ import type {
 
 function StatusBadge({ status }: { status: RemoteConnectionStatus }) {
   const config: Record<RemoteConnectionStatus, { color: string; label: string }> = {
-    online: { color: "bg-green-500", label: "Online" },
+    online: { color: "bg-brutal-green", label: "Online" },
     offline: { color: "bg-gray-400", label: "Offline" },
-    error: { color: "bg-red-500", label: "Error" },
-    unknown: { color: "bg-yellow-500", label: "Unknown" },
+    error: { color: "bg-brutal-pink", label: "Error" },
+    unknown: { color: "bg-brutal-yellow", label: "Unknown" },
   };
 
   const { color, label } = config[status];
 
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+    <span className="inline-flex items-center gap-1.5 text-xs font-bold">
       <span className={`w-2 h-2 rounded-full ${color}`} />
       {label}
     </span>
@@ -82,7 +83,7 @@ function ConnectionForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <div>
-        <label className="block text-xs font-medium text-gray-400 mb-1">
+        <label className="block text-xs font-bold mb-1">
           Name
         </label>
         <input
@@ -90,12 +91,12 @@ function ConnectionForm({
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
           placeholder="My Dev Server"
-          className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+          className="w-full brutal-border bg-white px-3 py-1.5 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-black"
         />
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-gray-400 mb-1">
+        <label className="block text-xs font-bold mb-1">
           Endpoint URL
         </label>
         <input
@@ -103,34 +104,34 @@ function ConnectionForm({
           value={form.endpoint_url}
           onChange={(e) => setForm({ ...form, endpoint_url: e.target.value })}
           placeholder="https://dev-server:8443/a2a"
-          className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+          className="w-full brutal-border bg-white px-3 py-1.5 text-sm font-mono placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-black"
         />
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-gray-400 mb-1">
+        <label className="block text-xs font-bold mb-1">
           Authentication
         </label>
         <div className="flex gap-3">
-          <label className="inline-flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+          <label className="inline-flex items-center gap-1.5 text-sm font-bold cursor-pointer">
             <input
               type="radio"
               name="auth_type"
               value="none"
               checked={form.auth_type === "none"}
               onChange={() => setForm({ ...form, auth_type: "none" })}
-              className="accent-blue-500"
+              className="accent-black"
             />
             None
           </label>
-          <label className="inline-flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+          <label className="inline-flex items-center gap-1.5 text-sm font-bold cursor-pointer">
             <input
               type="radio"
               name="auth_type"
               value="api_key"
               checked={form.auth_type === "api_key"}
               onChange={() => setForm({ ...form, auth_type: "api_key" })}
-              className="accent-blue-500"
+              className="accent-black"
             />
             API Key
           </label>
@@ -139,7 +140,7 @@ function ConnectionForm({
 
       {form.auth_type === "api_key" && (
         <div>
-          <label className="block text-xs font-medium text-gray-400 mb-1">
+          <label className="block text-xs font-bold mb-1">
             API Key
           </label>
           <input
@@ -147,7 +148,7 @@ function ConnectionForm({
             value={form.api_key}
             onChange={(e) => setForm({ ...form, api_key: e.target.value })}
             placeholder="sk-..."
-            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+            className="w-full brutal-border bg-white px-3 py-1.5 text-sm font-mono placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-black"
           />
         </div>
       )}
@@ -156,14 +157,14 @@ function ConnectionForm({
         <button
           type="submit"
           disabled={!isValid}
-          className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="brutal-btn bg-brutal-cyan text-black text-xs disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {submitLabel}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-1.5 text-sm bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
+          className="brutal-btn bg-white text-black text-xs"
         >
           Cancel
         </button>
@@ -192,11 +193,11 @@ function ConnectionCard({
   testResult: { success: boolean; error?: string | null } | null;
 }) {
   return (
-    <div className="border border-gray-700 rounded-lg p-4 bg-gray-800/50">
+    <div className="brutal-card">
       <div className="flex items-start justify-between mb-2">
         <div>
-          <h4 className="text-sm font-medium text-white">{conn.name}</h4>
-          <p className="text-xs text-gray-400 font-mono mt-0.5">
+          <h4 className="text-sm font-extrabold">{conn.name}</h4>
+          <p className="text-xs text-gray-500 font-mono mt-0.5">
             {conn.endpoint_url}
           </p>
         </div>
@@ -204,23 +205,25 @@ function ConnectionCard({
       </div>
 
       {conn.agent_card && (
-        <div className="mt-2 text-xs text-gray-400">
-          <span className="text-gray-500">Agent:</span>{" "}
+        <div className="mt-2 text-xs text-gray-600">
+          <span className="font-bold">Agent:</span>{" "}
           {conn.agent_card.name}
           {conn.agent_card.version && (
-            <span className="text-gray-500 ml-2">v{conn.agent_card.version}</span>
+            <span className="text-gray-400 ml-2">v{conn.agent_card.version}</span>
           )}
         </div>
       )}
 
       {testResult && !testResult.success && testResult.error && (
-        <div className="mt-2 text-xs text-red-400 bg-red-900/20 rounded px-2 py-1">
+        <div className="mt-2 text-xs font-bold text-brutal-pink bg-brutal-pink/10 brutal-border px-2 py-1 flex items-start gap-1">
+          <AlertCircle size={12} className="shrink-0 mt-0.5" />
           {testResult.error}
         </div>
       )}
 
       {testResult && testResult.success && (
-        <div className="mt-2 text-xs text-green-400 bg-green-900/20 rounded px-2 py-1">
+        <div className="mt-2 text-xs font-bold text-brutal-green bg-brutal-green/10 brutal-border px-2 py-1 flex items-center gap-1">
+          <CheckCircle size={12} />
           Connection successful
         </div>
       )}
@@ -229,26 +232,28 @@ function ConnectionCard({
         <button
           onClick={onTest}
           disabled={testing}
-          className="px-3 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:opacity-50"
+          className="brutal-btn bg-brutal-yellow text-black text-xs disabled:opacity-40"
         >
           {testing ? "Testing..." : "Test"}
         </button>
         <button
           onClick={onEdit}
-          className="px-3 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
+          className="brutal-btn bg-white text-black text-xs"
         >
+          <Pencil size={10} className="inline mr-1" />
           Edit
         </button>
         <button
           onClick={onDelete}
-          className="px-3 py-1 text-xs bg-red-900/30 text-red-400 rounded hover:bg-red-900/50"
+          className="brutal-btn bg-brutal-pink text-white text-xs"
         >
+          <Trash2 size={10} className="inline mr-1" />
           Delete
         </button>
       </div>
 
       {conn.last_health_check_at && (
-        <div className="mt-2 text-xs text-gray-500">
+        <div className="mt-2 text-[10px] text-gray-400">
           Last check: {new Date(conn.last_health_check_at).toLocaleString()}
         </div>
       )}
@@ -324,7 +329,7 @@ export default function RemoteConnectionsPanel() {
 
   if (loading) {
     return (
-      <div className="p-4 text-gray-400 text-sm">
+      <div className="p-4 text-gray-500 text-sm font-bold">
         Loading connections...
       </div>
     );
@@ -333,34 +338,35 @@ export default function RemoteConnectionsPanel() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-white">
+        <h3 className="text-sm font-extrabold uppercase tracking-wider">
           Remote Connections
         </h3>
         <div className="flex gap-2">
           <button
             onClick={healthCheckAll}
-            className="px-3 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
+            className="brutal-btn bg-white text-black text-xs"
           >
             Check All
           </button>
           <button
             onClick={() => setShowAddForm(true)}
-            className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-500"
+            className="brutal-btn bg-brutal-cyan text-black text-xs flex items-center gap-1"
           >
-            + Add
+            <Plus size={12} />
+            Add
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="text-xs text-red-400 bg-red-900/20 rounded px-3 py-2">
+        <div className="text-xs font-bold text-brutal-pink bg-brutal-pink/10 brutal-border px-3 py-2">
           {error}
         </div>
       )}
 
       {showAddForm && (
-        <div className="border border-gray-600 rounded-lg p-4 bg-gray-800/70">
-          <h4 className="text-sm font-medium text-white mb-3">
+        <div className="brutal-card bg-brutal-bg">
+          <h4 className="text-sm font-extrabold mb-3">
             Add Connection
           </h4>
           <ConnectionForm
@@ -372,10 +378,11 @@ export default function RemoteConnectionsPanel() {
       )}
 
       {connections.length === 0 && !showAddForm && (
-        <div className="text-center py-8 text-gray-500 text-sm">
-          No remote connections configured.
-          <br />
-          Click "+ Add" to connect to a remote A2A endpoint.
+        <div className="brutal-card bg-brutal-bg text-center py-8">
+          <p className="text-sm text-gray-500 font-bold">No remote connections configured.</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Click "+ Add" to connect to a remote A2A endpoint.
+          </p>
         </div>
       )}
 
@@ -385,9 +392,9 @@ export default function RemoteConnectionsPanel() {
             return (
               <div
                 key={conn.id}
-                className="border border-blue-600/50 rounded-lg p-4 bg-gray-800/70"
+                className="brutal-card bg-brutal-yellow/10"
               >
-                <h4 className="text-sm font-medium text-white mb-3">
+                <h4 className="text-sm font-extrabold mb-3">
                   Edit Connection
                 </h4>
                 <ConnectionForm
@@ -409,21 +416,21 @@ export default function RemoteConnectionsPanel() {
             return (
               <div
                 key={conn.id}
-                className="border border-red-600/50 rounded-lg p-4 bg-red-900/10"
+                className="brutal-card bg-brutal-pink/10"
               >
-                <p className="text-sm text-white mb-3">
+                <p className="text-sm font-extrabold mb-3">
                   Delete "{conn.name}"?
                 </p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleDelete(conn.id)}
-                    className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-500"
+                    className="brutal-btn bg-brutal-pink text-white text-xs"
                   >
                     Confirm Delete
                   </button>
                   <button
                     onClick={() => setDeleteConfirmId(null)}
-                    className="px-3 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
+                    className="brutal-btn bg-white text-black text-xs"
                   >
                     Cancel
                   </button>
