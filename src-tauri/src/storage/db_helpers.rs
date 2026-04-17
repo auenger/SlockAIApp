@@ -1127,10 +1127,10 @@ pub fn delete_remote_connection(conn: &Connection, id: &str) -> Result<(), DbErr
 // Remote agent queries
 // ===========================================================================
 
-/// List all remote agents (connection_mode = 'remote') from the database.
+/// List all remote agents (remote_connection_id IS NOT NULL) from the database.
 pub fn list_remote_agents(conn: &Connection) -> Result<Vec<AgentRow>, DbError> {
     let mut stmt = conn.prepare(
-        "SELECT * FROM agents WHERE connection_mode = 'remote' ORDER BY name ASC"
+        "SELECT * FROM agents WHERE remote_connection_id IS NOT NULL ORDER BY name ASC"
     )?;
     let rows = stmt.query_map([], AgentRow::from_row)?;
     Ok(rows.filter_map(|r| r.ok()).collect())
@@ -1142,7 +1142,7 @@ pub fn list_remote_agents_by_connection(
     connection_id: &str,
 ) -> Result<Vec<AgentRow>, DbError> {
     let mut stmt = conn.prepare(
-        "SELECT * FROM agents WHERE connection_mode = 'remote' AND remote_connection_id = ?1 ORDER BY name ASC"
+        "SELECT * FROM agents WHERE remote_connection_id = ?1 ORDER BY name ASC"
     )?;
     let rows = stmt.query_map(params![connection_id], AgentRow::from_row)?;
     Ok(rows.filter_map(|r| r.ok()).collect())
@@ -1190,7 +1190,7 @@ pub fn delete_remote_agents_by_connection(
     connection_id: &str,
 ) -> Result<usize, DbError> {
     let count = conn.execute(
-        "DELETE FROM agents WHERE connection_mode = 'remote' AND remote_connection_id = ?1",
+        "DELETE FROM agents WHERE remote_connection_id = ?1",
         params![connection_id],
     )?;
     Ok(count)
@@ -1203,7 +1203,7 @@ pub fn disable_remote_agents_by_connection(
 ) -> Result<usize, DbError> {
     let now = chrono_now_iso();
     let count = conn.execute(
-        "UPDATE agents SET enabled = 0, updated_at = ?1 WHERE connection_mode = 'remote' AND remote_connection_id = ?2",
+        "UPDATE agents SET enabled = 0, updated_at = ?1 WHERE remote_connection_id = ?2",
         params![now, connection_id],
     )?;
     Ok(count)
@@ -1216,7 +1216,7 @@ pub fn enable_remote_agents_by_connection(
 ) -> Result<usize, DbError> {
     let now = chrono_now_iso();
     let count = conn.execute(
-        "UPDATE agents SET enabled = 1, updated_at = ?1 WHERE connection_mode = 'remote' AND remote_connection_id = ?2",
+        "UPDATE agents SET enabled = 1, updated_at = ?1 WHERE remote_connection_id = ?2",
         params![now, connection_id],
     )?;
     Ok(count)

@@ -6,7 +6,7 @@ az-bridge 是 AgentsZone 的独立轻量二进制，可在无 GUI 的远程服�
 
 ### 整体架构
 
-```
+```text
 ┌─────────────────────────┐          HTTP/JSON-RPC          ┌──────────────────────────┐
 │  本地 AgentsZone 桌面端   │ ◄────────────────────────────► │  远程 az-bridge          │
 │  (Tauri + React)         │                                 │  (独立 Rust 二进制)       │
@@ -30,19 +30,28 @@ az-bridge 是 AgentsZone 的独立轻量二进制，可在无 GUI 的远程服�
 ### 通信流程
 
 1. **前端发起请求**：`useBridgeWorkspace` hook 通过 `fetch()` 发送 HTTP POST
+
 2. **Tauri Webview**：请求经 Tauri 内置 WebView 发出（受浏览器 CORS 策略约束）
+
 3. **TCP 层**：az-bridge 监听 TCP 端口，接收 HTTP 请求
+
 4. **HTTP 解析**：读取 request line + headers + body，解析出 JSON-RPC 消息
+
 5. **CORS 处理**：
-   - 浏览器先发 `OPTIONS` 预检请求
-   - 服务端返回 `204 No Content` + `Access-Control-Allow-Origin: *`
-   - 浏览器确认允许后再发实际 `POST` 请求
-   - 服务端返回 `200 OK` + CORS 头 + JSON-RPC 响应
+
+   * 浏览器先发 `OPTIONS` 预检请求
+
+   * 服务端返回 `204 No Content` + `Access-Control-Allow-Origin: *`
+
+   * 浏览器确认允许后再发实际 `POST` 请求
+
+   * 服务端返回 `200 OK` + CORS 头 + JSON-RPC 响应
+
 6. **JSON-RPC 路由**：根据 `method` 字段分发到对应 handler
 
 ### 协议层
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │ HTTP/1.1 (传输层)                         │
 │  - POST / 请求                            │
@@ -64,7 +73,7 @@ az-bridge 是 AgentsZone 的独立轻量二进制，可在无 GUI 的远程服�
 
 浏览器 `fetch()` 跨域请求必须经过 CORS 预检：
 
-```
+```text
 浏览器                          az-bridge
   │                                │
   │──── OPTIONS / ────────────────►│  (预检请求)
@@ -86,7 +95,7 @@ az-bridge 是 AgentsZone 的独立轻量二进制，可在无 GUI 的远程服�
 
 ### 数据流：Bridge Workspace 加载
 
-```
+```text
 App 启动 → Settings → 点 Test → 连接成功 (status: online)
     │
     ▼
@@ -181,8 +190,11 @@ workspace = "/home/user/.agentszone"
 启动后会打印：
 
 * 监听地址和端口
+
 * 本机 IP 地址列表（方便远程连接）
+
 * 已加载的 agent 数量
+
 * Ctrl+C 优雅关闭提示
 
 ## 3. 本地测试（单机）
@@ -287,18 +299,30 @@ ssh user@server
 ### 4.2 本地 AgentsZone 连接
 
 1. 打开 AgentsZone 桌面 App
+
 2. 点击左下角 **设置按钮**（用户名右边）
+
 3. 在弹窗中找到 **Remote Connections** 区域
+
 4. 点 **+ Add**
+
 5. 填写：
-   - **Name**: 远程机器名称
-   - **Endpoint URL**: `http://<远程IP>:7878`
-   - **Authentication**: 选 **None**
+
+   * **Name**: 远程机器名称
+
+   * **Endpoint URL**: `http://<远程IP>:7878`
+
+   * **Authentication**: 选 **None**
+
 6. 点 **Save** → 点 **Test** → 状态变 **Online**
+
 7. 自动出现 **Bridge Workspace** 面板：
-   - 显示远程 agent 卡片（emoji + name + runtime type）
-   - 点击 agent 可浏览远程文件（只读）
-   - 点击文件可查看内容
+
+   * 显示远程 agent 卡片（emoji + name + runtime type）
+
+   * 点击 agent 可浏览远程文件（只读）
+
+   * 点击文件可查看内容
 
 ### 4.3 发送消息协作
 
@@ -335,39 +359,48 @@ curl -X POST http://<remote-ip>:7878 \
 ### 安全
 
 * 所有文件操作限制在 workspace 基目录内
+
 * 路径遍历检查：拒绝 `..`、绝对路径、反斜杠
+
 * 文件读取使用 canonicalize + starts_with 二次验证
 
 ## 6. 常见问题
 
 ### Q: Windows 上启动后立即 stopped
 
-**原因**：旧版本的 `recv_timeout(10s)` 导致 10 秒后自动退出。
-**修复**：v1.1+ 改为 `done_rx.recv()` 无限阻塞，只在 Ctrl+C 时退出。
+**原因**：旧版本的 `recv_timeout(10s)` 导致 10 秒后自动退出。\
+**修复**：v1.1+ 改为 `done_rx.recv()` 无限阻塞，只在 Ctrl+C 时退出。\
 **文件**：`src-tauri/src/bridge/server.rs`
 
 ### Q: App 显示 "Load failed"
 
-**原因**：浏览器 CORS 预检（OPTIONS）请求被服务端拒绝。
-**修复**：v1.1+ 在 TCP handler 中添加 OPTIONS 处理和 `Access-Control-Allow-Origin: *` 头。
+**原因**：浏览器 CORS 预检（OPTIONS）请求被服务端拒绝。\
+**修复**：v1.1+ 在 TCP handler 中添加 OPTIONS 处理和 `Access-Control-Allow-Origin: *` 头。\
 **文件**：`src-tauri/src/runtime/a2a/adapter/handler.rs`
 
 ### Q: `npm run tauri dev` 报 "could not determine which binary to run"
 
-**原因**：Cargo.toml 有多个 `[[bin]]` target，未指定默认。
-**修复**：在 `[package]` 中添加 `default-run = "agentszone"`。
+**原因**：Cargo.toml 有多个 [[bin]] target，未指定默认。\
+**修复**：在 `[package]` 中添加 `default-run = "agentszone"`。\
 **文件**：`src-tauri/Cargo.toml`
 
 ### Q: 找不到 Remote Connections 入口
 
-**位置**：左下角用户名右边的设置按钮 → 弹窗中 LAN Access 下方 → Remote Connections。
+**位置**：左下角用户名右边的设置按钮 → 弹窗中 LAN Access 下方 → Remote Connections。\
 **文件**：`src/components/ApiKeyManager.tsx`
 
 ## 7. 建议测试顺序
 
 1. **编译** — 确认无 Tauri 链接错误
+
 2. **单元测试** — `cargo test --bin az-bridge --no-default-features`
+
 3. **本地启动 + curl** — 测试各 JSON-RPC 方法
+
 4. **路径安全** — 验证 `../../etc/passwd` 被拒绝
+
 5. **两台机器连接** — 实际远程连接测试
+
 6. **GUI 验证** — 在 AgentsZone 桌面端确认远程 workspace 面板显示
+
+⠀

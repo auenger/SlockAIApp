@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-17T07:30:00+08:00'
-  version: 150
+  last_updated: '2026-04-17T11:55:00+08:00'
+  version: 159
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -40,12 +40,20 @@ parents:
   - feat-task-realtime-exec
   - feat-task-async-exec
   - id: feat-lan-a2a-server
-    name: 'LAN A2A 局域网互联（方式1 GUI + 方式2 Headless）'
+    name: LAN A2A 局域网互联（方式1 GUI + 方式2 Headless）
     split: true
     children:
     - feat-lan-a2a-access
     - feat-lan-headless-serve
+- id: feat-remote-agent-integration
+  name: 远程 Agent 完整融入（Bridge Agent → 本地可用）
+  split: true
+  children:
+  - feat-remote-agent-model
+  - feat-remote-agent-ui
+  - feat-remote-agent-chat
 active:
+blocked:
 - id: feat-lan-mdns-discovery
   name: mDNS 零配置局域网自动发现（方案B）
   priority: 50
@@ -54,14 +62,26 @@ active:
   branch: feature/feat-lan-mdns-discovery
   worktree: ../AgentsZone-feat-lan-mdns-discovery
   started_at: '2026-04-17T05:00:00+08:00'
-blocked:
+  reason: Manually blocked — 暂缓开发，保留进度
 - id: feat-lan-security
   name: LAN 安全加固 — TLS + 认证（方案C）
   priority: 50
   dependencies:
   - feat-lan-mdns-discovery
-  reason: 'Manually blocked — 暂缓开发'
+  reason: Manually blocked — 暂缓开发
 completed:
+- id: feat-remote-agent-chat
+  name: 远程 Agent 消息通信（A2A 协议发送 + 流式响应 + @mention 触发）
+  completed_at: '2026-04-17T11:55:00+08:00'
+  tag: feat-remote-agent-chat-20260417
+- id: feat-remote-agent-ui
+  name: 远程 Agent UI 融入（Sidebar + Channel 成员 + Thread + 视觉区分）
+  completed_at: '2026-04-17T10:45:00+08:00'
+  tag: feat-remote-agent-ui-20260417
+- id: feat-remote-agent-model
+  name: 远程 Agent 代理模型（后端拉取 + 映射 + 状态同步）
+  completed_at: '2026-04-17T09:45:00+08:00'
+  tag: feat-remote-agent-model-20260417
 - id: feat-lan-a2a-bridge
   name: 远程 Workspace 网关（独立 A2A Bridge 二进制 + 远程 workspace 管理）
   completed_at: '2026-04-17T07:30:00+08:00'
@@ -302,3 +322,8 @@ completed:
   name: Channel 消息即时渲染 & Agent Thinking 状态清理
   completed_at: '2026-04-12T01:30:00+08:00'
   tag: fix-channel-msg-render-20260412
+pending:
+- id: fix-settings-remote-ui
+  name: 设置页面 Remote Connections UI 优化（样式统一 + Emoji→SVG + 溢出修复）
+  priority: 60
+  dependencies: []

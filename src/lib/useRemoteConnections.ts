@@ -19,6 +19,7 @@ import {
   remoteConnectionDelete,
   remoteConnectionTest,
   remoteConnectionHealthAll,
+  syncRemoteAgents,
 } from "../lib/ipc";
 
 export interface UseRemoteConnectionsReturn {
@@ -126,6 +127,14 @@ export function useRemoteConnections(): UseRemoteConnectionsReturn {
           return next;
         });
         await refresh();
+        // Auto-sync agents on successful test
+        if (result.success) {
+          try {
+            await syncRemoteAgents(id);
+          } catch (e) {
+            console.warn(`[useRemoteConnections] Auto-sync agents failed for ${id}:`, e);
+          }
+        }
         return result;
       } catch (e) {
         setError(String(e));
@@ -140,6 +149,11 @@ export function useRemoteConnections(): UseRemoteConnectionsReturn {
       setError(null);
       const updated = await remoteConnectionHealthAll();
       setConnections(updated);
+      // Auto-sync agents for all online connections
+      const onlineConns = updated.filter((c) => c.status === "online");
+      await Promise.allSettled(
+        onlineConns.map((c) => syncRemoteAgents(c.id))
+      );
     } catch (e) {
       setError(String(e));
     }

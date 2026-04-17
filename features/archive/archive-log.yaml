@@ -1,10 +1,81 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-17T07:30:00+08:00"
-  version: 50
-  total_completed: 50
+  last_updated: "2026-04-17T11:55:00+08:00"
+  version: 53
+  total_completed: 53
 
 records:
+  - id: feat-remote-agent-chat
+    name: "远程 Agent 消息通信（A2A 协议发送 + 流式响应 + @mention 触发）"
+    completed: "2026-04-17T11:55:00+08:00"
+    tag: feat-remote-agent-chat-20260417
+    merge_commit: HEAD
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-remote-agent-chat
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-remote-agent-chat
+    conflicts:
+      had_conflict: false
+    verification:
+      status: passed
+      scenarios_total: 5
+      scenarios_passed: 5
+    stats:
+      started: "2026-04-17T11:00:00+08:00"
+      duration: "~55min"
+      commits: 1
+      files_changed: 5
+      lines_added: 351
+      lines_deleted: 83
+
+  - id: feat-remote-agent-ui
+    name: "远程 Agent UI 融入（Sidebar + Channel 成员 + Thread + 视觉区分）"
+    completed: "2026-04-17T10:45:00+08:00"
+    tag: feat-remote-agent-ui-20260417
+    merge_commit: HEAD
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-remote-agent-ui
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-remote-agent-ui
+    conflicts:
+      had_conflict: false
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-17T10:30:00+08:00"
+      duration: "15m"
+      commits: 1
+      files_changed: 5
+
+  - id: feat-remote-agent-model
+    name: "远程 Agent 代理模型（后端拉取 + 映射 + 状态同步）"
+    completed: "2026-04-17T09:45:00+08:00"
+    tag: feat-remote-agent-model-20260417
+    merge_commit: "7bab0bb"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-remote-agent-model
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-remote-agent-model
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-17T09:30:00+08:00"
+      duration: "~15min"
+      commits: 1
+      files_changed: 7
+      lines_added: 489
+      lines_deleted: 3
+
   - id: feat-lan-a2a-bridge
     name: "远程 Workspace 网关（独立 A2A Bridge 二进制 + 远程 workspace 管理）"
     completed: "2026-04-17T07:30:00+08:00"

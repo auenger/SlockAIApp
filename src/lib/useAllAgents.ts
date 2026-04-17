@@ -6,7 +6,7 @@
  * providing a single list for UI consumption.
  */
 
-import { useMemo } from "react";
+import { useMemo, useEffect, useRef } from "react";
 import type { AgentSummary, AgentWithRuntime, ConnectionMode, RemoteConnectionStatus } from "../types";
 import { useAgentStatus } from "./useAgentStatus";
 import { useRemoteAgents } from "./useRemoteAgents";
@@ -70,6 +70,20 @@ export function useAllAgents(): UseAllAgentsReturn {
   const { agents: localAgents, loading: localLoading, scan: localScan } = useAgentStatus();
   const { remoteAgents: remoteSummaries, loading: remoteLoading, refresh: refreshRemote } = useRemoteAgents();
   const { connections, refresh: refreshConnections } = useRemoteConnections();
+
+  // Track online connection IDs to detect changes (e.g. after Settings sync)
+  const prevOnlineIds = useRef<string>("");
+  useEffect(() => {
+    const onlineIds = connections
+      .filter((c) => c.status === "online")
+      .map((c) => c.id)
+      .sort()
+      .join(",");
+    if (onlineIds !== prevOnlineIds.current && onlineIds.length > 0) {
+      prevOnlineIds.current = onlineIds;
+      refreshRemote();
+    }
+  }, [connections, refreshRemote]);
 
   // Build connection ID → status map
   const connectionStatuses = useMemo(() => {

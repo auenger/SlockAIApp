@@ -218,6 +218,12 @@ impl AgentManager {
             }
 
             let agent_id = entry.file_name().to_string_lossy().to_string();
+
+            // Skip remote agent directories — they are managed by remote sync, not local workspace
+            if agent_id.starts_with("remote:") {
+                continue;
+            }
+
             let identity = self.load_identity(&agent_id)?;
 
             // Self-heal: ensure workspace subdirectories exist for loaded agent

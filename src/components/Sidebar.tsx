@@ -287,8 +287,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </div>
                       <span className="text-[10px] font-bold">{awr.agent.name}</span>
                       {remote && (
-                        <span className="text-[8px] text-purple-400 font-mono">
-                          {connName ? `via ${connName}` : 'remote'}
+                        <span className={cn(
+                          "text-[9px] font-bold flex items-center gap-0.5",
+                          isOfflineRemote ? "text-gray-400" : "text-purple-500"
+                        )}>
+                          <Cloud size={8} />
+                          {connName ?? 'remote'}
                         </span>
                       )}
                     </label>
@@ -513,8 +517,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </div>
                       <span className="text-[10px] font-bold">{awr.agent.name}</span>
                       {remote && (
-                        <span className="text-[8px] text-purple-400 font-mono">
-                          {isOfflineRemote ? 'offline' : connName ? `via ${connName}` : 'remote'}
+                        <span className={cn(
+                          "text-[9px] font-bold flex items-center gap-0.5",
+                          isOfflineRemote ? "text-gray-400" : "text-purple-500"
+                        )}>
+                          {isOfflineRemote ? <CloudOff size={8} /> : <Cloud size={8} />}
+                          {isOfflineRemote ? 'offline' : connName ?? 'remote'}
                         </span>
                       )}
                     </button>
@@ -591,10 +599,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <div className="font-black text-sm truncate">{agent.name}</div>
                       {remote && connName && (
                         <div className={cn(
-                          "text-[8px] font-mono truncate",
-                          isSelected ? "text-white/60" : "text-purple-400"
+                          "text-[10px] font-bold truncate mt-0.5 flex items-center gap-1",
+                          isSelected ? "text-white/70" : "text-purple-500"
                         )}>
-                          via {connName}
+                          <Cloud size={9} />
+                          {connName}
                         </div>
                       )}
                     </div>

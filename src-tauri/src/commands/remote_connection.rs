@@ -305,17 +305,25 @@ pub fn sync_remote_agents(
         return Err(format!("Connection '{}' is not online (status: {:?})", connection_id, conn.status));
     }
 
-    // Fetch agents from the remote bridge endpoint
+    // Fetch agents from the remote bridge via JSON-RPC
     let client = crate::runtime::a2a::remote::build_http_client(&conn)?;
     let url = format!(
-        "{}/agents",
+        "{}/",
         conn.endpoint_url.trim_end_matches('/')
     );
 
-    log::info!("[sync_remote_agents] Fetching agents from '{}' at {}", conn.name, url);
+    log::info!("[sync_remote_agents] Fetching agents from '{}' via bridge.getAgents", conn.name);
+
+    let rpc_request = JsonRpcRequest {
+        jsonrpc: "2.0",
+        method: "bridge.getAgents",
+        params: serde_json::json!({}),
+        id: 1,
+    };
 
     let response = client
-        .get(&url)
+        .post(&url)
+        .json(&rpc_request)
         .send()
         .map_err(|e| format!("Failed to fetch remote agents: {}", e))?;
 
@@ -325,10 +333,12 @@ pub fn sync_remote_agents(
         return Err(format!("Remote agents fetch failed ({}): {}", status, body));
     }
 
-    // Parse the response — expect a JSON array of agent objects
-    let remote_agents: Vec<RemoteAgentEntry> = response
+    // Parse JSON-RPC response: { "result": { "agents": [...] } }
+    let rpc_response: JsonRpcResponse = response
         .json()
         .map_err(|e| format!("Failed to parse remote agents response: {}", e))?;
+
+    let remote_agents = rpc_response.result.agents;
 
     log::info!(
         "[sync_remote_agents] Found {} agents from '{}'",
@@ -336,21 +346,30 @@ pub fn sync_remote_agents(
         conn.name
     );
 
+    // Clean up stale remote agents for this connection before upserting
+    let _ = crate::storage::db_helpers::delete_remote_agents_by_connection(&db_conn, &connection_id);
+
     // Upsert each remote agent into the local database
     let now = crate::storage::db_helpers::chrono_now_iso();
     let mut synced = Vec::new();
 
     for agent in &remote_agents {
-        let agent_id = format!("remote:{}:{}", connection_id, agent.id);
+        let agent_id = format!("remote:{}:{}", connection_id, agent.agent_id);
+
+        let runtime_type = if agent.runtime_type.is_empty() {
+            "remote-a2a".to_string()
+        } else {
+            agent.runtime_type.clone()
+        };
 
         let row = crate::storage::db_helpers::AgentRow {
             id: agent_id.clone(),
             name: agent.name.clone(),
-            emoji: agent.emoji.clone().unwrap_or_else(|| "cloud".to_string()),
-            avatar_path: agent.avatar.clone(),
+            emoji: if agent.emoji.is_empty() { "cloud".to_string() } else { agent.emoji.clone() },
+            avatar_path: None,
             enabled: true,
-            runtime_type: agent.runtime_type.clone().unwrap_or_else(|| "remote-a2a".to_string()),
-            description: agent.description.clone().unwrap_or_default(),
+            runtime_type: runtime_type.clone(),
+            description: String::new(),
             connection_mode: format!("remote:{}", connection_id),
             remote_connection_id: Some(connection_id.clone()),
             created_at: now.clone(),
@@ -373,14 +392,12 @@ pub fn sync_remote_agents(
         synced.push(AgentSummary {
             agent_id,
             name: agent.name.clone(),
-            emoji: agent.emoji.clone().unwrap_or_else(|| "cloud".to_string()),
-            avatar: agent.avatar.clone(),
-            icon: agent.icon.clone(),
+            emoji: if agent.emoji.is_empty() { "cloud".to_string() } else { agent.emoji.clone() },
+            avatar: None,
+            icon: None,
             enabled: true,
             session_count: 0,
-            runtime_type: crate::runtime::RuntimeType::Custom(
-                agent.runtime_type.clone().unwrap_or_else(|| "remote-a2a".to_string())
-            ),
+            runtime_type: crate::runtime::RuntimeType::Custom(runtime_type),
             connection_mode: crate::runtime::a2a::types::ConnectionMode::Remote {
                 connection_id: connection_id.clone(),
             },
@@ -461,24 +478,41 @@ pub fn refresh_remote_agents(
 }
 
 // ===========================================================================
-// Remote Agent Entry (parsed from bridge response)
+// Remote Agent Entry (parsed from bridge.getAgents JSON-RPC response)
 // ===========================================================================
 
-/// An agent entry returned by the remote bridge's `/agents` endpoint.
+/// An agent entry returned by the remote bridge's `bridge.getAgents` method.
 #[derive(Debug, Clone, serde::Deserialize)]
 struct RemoteAgentEntry {
     /// Agent identifier on the remote side.
-    pub id: String,
+    pub agent_id: String,
     /// Display name.
     pub name: String,
-    /// Emoji (optional).
-    pub emoji: Option<String>,
-    /// Avatar URL (optional).
-    pub avatar: Option<String>,
-    /// SVG icon name (optional).
-    pub icon: Option<String>,
-    /// Description (optional).
-    pub description: Option<String>,
-    /// Runtime type on the remote side (optional).
-    pub runtime_type: Option<String>,
+    /// Emoji.
+    #[serde(default)]
+    pub emoji: String,
+    /// Runtime type on the remote side (e.g. "ClaudeCode").
+    #[serde(default)]
+    pub runtime_type: String,
+}
+
+/// Wrapper response from `bridge.getAgents`.
+#[derive(Debug, Clone, serde::Deserialize)]
+struct BridgeGetAgentsResponse {
+    pub agents: Vec<RemoteAgentEntry>,
+}
+
+/// JSON-RPC request envelope.
+#[derive(Debug, serde::Serialize)]
+struct JsonRpcRequest {
+    jsonrpc: &'static str,
+    method: &'static str,
+    params: serde_json::Value,
+    id: u64,
+}
+
+/// JSON-RPC success response envelope.
+#[derive(Debug, Clone, serde::Deserialize)]
+struct JsonRpcResponse {
+    result: BridgeGetAgentsResponse,
 }
