@@ -716,6 +716,29 @@ export async function remoteConnectionGetAgentCard(
 }
 
 // ---------------------------------------------------------------------------
+// Remote Agent Sync commands
+// ---------------------------------------------------------------------------
+
+/** Sync remote agents from a specific connection. */
+export async function syncRemoteAgents(
+  connectionId: string
+): Promise<AgentSummary[]> {
+  return invoke<AgentSummary[]>("sync_remote_agents", { connectionId });
+}
+
+/** Get all remote agents across all connections. */
+export async function getRemoteAgents(): Promise<AgentSummary[]> {
+  return invoke<AgentSummary[]>("get_remote_agents");
+}
+
+/** Refresh agents for a specific connection (health check + sync). */
+export async function refreshRemoteAgents(
+  connectionId: string
+): Promise<void> {
+  return invoke<void>("refresh_remote_agents", { connectionId });
+}
+
+// ---------------------------------------------------------------------------
 // Collaboration / A2A Multi-Agent commands
 // ---------------------------------------------------------------------------
 
