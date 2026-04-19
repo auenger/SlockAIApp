@@ -585,14 +585,33 @@ pub async fn send_message(
                                 persistent: true,
                             };
 
-                            match runtime.execute(params) {
-                                Ok(rx) => rx,
-                                Err(e) => {
+                            // Execute on a dedicated OS thread to avoid
+                            // tokio + reqwest::blocking runtime conflict.
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            std::thread::spawn(move || {
+                                let result = runtime.execute(params);
+                                let _ = tx.send(result);
+                            });
+                            match rx.recv() {
+                                Ok(Ok(recv)) => recv,
+                                Ok(Err(e)) => {
                                     let error_msg = format!("远程执行失败: {}", e);
                                     log::warn!(
                                         "[send_message] Remote agent {} execution failed: {}",
                                         agent_id, e
                                     );
+                                    let _ = app.emit("agent://chunk", serde_json::json!({
+                                        "text": error_msg.clone(),
+                                        "is_done": true,
+                                        "error": Some(error_msg.clone()),
+                                        "type": "error",
+                                        "session_id": null,
+                                        "content_blocks": null,
+                                    }));
+                                    return Err(error_msg);
+                                }
+                                Err(_) => {
+                                    let error_msg = "远程执行线程意外终止".to_string();
                                     let _ = app.emit("agent://chunk", serde_json::json!({
                                         "text": error_msg.clone(),
                                         "is_done": true,
@@ -687,6 +706,15 @@ pub async fn send_message(
 
             while let Ok(event) = receiver.recv() {
                 event_count += 1;
+
+                log::info!(
+                    "[forward_thread] Event #{}: type={:?}, is_done={}, text_len={}, error={:?}",
+                    event_count,
+                    event.msg_type,
+                    event.is_done,
+                    event.text.len(),
+                    event.error
+                );
 
                 // Capture session_id from result
                 if event.is_done {

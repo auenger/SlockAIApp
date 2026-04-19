@@ -156,10 +156,24 @@ impl AdapterServer {
             // Execute the task via adapter
             match adapter_send.execute_task(&task_id, &user_text, &config_send) {
                 Ok(rx) => {
-                    // Store the receiver for potential streaming
+                    // Register task in state so getTask can find it
+                    {
+                        let mut s = state_send.lock().unwrap();
+                        s.set_task_status(&task_id, TaskStatus::Working);
+                    }
+
+                    // Wrap receiver with status tracker so task state updates on completion
+                    let tracked_rx = super::cli_adapter::spawn_status_tracker(
+                        task_id.clone(),
+                        rx,
+                        state_send.clone(),
+                        task_messages_send.clone(),
+                    );
+
+                    // Store the tracked receiver for potential streaming
                     {
                         let mut streams = active_streams_send.lock().unwrap();
-                        streams.insert(task_id.clone(), rx);
+                        streams.insert(task_id.clone(), tracked_rx);
                     }
 
                     // Build response task
@@ -297,6 +311,14 @@ impl AdapterServer {
                 tasks: tasks_with_msgs,
             }).unwrap_or_default())
         });
+    }
+
+    /// Take the active stream receiver for a task (removes it from the map).
+    ///
+    /// Used by the TCP handler to stream SSE events for `sendMessage` with `stream: true`.
+    pub fn take_active_stream(&self, task_id: &str) -> Option<std::sync::mpsc::Receiver<StreamEvent>> {
+        let mut streams = self.active_streams.lock().unwrap();
+        streams.remove(task_id)
     }
 
     /// Handle an incoming HTTP request.
@@ -534,6 +556,59 @@ pub fn handle_tcp_connection(
 
     let body_str = String::from_utf8_lossy(&body).to_string();
     let response_body = server.handle_http_request(method, path, &body_str);
+
+    // Check if this is a sendMessage with stream=true that should return SSE
+    let wants_sse = method == "POST"
+        && body_str.contains("\"sendMessage\"")
+        && (body_str.contains("\"stream\":true") || body_str.contains("\"stream\": true"));
+
+    if wants_sse {
+        // Extract task_id from response to find the active stream
+        if let Ok(resp_json) = serde_json::from_str::<serde_json::Value>(&response_body) {
+            if let Some(task_id) = resp_json
+                .get("result")
+                .and_then(|r| r.get("task"))
+                .and_then(|t| t.get("id"))
+                .and_then(|id| id.as_str())
+            {
+                if let Some(rx) = server.take_active_stream(task_id) {
+                    log::info!(
+                        "[AdapterServer] Streaming SSE events for task {}",
+                        task_id
+                    );
+
+                    // Send SSE headers
+                    let sse_header = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n";
+                    stream.write_all(sse_header.as_bytes())
+                        .map_err(|e| A2AError::internal_error(format!("Failed to write SSE header: {}", e)))?;
+                    stream.flush()
+                        .map_err(|e| A2AError::internal_error(format!("Failed to flush SSE header: {}", e)))?;
+
+                    // Stream events as SSE
+                    for event in rx.iter() {
+                        let has_content = !event.text.is_empty() || event.is_done;
+                        if has_content {
+                            let a2a_msg = stream_event_to_a2a_message(&event);
+                            let event_type = if event.is_done { "done" } else { "message" };
+                            if let Ok(data) = serde_json::to_string(&a2a_msg) {
+                                let sse_frame = format!("event: {}\ndata: {}\n\n", event_type, data);
+                                if stream.write_all(sse_frame.as_bytes()).is_err() {
+                                    break;
+                                }
+                                if stream.flush().is_err() {
+                                    break;
+                                }
+                            }
+                        }
+                        if event.is_done {
+                            break;
+                        }
+                    }
+                    return Ok(());
+                }
+            }
+        }
+    }
 
     // Send HTTP response with CORS headers
     let response = if method == "OPTIONS" {

@@ -119,7 +119,18 @@ pub fn start_a2a_server(
     };
 
     let server = Arc::new(AdapterServer::new(adapter, agent_card));
-    server.register_adapter_handlers(AdapterConfig::default());
+
+    // Use workspace root as default workspace for A2A tasks so the CLI
+    // has a valid working directory.
+    let adapter_config = {
+        let manager = state
+            .agent_manager
+            .lock()
+            .map_err(|e| format!("lock error: {}", e))?;
+        AdapterConfig::new(manager.workspace_root().to_string_lossy().to_string())
+            .with_timeout(300)
+    };
+    server.register_adapter_handlers(adapter_config);
 
     let config = ListenerConfig::tcp("0.0.0.0", port);
 
