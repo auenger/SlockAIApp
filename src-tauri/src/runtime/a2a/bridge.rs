@@ -152,6 +152,7 @@ pub fn a2a_message_to_stream_event(message: &Message) -> StreamEvent {
         msg_type,
         session_id,
         content_blocks,
+        token_usage: None,
     }
 }
 
@@ -276,6 +277,7 @@ mod tests {
             msg_type: Some("assistant".into()),
             session_id: Some("sess-1".into()),
             content_blocks: None,
+            token_usage: None,
         };
         let msg = stream_event_to_a2a_message(&event);
         assert_eq!(msg.role, MessageRole::Agent);
@@ -292,6 +294,7 @@ mod tests {
             msg_type: Some("user".into()),
             session_id: None,
             content_blocks: None,
+            token_usage: None,
         };
         let msg = stream_event_to_a2a_message(&event);
         assert_eq!(msg.role, MessageRole::User);
@@ -306,6 +309,7 @@ mod tests {
             msg_type: Some("system".into()),
             session_id: None,
             content_blocks: None,
+            token_usage: None,
         };
         let msg = stream_event_to_a2a_message(&event);
         assert_eq!(msg.role, MessageRole::System);
@@ -320,6 +324,7 @@ mod tests {
             msg_type: Some("result".into()),
             session_id: None,
             content_blocks: None,
+            token_usage: None,
         };
         let msg = stream_event_to_a2a_message(&event);
         assert_eq!(msg.role, MessageRole::Agent);
@@ -340,6 +345,7 @@ mod tests {
             msg_type: Some("assistant".into()),
             session_id: None,
             content_blocks: Some(serde_json::json!([
+            token_usage: None,
                 {"type": "tool_use", "name": "read_file", "input": {"path": "/tmp/a.txt"}},
                 {"type": "tool_result", "content": "file contents here"}
             ])),
@@ -360,6 +366,7 @@ mod tests {
             msg_type: Some("timeout".into()),
             session_id: None,
             content_blocks: None,
+            token_usage: None,
         };
         let msg = stream_event_to_a2a_message(&event);
         assert_eq!(msg.role, MessageRole::System);
@@ -428,6 +435,7 @@ mod tests {
             msg_type: Some("assistant".into()),
             session_id: Some("sess-rt".into()),
             content_blocks: None,
+            token_usage: None,
         };
         let msg = stream_event_to_a2a_message(&original);
         let back = a2a_message_to_stream_event(&msg);
@@ -446,6 +454,7 @@ mod tests {
             msg_type: Some("system".into()),
             session_id: None,
             content_blocks: None,
+            token_usage: None,
         };
         let msg = stream_event_to_a2a_message(&original);
         let back = a2a_message_to_stream_event(&msg);

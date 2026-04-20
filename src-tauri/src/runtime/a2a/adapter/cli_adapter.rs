@@ -384,6 +384,7 @@ mod tests {
             msg_type: Some("assistant".into()),
             session_id: Some("sess-tracker".into()),
             content_blocks: None,
+            token_usage: None,
         }).unwrap();
 
         tx.send(StreamEvent {
@@ -393,6 +394,7 @@ mod tests {
             msg_type: Some("result".into()),
             session_id: None,
             content_blocks: None,
+            token_usage: None,
         }).unwrap();
 
         drop(tx);

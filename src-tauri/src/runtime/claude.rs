@@ -16,7 +16,7 @@
 
 use super::{
     AgentCapability, AgentRuntime, AgentRuntimeInfo, AgentRuntimeStatus, ExecuteParams,
-    RuntimeDetector, RuntimeType, StreamEvent,
+    RuntimeDetector, RuntimeType, StreamEvent, TokenUsage, merge_token_usage_maps,
 };
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, BufWriter, Write};
@@ -448,6 +448,7 @@ impl ClaudeCodeRuntime {
                         msg_type: Some("timeout".to_string()),
                         session_id: None,
                         content_blocks: None,
+                        token_usage: None,
                     });
                     break;
                 }
@@ -534,6 +535,7 @@ impl ClaudeCodeRuntime {
                         msg_type: Some("timeout".to_string()),
                         session_id: None,
                         content_blocks: None,
+                        token_usage: None,
                     });
                     break;
                 }
@@ -752,6 +754,7 @@ fn spawn_stdout_reader(
                                 content_blocks: None,
                                 msg_type: Some("raw".to_string()),
                                 session_id: None,
+                                token_usage: None,
                             };
                             send_to_current_sender(&current_sender, event);
                         }
@@ -846,6 +849,7 @@ fn spawn_stderr_reader(
                             content_blocks: None,
                             msg_type: Some("stderr".to_string()),
                             session_id: None,
+                            token_usage: None,
                         };
                         send_to_current_sender(&current_sender, event);
                     }
@@ -900,6 +904,7 @@ fn read_stdout_to_channel(
                             content_blocks: None,
                             msg_type: Some("raw".to_string()),
                             session_id: None,
+                            token_usage: None,
                         };
                         if tx.send(event).is_err() {
                             break;
@@ -923,6 +928,7 @@ fn read_stdout_to_channel(
             content_blocks: None,
             msg_type: Some("process_exit".to_string()),
             session_id: None,
+            token_usage: None,
         });
     }
 }
@@ -954,6 +960,7 @@ fn read_stderr_to_channel(
                         content_blocks: None,
                         msg_type: Some("stderr".to_string()),
                         session_id: None,
+                        token_usage: None,
                     };
                     if tx.send(event).is_err() {
                         break;
@@ -1083,6 +1090,36 @@ fn parse_stream_event(json_obj: &serde_json::Value, raw_line: &str) -> StreamEve
         .and_then(|s| s.as_str())
         .map(|s| s.to_string());
 
+    // Extract token usage from assistant messages (message.usage field)
+    let token_usage = if msg_type == "assistant" {
+        if let Some(msg_obj) = json_obj.get("message") {
+            if let Some(usage) = msg_obj.get("usage") {
+                let model = msg_obj
+                    .get("model")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("unknown");
+                let usage_data = TokenUsage::from_claude_usage(usage);
+                let mut map = HashMap::new();
+                if usage_data.input_tokens > 0
+                    || usage_data.output_tokens > 0
+                    || usage_data.cache_read_tokens > 0
+                    || usage_data.cache_write_tokens > 0
+                {
+                    map.insert(model.to_string(), usage_data);
+                    Some(map)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     StreamEvent {
         text,
         is_done: is_result,
@@ -1090,6 +1127,7 @@ fn parse_stream_event(json_obj: &serde_json::Value, raw_line: &str) -> StreamEve
         msg_type: Some(msg_type),
         session_id,
         content_blocks,
+        token_usage,
     }
 }
 
@@ -1103,6 +1141,172 @@ fn send_to_current_sender(
             let _ = tx.send(event);
         }
     }
+}
+
+/// Wrap a receiver with session resume retry logic.
+///
+/// When `--resume <session_id>` fails (Claude Code returns a different session_id
+/// and exits with an error), this wrapper detects the failure and automatically
+/// retries with a fresh session (no --resume).
+///
+/// The retry happens at most once to prevent infinite loops. Token usage from
+/// both the failed attempt and the successful retry is merged into the final result.
+fn wrap_with_resume_retry(
+    rx: std::sync::mpsc::Receiver<StreamEvent>,
+    processes: Arc<Mutex<HashMap<String, ProcessHandle>>>,
+    params: ExecuteParams,
+    prior_session_id: Option<String>,
+) -> std::sync::mpsc::Receiver<StreamEvent> {
+    let (out_tx, out_rx) = std::sync::mpsc::channel();
+
+    std::thread::spawn(move || {
+        let mut accumulated_usage: HashMap<String, TokenUsage> = HashMap::new();
+
+        // Forward events from the initial attempt
+        while let Ok(event) = rx.recv() {
+            // Accumulate token usage from all events
+            if let Some(ref usage) = event.token_usage {
+                merge_token_usage_maps(&mut accumulated_usage, usage);
+            }
+
+            if event.is_done {
+                let result_session_id = event.session_id.clone();
+
+                // Check resume failure conditions:
+                // 1. Event has an error (execution failed)
+                // 2. We requested a resume (prior_session_id is Some)
+                // 3. The returned session_id differs from what we requested
+                let resume_failed = event.error.is_some()
+                    && prior_session_id.is_some()
+                    && result_session_id.as_deref() != prior_session_id.as_deref();
+
+                if resume_failed {
+                    log::warn!(
+                        "[ClaudeCodeRuntime] Session resume failed for agent {} \
+                         (requested={:?}, got={:?}). Retrying with fresh session.",
+                        params.agent_id,
+                        prior_session_id,
+                        result_session_id
+                    );
+
+                    // Kill the current process (it's in a bad state)
+                    {
+                        let mut proc_map = processes.lock().unwrap();
+                        proc_map.remove(&params.agent_id);
+                    }
+
+                    // Retry with no session_id (fresh session)
+                    let retry_params = ExecuteParams {
+                        session_id: None,
+                        ..params.clone()
+                    };
+
+                    // Spawn a new persistent process and send the message
+                    let retry_rx = {
+                        // We need to call execute_persistent on a fresh ClaudeCodeRuntime
+                        // but we share the same process pool. Instead, we directly
+                        // use the runtime methods via a temporary runtime.
+                        // However, since we can't easily create a new runtime sharing
+                        // the same process map, we'll spawn directly.
+                        let runtime = ClaudeCodeRuntime {
+                            processes: processes.clone(),
+                            epoch_counter: Arc::new(AtomicU64::new(0)),
+                        };
+
+                        match runtime.execute_persistent(&retry_params) {
+                            Ok(rx) => rx,
+                            Err(e) => {
+                                log::error!(
+                                    "[ClaudeCodeRuntime] Resume retry failed for agent {}: {}",
+                                    params.agent_id, e
+                                );
+                                let _ = out_tx.send(StreamEvent {
+                                    text: String::new(),
+                                    is_done: true,
+                                    error: Some(format!(
+                                        "Session resume failed and retry also failed: {}",
+                                        e
+                                    )),
+                                    msg_type: Some("error".to_string()),
+                                    session_id: None,
+                                    content_blocks: None,
+                                    token_usage: if accumulated_usage.is_empty() {
+                                        None
+                                    } else {
+                                        Some(accumulated_usage)
+                                    },
+                                });
+                                return;
+                            }
+                        }
+                    };
+
+                    // Forward events from the retry attempt
+                    while let Ok(retry_event) = retry_rx.recv() {
+                        // Accumulate token usage from retry events
+                        if let Some(ref usage) = retry_event.token_usage {
+                            merge_token_usage_maps(&mut accumulated_usage, usage);
+                        }
+
+                        if retry_event.is_done {
+                            // Final event: merge accumulated usage into the result
+                            let mut final_event = retry_event;
+                            if !accumulated_usage.is_empty() {
+                                // Merge any usage already on the event
+                                if let Some(ref event_usage) = final_event.token_usage {
+                                    merge_token_usage_maps(&mut accumulated_usage, event_usage);
+                                }
+                                final_event.token_usage = Some(accumulated_usage);
+                            }
+                            let _ = out_tx.send(final_event);
+                            return;
+                        }
+
+                        if out_tx.send(retry_event).is_err() {
+                            return;
+                        }
+                    }
+                    return; // Retry stream ended
+                }
+
+                // Normal completion (no resume failure) -- pass through with accumulated usage
+                let mut final_event = event;
+                if !accumulated_usage.is_empty() {
+                    if let Some(ref event_usage) = final_event.token_usage {
+                        merge_token_usage_maps(&mut accumulated_usage, event_usage);
+                    }
+                    final_event.token_usage = Some(accumulated_usage);
+                }
+                let _ = out_tx.send(final_event);
+                return;
+            }
+
+            if out_tx.send(event).is_err() {
+                return;
+            }
+        }
+
+        // Stream ended without a done event -- send a synthetic process_exit.
+        // We only reach here if the receiver was exhausted without an is_done event,
+        // which means the stream was dropped unexpectedly.
+        {
+            let _ = out_tx.send(StreamEvent {
+                text: String::new(),
+                is_done: true,
+                error: None,
+                content_blocks: None,
+                msg_type: Some("process_exit".to_string()),
+                session_id: None,
+                token_usage: if accumulated_usage.is_empty() {
+                    None
+                } else {
+                    Some(accumulated_usage)
+                },
+            });
+        }
+    });
+
+    out_rx
 }
 
 // ===========================================================================
@@ -1215,7 +1419,23 @@ impl AgentRuntime for ClaudeCodeRuntime {
                 params.agent_id,
                 params.session_id
             );
-            self.execute_persistent(&params)
+
+            // When resuming a session, wrap the receiver with resume-retry logic.
+            // If the resume fails (session_id mismatch), we automatically retry
+            // with a fresh session to avoid the task getting stuck.
+            let prior_session_id = params.session_id.clone();
+            let rx = self.execute_persistent(&params)?;
+
+            if prior_session_id.is_some() {
+                Ok(wrap_with_resume_retry(
+                    rx,
+                    self.processes.clone(),
+                    params,
+                    prior_session_id,
+                ))
+            } else {
+                Ok(rx)
+            }
         } else {
             log::info!(
                 "[ClaudeCodeRuntime] Channel mode: agent={}, one-shot spawn",
