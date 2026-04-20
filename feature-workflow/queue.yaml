@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-20T17:00:00+08:00'
-  version: 167
+  last_updated: '2026-04-20T12:35:00+08:00'
+  version: 168
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -53,12 +53,6 @@ parents:
   - feat-remote-agent-ui
   - feat-remote-agent-chat
 active:
-- id: feat-sidebar-agent-panel
-  name: Sidebar 对话按钮活跃 Agent 弹出面板
-  priority: 70
-  branch: feature/feat-sidebar-agent-panel
-  worktree: ../AgentsZone-feat-sidebar-agent-panel
-  started_at: '2026-04-20T17:00:00+08:00'
 blocked:
 - id: feat-lan-mdns-discovery
   name: mDNS 零配置局域网自动发现（方案B）
@@ -76,6 +70,10 @@ blocked:
   - feat-lan-mdns-discovery
   reason: Manually blocked — 暂缓开发
 completed:
+- id: feat-sidebar-agent-panel
+  name: Sidebar 对话按钮活跃 Agent 弹出面板
+  completed_at: '2026-04-20T12:35:00+08:00'
+  tag: feat-sidebar-agent-panel-20260420
 - id: feat-claude-resilience-usage
   name: Claude Code 健壮性 + Token 用量统计（Session Resume 降级重试 + 按模型聚合统计）
   completed_at: '2026-04-20T16:30:00+08:00'

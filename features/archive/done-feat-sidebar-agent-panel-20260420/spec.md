@@ -101,3 +101,13 @@ Then 弹出面板关闭
 - [ ] 不影响现有 Agent 列表功能
 - [ ] 弹出面板 z-index 正确，不被其他元素遮挡
 - [ ] 响应式适配（面板不超出视口）
+
+## Merge Record
+
+- **Completed**: 2026-04-20T12:35:00+08:00
+- **Merged Branch**: feature/feat-sidebar-agent-panel
+- **Merge Commit**: f34c105
+- **Archive Tag**: feat-sidebar-agent-panel-20260420
+- **Conflicts**: none
+- **Verification**: passed (4/4 Gherkin scenarios)
+- **Stats**: 1 commit, 5 files changed (1 new, 1 modified, 3 feature docs)
