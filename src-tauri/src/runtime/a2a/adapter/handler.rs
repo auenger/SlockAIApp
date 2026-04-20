@@ -167,7 +167,6 @@ impl AdapterServer {
                         task_id.clone(),
                         rx,
                         state_send.clone(),
-                        task_messages_send.clone(),
                     );
 
                     // Store the tracked receiver for potential streaming

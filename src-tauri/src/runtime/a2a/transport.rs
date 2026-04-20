@@ -208,7 +208,7 @@ impl A2ATransport for A2AHttpClient {
 
         let stream_client = self.client.clone();
         let url = format!("{}/tasks/{}/messages", self.base_url.trim_end_matches('/'), task_id);
-        open_sse_stream(stream_client, &url, message, &self.auth_headers)
+        open_sse_stream(stream_client, &url, task_id, message, &self.auth_headers)
     }
 
     fn get_task(&self, task_id: &str) -> A2AResult<Task> {

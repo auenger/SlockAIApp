@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-20T12:35:00+08:00'
-  version: 168
+  last_updated: '2026-04-20T15:00:00+08:00'
+  version: 169
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -342,4 +342,9 @@ completed:
   name: Channel 消息即时渲染 & Agent Thinking 状态清理
   completed_at: '2026-04-12T01:30:00+08:00'
   tag: fix-channel-msg-render-20260412
-pending: []
+pending:
+- id: feat-token-usage-ui
+  name: Token 用量前端展示（消息底部消耗 + Agent 面板聚合统计）
+  priority: 75
+  dependencies:
+  - feat-claude-resilience-usage

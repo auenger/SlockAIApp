@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>az-bridge 通信架构</title>
+<style>
+  :root {
+    --bg: #f8f9fc;
+    --surface: #ffffff;
+    --surface2: #f1f3f8;
+    --border: #e2e6ef;
+    --text: #1a1d2e;
+    --text-dim: #6b7394;
+    --cyan: #0088cc;
+    --cyan-dim: rgba(0,136,204,0.08);
+    --cyan-border: rgba(0,136,204,0.2);
+    --pink: #d9296e;
+    --pink-dim: rgba(217,41,110,0.07);
+    --pink-border: rgba(217,41,110,0.18);
+    --green: #0fa958;
+    --green-dim: rgba(15,169,88,0.07);
+    --green-border: rgba(15,169,88,0.18);
+    --yellow: #c48800;
+    --yellow-dim: rgba(196,136,0,0.07);
+    --purple: #7c4dff;
+    --purple-dim: rgba(124,77,255,0.07);
+    --purple-border: rgba(124,77,255,0.18);
+    --orange: #e86800;
+    --orange-dim: rgba(232,104,0,0.07);
+    --radius: 14px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 48px 20px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 2rem;
+    font-weight: 800;
+    margin-bottom: 6px;
+    background: linear-gradient(135deg, var(--cyan), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.92rem;
+    margin-bottom: 48px;
+  }
+
+  h2 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin: 48px 0 20px;
+    padding-left: 16px;
+    border-left: 4px solid var(--cyan);
+  }
+
+  h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 20px 0 10px;
+    color: var(--cyan);
+  }
+
+  /* SVG icons inline */
+  .icon-svg { width: 18px; height: 18px; flex-shrink: 0; vertical-align: middle; }
+
+  /* Card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+  }
+
+  /* Architecture Diagram */
+  .arch-diagram {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 0;
+    align-items: stretch;
+    margin: 16px 0;
+  }
+
+  .arch-box {
+    border-radius: var(--radius);
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .arch-local {
+    background: var(--cyan-dim);
+    border: 1px solid var(--cyan-border);
+  }
+
+  .arch-remote {
+    background: var(--pink-dim);
+    border: 1px solid var(--pink-border);
+  }
+
+  .arch-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 2px;
+  }
+
+  .arch-local .arch-label { color: var(--cyan); }
+  .arch-remote .arch-label { color: var(--pink); }
+
+  .arch-title { font-size: 1.1rem; font-weight: 700; }
+
+  .arch-items { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+
+  .arch-item {
+    font-size: 0.8rem;
+    padding: 7px 12px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .arch-middle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0 24px;
+    min-width: 170px;
+  }
+
+  .arch-protocol-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 5px 14px;
+    border-radius: 20px;
+    background: var(--purple-dim);
+    border: 1px solid var(--purple-border);
+    color: var(--purple);
+    text-align: center;
+    letter-spacing: 0.3px;
+  }
+
+  .arch-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    margin: 6px 0;
+  }
+
+  .arch-arrow .line {
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, var(--cyan), var(--purple), var(--pink));
+    border-radius: 1px;
+  }
+
+  .arch-arrow .label {
+    font-size: 0.62rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+    padding: 2px 8px;
+    background: var(--surface);
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  /* Protocol Stack */
+  .proto-stack {
+    max-width: 560px;
+    margin: 16px auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+  }
+
+  .proto-layer {
+    padding: 16px 22px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: all 0.15s;
+  }
+
+  .proto-layer:hover { filter: brightness(0.98); }
+
+  .proto-layer-http {
+    background: var(--cyan-dim);
+    border-bottom: 1px solid var(--border);
+  }
+  .proto-layer-jsonrpc {
+    background: var(--purple-dim);
+    border-bottom: 1px solid var(--border);
+  }
+  .proto-layer-data { background: var(--green-dim); }
+
+  .proto-layer-num {
+    width: 34px; height: 34px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 0.85rem; flex-shrink: 0;
+  }
+
+  .proto-layer-http .proto-layer-num { background: rgba(0,136,204,0.12); color: var(--cyan); }
+  .proto-layer-jsonrpc .proto-layer-num { background: rgba(124,77,255,0.12); color: var(--purple); }
+  .proto-layer-data .proto-layer-num { background: rgba(15,169,88,0.12); color: var(--green); }
+
+  .proto-layer-info { flex: 1; }
+  .proto-layer-name { font-weight: 700; font-size: 0.92rem; }
+  .proto-layer-desc { font-size: 0.76rem; color: var(--text-dim); margin-top: 2px; }
+
+  .proto-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+
+  .proto-tag {
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+
+  .proto-tag-http { background: rgba(0,136,204,0.08); color: var(--cyan); }
+  .proto-tag-rpc { background: rgba(124,77,255,0.08); color: var(--purple); }
+  .proto-tag-data { background: rgba(15,169,88,0.08); color: var(--green); }
+
+  /* Sequence Diagram */
+  .seq-container {
+    margin: 16px 0;
+    padding: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow-x: auto;
+    box-shadow: var(--shadow);
+  }
+
+  .seq-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .seq-actor {
+    font-size: 0.78rem; font-weight: 700;
+    padding: 5px 14px; border-radius: 8px;
+  }
+
+  .seq-actor-browser {
+    background: var(--cyan-dim); border: 1px solid var(--cyan-border); color: var(--cyan);
+  }
+
+  .seq-actor-server {
+    background: var(--pink-dim); border: 1px solid var(--pink-border); color: var(--pink);
+  }
+
+  .seq-rows { display: flex; flex-direction: column; gap: 2px; min-width: 500px; }
+
+  .seq-row {
+    display: grid;
+    grid-template-columns: 120px 1fr 120px;
+    align-items: center;
+    padding: 7px 0;
+  }
+
+  .seq-from { font-size: 0.72rem; font-weight: 600; text-align: right; padding-right: 10px; }
+  .seq-to { font-size: 0.72rem; font-weight: 600; text-align: left; padding-left: 10px; }
+
+  .seq-msg {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border-radius: 8px; font-size: 0.72rem;
+  }
+
+  .seq-row.right .seq-msg { background: var(--cyan-dim); }
+  .seq-row.right .seq-from { color: var(--cyan); }
+  .seq-row.left .seq-msg { background: var(--pink-dim); }
+  .seq-row.left .seq-to { color: var(--pink); }
+
+  .seq-method {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-weight: 700; font-size: 0.7rem;
+  }
+  .seq-row.right .seq-method { color: var(--cyan); }
+  .seq-row.left .seq-method { color: var(--pink); }
+
+  .seq-detail { color: var(--text-dim); font-size: 0.65rem; }
+
+  .seq-divider {
+    display: grid; grid-template-columns: 120px 1fr 120px;
+    padding: 10px 0; align-items: center;
+  }
+
+  .seq-divider-line {
+    height: 1px; background: var(--border); position: relative;
+  }
+
+  .seq-divider-label {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    background: var(--surface); padding: 2px 12px;
+    font-size: 0.62rem; color: var(--yellow); font-weight: 600; white-space: nowrap;
+  }
+
+  /* Flow Steps */
+  .flow-steps {
+    display: flex; flex-direction: column; gap: 0;
+    margin: 16px 0; position: relative; padding-left: 44px;
+  }
+
+  .flow-steps::before {
+    content: ''; position: absolute;
+    left: 16px; top: 22px; bottom: 22px; width: 2px;
+    background: linear-gradient(to bottom, var(--cyan), var(--purple), var(--green));
+    border-radius: 1px;
+  }
+
+  .flow-step {
+    position: relative; padding: 12px 18px; margin-bottom: 5px;
+    border-radius: 10px; background: var(--surface);
+    border: 1px solid var(--border); transition: all 0.15s;
+    box-shadow: var(--shadow);
+  }
+
+  .flow-step:hover { border-color: var(--cyan-border); }
+
+  .flow-step::before {
+    content: ''; position: absolute;
+    left: -34px; top: 50%; transform: translateY(-50%);
+    width: 10px; height: 10px; border-radius: 50%;
+    border: 2px solid var(--cyan); background: var(--bg);
+  }
+
+  .flow-step-title { font-weight: 700; font-size: 0.82rem; margin-bottom: 3px; }
+  .flow-step-desc { font-size: 0.76rem; color: var(--text-dim); }
+
+  .flow-step-desc code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.7rem; padding: 1px 5px; border-radius: 4px;
+    background: var(--cyan-dim); color: var(--cyan);
+  }
+
+  /* Claude Code Communication */
+  .claude-comm {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px; margin: 16px 0;
+  }
+
+  .claude-comm-card {
+    padding: 20px; border-radius: var(--radius);
+    background: var(--surface); border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+  }
+
+  .claude-comm-card h4 {
+    font-size: 0.9rem; font-weight: 700; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .claude-comm-card p { font-size: 0.78rem; color: var(--text-dim); line-height: 1.6; }
+
+  .claude-comm-card code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.7rem; padding: 1px 5px; border-radius: 4px;
+    background: var(--orange-dim); color: var(--orange);
+  }
+
+  .thread-badge {
+    display: inline-block; font-size: 0.62rem; font-weight: 700;
+    padding: 2px 8px; border-radius: 4px; margin-right: 4px;
+  }
+  .badge-thread { background: var(--cyan-dim); color: var(--cyan); }
+  .badge-channel { background: var(--pink-dim); color: var(--pink); }
+
+  /* API Grid */
+  .api-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 14px; margin: 16px 0;
+  }
+
+  .api-section {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow);
+  }
+
+  .api-section-header {
+    padding: 12px 18px; font-weight: 700; font-size: 0.82rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .api-standard .api-section-header { background: var(--cyan-dim); color: var(--cyan); }
+  .api-bridge .api-section-header { background: var(--pink-dim); color: var(--pink); }
+
+  .api-methods { padding: 10px 14px; display: flex; flex-direction: column; gap: 5px; }
+
+  .api-method {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 10px; border-radius: 8px;
+    background: var(--surface2); border: 1px solid var(--border);
+    transition: all 0.12s;
+  }
+
+  .api-method:hover { border-color: var(--cyan-border); }
+
+  .api-method-name {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.74rem; font-weight: 600; min-width: 170px;
+  }
+
+  .api-standard .api-method-name { color: var(--cyan); }
+  .api-bridge .api-method-name { color: var(--pink); }
+
+  .api-method-desc { font-size: 0.74rem; color: var(--text-dim); flex: 1; }
+
+  .api-method-badge {
+    font-size: 0.58rem; font-weight: 700; padding: 2px 7px;
+    border-radius: 4px; text-transform: uppercase; letter-spacing: 0.3px;
+  }
+  .badge-std { background: var(--cyan-dim); color: var(--cyan); }
+  .badge-ext { background: var(--pink-dim); color: var(--pink); }
+
+  /* Security Grid */
+  .security-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 12px; margin: 16px 0;
+  }
+
+  .security-item {
+    padding: 18px; border-radius: var(--radius);
+    background: var(--surface); border: 1px solid var(--border);
+    text-align: center; box-shadow: var(--shadow);
+  }
+
+  .security-icon { margin-bottom: 8px; }
+
+  .security-title { font-weight: 700; font-size: 0.85rem; margin-bottom: 5px; }
+  .security-desc { font-size: 0.74rem; color: var(--text-dim); line-height: 1.5; }
+
+  footer {
+    text-align: center; padding: 36px 0 16px;
+    color: var(--text-dim); font-size: 0.72rem;
+  }
+  footer span { color: var(--cyan); }
+</style>
+</head>
+<body>
+
+<h1>az-bridge 通信架构</h1>
+<p class="subtitle">AgentsZone 远程 Workspace 网关 — 通信原理 / 协议 / 数据流</p>
+
+<!-- ============================================================ -->
+<!-- Section 1: Architecture Overview                             -->
+<!-- ============================================================ -->
+<h2>整体架构</h2>
+
+<div class="card">
+  <div class="arch-diagram">
+    <div class="arch-box arch-local">
+      <div class="arch-label">本地端</div>
+      <div class="arch-title">AgentsZone 桌面端</div>
+      <div class="arch-items">
+        <div class="arch-item">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          Tauri V2 + React 19
+        </div>
+        <div class="arch-item">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          BridgeWorkspacePanel 组件
+        </div>
+        <div class="arch-item">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          useBridgeWorkspace Hook
+        </div>
+        <div class="arch-item">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.66 0 3-4.03 3-9s-1.34-9-3-9m0 18c-1.66 0-3-4.03-3-9s1.34-9 3-9"/></svg>
+          fetch() — HTTP/JSON-RPC Client
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-middle">
+      <div class="arch-protocol-badge">HTTP/1.1 + JSON-RPC 2.0</div>
+      <div class="arch-arrow">
+        <div class="line"></div>
+        <div class="label">POST / (JSON-RPC body)</div>
+        <div class="line"></div>
+      </div>
+      <div class="arch-protocol-badge">CORS: Access-Control-*</div>
+      <div class="arch-arrow">
+        <div class="line"></div>
+        <div class="label">OPTIONS / Preflight</div>
+        <div class="line"></div>
+      </div>
+      <div class="arch-protocol-badge">TCP Socket</div>
+    </div>
+
+    <div class="arch-box arch-remote">
+      <div class="arch-label">远程端</div>
+      <div class="arch-title">az-bridge 独立二进制</div>
+      <div class="arch-items">
+        <div class="arch-item">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+          TCP Listener (0.0.0.0:7878)
+        </div>
+        <div class="arch-item">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          HTTP Parser + CORS Handler
+        </div>
+        <div class="arch-item">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10"/></svg>
+          AdapterServer (A2A Protocol)
+        </div>
+        <div class="arch-item">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          AgentManager (workspace)
+        </div>
+        <div class="arch-item">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+          Claude Code Runtime (stdin/stdout)
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Section 2: Claude Code Communication                         -->
+<!-- ============================================================ -->
+<h2>Claude Code 通信方式</h2>
+
+<!-- ============================================================ -->
+<!-- Section 2.5: A2A SSE Streaming                               -->
+<!-- ============================================================ -->
+<h2>A2A 通信协议 — SSE 流式 + 轮询降级</h2>
+
+<div class="claude-comm">
+  <div class="claude-comm-card" style="border-left: 3px solid var(--green);">
+    <h4>
+      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      SSE 流式模式 (优先)
+    </h4>
+    <p>
+      <span class="thread-badge" style="background:var(--green-dim);color:var(--green);">stream: true</span>
+      客户端发送 <code>sendMessage</code> 并设置 <code>stream: true</code>，服务端返回 <code>Content-Type: text/event-stream</code> SSE 事件流。
+      事件格式: <code>event: task</code> → <code>event: message</code> → <code>event: done</code>。
+      通过 <code>spawn_status_tracker</code> 包装 CLI 事件流，实时追踪 task 状态转换 (SUBMITTED→WORKING→COMPLETED)。
+    </p>
+  </div>
+
+  <div class="claude-comm-card" style="border-left: 3px solid var(--yellow);">
+    <h4>
+      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="var(--yellow)" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Polling 轮询降级
+    </h4>
+    <p>
+      <span class="thread-badge" style="background:var(--yellow-dim);color:var(--yellow);">fallback</span>
+      服务端不支持 SSE 时返回标准 JSON，客户端自动降级为 <code>getTask</code> 轮询 (3s 间隔)。
+      每 3 次轮询发送进度事件: <code>等待远程 Agent 响应...(Ns)</code>，前端显示等待时间。
+      直到 task status 变为 completed/failed，从 <code>task.artifacts</code> 或 <code>task.messages</code> 提取响应。
+    </p>
+  </div>
+</div>
+
+<div class="card" style="padding: 18px 24px;">
+  <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+    <svg class="icon-svg" style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+    <strong style="font-size:0.85rem;">多格式消息兼容</strong>
+    <span style="font-size:0.8rem; color:var(--text-dim);">支持三种消息格式自动检测:
+      <code style="font-family:'SF Mono','Fira Code',monospace;font-size:0.72rem;padding:1px 5px;border-radius:4px;background:var(--purple-dim);color:var(--purple);">parts[]</code> (A2A标准) /
+      <code style="font-family:'SF Mono','Fira Code',monospace;font-size:0.72rem;padding:1px 5px;border-radius:4px;background:var(--purple-dim);color:var(--purple);">content: string</code> (简单文本) /
+      <code style="font-family:'SF Mono','Fira Code',monospace;font-size:0.72rem;padding:1px 5px;border-radius:4px;background:var(--purple-dim);color:var(--purple);">content: [{type,text}]</code> (OpenAI风格)
+    </span>
+  </div>
+</div>
+
+<div class="claude-comm">
+  <div class="claude-comm-card" style="border-left: 3px solid var(--cyan);">
+    <h4>
+      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      Thread 模式 — 持久进程
+    </h4>
+    <p>
+      <span class="thread-badge badge-thread">stdin/stdout</span>
+      启动 <code>claude --print --output-format stream-json --input-format stream-json</code> 持久进程。
+      通过 <strong>stdin</strong> 写入 JSON 消息，从 <strong>stdout</strong> 读取 JSONL 流式响应。进程跨消息复用，支持 <code>--resume</code> 恢复会话。
+      5 个进程池上限，LRU 淘汰，5 分钟空闲自动回收。
+    </p>
+  </div>
+
+  <div class="claude-comm-card" style="border-left: 3px solid var(--pink);">
+    <h4>
+      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="var(--pink)" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      Channel 模式 — 一次性调用
+    </h4>
+    <p>
+      <span class="thread-badge badge-channel">one-shot</span>
+      每次请求 <code>spawn</code> 一个新进程，消息作为命令行参数传入。
+      Channel 自行管理上下文（滑动窗口 + 自动摘要），不依赖进程复用。进程执行完毕自动退出。
+    </p>
+  </div>
+</div>
+
+<div class="card" style="padding: 18px 24px;">
+  <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+    <svg class="icon-svg" style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <strong style="font-size:0.85rem;">不是 ACP 协议</strong>
+    <span style="font-size:0.8rem; color:var(--text-dim);">AgentsZone 通过 <code style="font-family:'SF Mono','Fira Code',monospace;font-size:0.72rem;padding:1px 5px;border-radius:4px;background:var(--orange-dim);color:var(--orange);">stdin/stdout JSON Streaming</code> 直接控制 Claude Code CLI 进程，不使用 Anthropic ACP 或其他中间协议。</span>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Section 3: Protocol Stack                                    -->
+<!-- ============================================================ -->
+<h2>协议栈</h2>
+
+<div class="proto-stack">
+  <div class="proto-layer proto-layer-http">
+    <div class="proto-layer-num">L3</div>
+    <div class="proto-layer-info">
+      <div class="proto-layer-name">HTTP/1.1 传输层</div>
+      <div class="proto-layer-desc">基于 TCP 长连接，每次 JSON-RPC 调用为一个独立 HTTP 请求/响应周期。sendMessage 支持 SSE 流式 (text/event-stream)</div>
+      <div class="proto-tags">
+        <span class="proto-tag proto-tag-http">POST /</span>
+        <span class="proto-tag proto-tag-http">OPTIONS /</span>
+        <span class="proto-tag proto-tag-http">Content-Type: application/json</span>
+	        <span class="proto-tag proto-tag-http">text/event-stream (SSE)</span>
+        <span class="proto-tag proto-tag-http">Access-Control-Allow-Origin: *</span>
+      </div>
+    </div>
+  </div>
+  <div class="proto-layer proto-layer-jsonrpc">
+    <div class="proto-layer-num">L2</div>
+    <div class="proto-layer-info">
+      <div class="proto-layer-name">JSON-RPC 2.0 协议层</div>
+      <div class="proto-layer-desc">标准 JSON-RPC 信封格式，method 字段路由到对应 handler</div>
+      <div class="proto-tags">
+        <span class="proto-tag proto-tag-rpc">getAgentCard</span>
+        <span class="proto-tag proto-tag-rpc">sendMessage</span>
+        <span class="proto-tag proto-tag-rpc">bridge.getWorkspaceInfo</span>
+        <span class="proto-tag proto-tag-rpc">bridge.getAgents</span>
+        <span class="proto-tag proto-tag-rpc">bridge.listFiles</span>
+        <span class="proto-tag proto-tag-rpc">bridge.readFile</span>
+      </div>
+    </div>
+  </div>
+  <div class="proto-layer proto-layer-data">
+    <div class="proto-layer-num">L1</div>
+    <div class="proto-layer-info">
+      <div class="proto-layer-name">应用数据层</div>
+      <div class="proto-layer-desc">A2A 协议定义的业务数据结构</div>
+      <div class="proto-tags">
+        <span class="proto-tag proto-tag-data">AgentCard</span>
+        <span class="proto-tag proto-tag-data">BridgeWorkspaceInfo</span>
+        <span class="proto-tag proto-tag-data">BridgeAgent[]</span>
+        <span class="proto-tag proto-tag-data">BridgeFileEntry[]</span>
+        <span class="proto-tag proto-tag-data">BridgeFileContent</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Section 4: CORS Sequence                                     -->
+<!-- ============================================================ -->
+<h2>CORS 预检流程</h2>
+
+<div class="seq-container">
+  <div class="seq-header">
+    <div class="seq-actor seq-actor-browser">Tauri WebView (浏览器)</div>
+    <div class="seq-actor seq-actor-server">az-bridge (远程服务器)</div>
+  </div>
+
+  <div class="seq-rows">
+    <div class="seq-row right">
+      <div class="seq-from">WebView</div>
+      <div class="seq-msg">
+        <span class="seq-method">OPTIONS /</span>
+        <span class="seq-detail">CORS 预检请求</span>
+      </div>
+      <div class="seq-to"></div>
+    </div>
+
+    <div class="seq-row left">
+      <div class="seq-from"></div>
+      <div class="seq-msg">
+        <span class="seq-method">204 No Content</span>
+        <span class="seq-detail">Access-Control-Allow-Origin: * | Methods: POST, OPTIONS | Headers: Content-Type</span>
+      </div>
+      <div class="seq-to">az-bridge</div>
+    </div>
+
+    <div class="seq-divider">
+      <div></div>
+      <div class="seq-divider-line">
+        <span class="seq-divider-label">预检通过，发送实际请求</span>
+      </div>
+      <div></div>
+    </div>
+
+    <div class="seq-row right">
+      <div class="seq-from">WebView</div>
+      <div class="seq-msg">
+        <span class="seq-method">POST /</span>
+        <span class="seq-detail">{"jsonrpc":"2.0","method":"bridge.getAgents","params":{},"id":3}</span>
+      </div>
+      <div class="seq-to"></div>
+    </div>
+
+    <div class="seq-row left">
+      <div class="seq-from"></div>
+      <div class="seq-msg">
+        <span class="seq-method">200 OK</span>
+        <span class="seq-detail">Access-Control-Allow-Origin: * | {"jsonrpc":"2.0","result":{"agents":[...]},"id":3}</span>
+      </div>
+      <div class="seq-to">az-bridge</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Section 4.5: A2A SSE Sequence                                -->
+<!-- ============================================================ -->
+<h2>A2A 远程通信序列</h2>
+
+<div class="seq-container">
+  <div class="seq-header">
+    <div class="seq-actor seq-actor-browser">本地 AgentsZone</div>
+    <div class="seq-actor seq-actor-server">远程 A2A Server</div>
+  </div>
+
+  <div class="seq-rows">
+    <div class="seq-row right">
+      <div class="seq-from">Client</div>
+      <div class="seq-msg">
+        <span class="seq-method">POST / sendMessage</span>
+        <span class="seq-detail">stream: true + message</span>
+      </div>
+      <div class="seq-to"></div>
+    </div>
+
+    <div class="seq-row left">
+      <div class="seq-from"></div>
+      <div class="seq-msg">
+        <span class="seq-method">200 text/event-stream</span>
+        <span class="seq-detail">Content-Type: text/event-stream (SSE)</span>
+      </div>
+      <div class="seq-to">Server</div>
+    </div>
+
+    <div class="seq-row left">
+      <div class="seq-from"></div>
+      <div class="seq-msg">
+        <span class="seq-method">event: task</span>
+        <span class="seq-detail">{"id":"task-xxx","status":"working"}</span>
+      </div>
+      <div class="seq-to">Server</div>
+    </div>
+
+    <div class="seq-row left">
+      <div class="seq-from"></div>
+      <div class="seq-msg">
+        <span class="seq-method">event: message</span>
+        <span class="seq-detail">{"role":"agent","parts":[{"type":"text","text":"..."}]}</span>
+      </div>
+      <div class="seq-to">Server</div>
+    </div>
+
+    <div class="seq-row left">
+      <div class="seq-from"></div>
+      <div class="seq-msg">
+        <span class="seq-method">event: done</span>
+        <span class="seq-detail">流结束</span>
+      </div>
+      <div class="seq-to">Server</div>
+    </div>
+
+    <div class="seq-divider">
+      <div></div>
+      <div class="seq-divider-line">
+        <span class="seq-divider-label">若服务端不支持 SSE → 轮询降级</span>
+      </div>
+      <div></div>
+    </div>
+
+    <div class="seq-row right">
+      <div class="seq-from">Client</div>
+      <div class="seq-msg">
+        <span class="seq-method">POST / getTask</span>
+        <span class="seq-detail">{"taskId":"task-xxx"} — 每 3s 轮询</span>
+      </div>
+      <div class="seq-to"></div>
+    </div>
+
+    <div class="seq-row left">
+      <div class="seq-from"></div>
+      <div class="seq-msg">
+        <span class="seq-method">200 OK</span>
+        <span class="seq-detail">{"status":"working"} 或 {"status":"completed","messages":[...]}</span>
+      </div>
+      <div class="seq-to">Server</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Section 5: Data Flow                                         -->
+<!-- ============================================================ -->
+<h2>数据流：Bridge Workspace 加载</h2>
+
+<div class="card">
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="flow-step-title">1. 用户打开 Settings → Remote Connections → + Add</div>
+      <div class="flow-step-desc">填入远程 <code>http://IP:7878</code>，点 Save 创建连接记录</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-title">2. 用户点 Test → 健康检查</div>
+      <div class="flow-step-desc">Rust 后端通过 <code>remote_connection_test</code> IPC 发送 <code>getAgentCard</code>，获取远程 AgentCard</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-title">3. 状态变为 Online → BridgeWorkspacePanel 渲染</div>
+      <div class="flow-step-desc"><code>isBridgeEndpoint()</code> 检查 <code>agent_card.supported_operations</code> 是否包含 <code>bridge.*</code> 操作</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-title">4. useBridgeWorkspace.refresh() 并行加载</div>
+      <div class="flow-step-desc">同时请求 <code>bridge.getWorkspaceInfo</code> + <code>bridge.getAgents</code>，返回 workspace 元信息和 agent 列表</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-title">5. 渲染远程 Agent 卡片</div>
+      <div class="flow-step-desc">每个 agent 显示 emoji + name + runtime_type，点击可展开文件浏览</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-title">6. 点击 Agent → <code>bridge.listFiles</code></div>
+      <div class="flow-step-desc">请求 <code>{"agent_id":"default"}</code>，返回文件/目录列表（含 name, is_dir, size, modified）</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-title">7. 点击文件 → <code>bridge.readFile</code></div>
+      <div class="flow-step-desc">请求 <code>{"agent_id":"default","file_path":"IDENTITY.md"}</code>，返回文件内容 + MIME 类型（只读）</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-title">8. 每 30 秒自动轮询刷新</div>
+      <div class="flow-step-desc"><code>POLL_INTERVAL = 30000ms</code>，定时调用 <code>refresh()</code> 更新 workspace 和 agent 状态</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Section 6: API Reference                                     -->
+<!-- ============================================================ -->
+<h2>API 方法总览</h2>
+
+<div class="api-grid">
+  <div class="api-section api-standard">
+    <div class="api-section-header">标准 A2A 方法</div>
+    <div class="api-methods">
+      <div class="api-method">
+        <span class="api-method-name">getAgentCard</span>
+        <span class="api-method-desc">获取 agent 身份和能力</span>
+        <span class="api-method-badge badge-std">STD</span>
+      </div>
+      <div class="api-method">
+        <span class="api-method-name">sendMessage</span>
+        <span class="api-method-desc">发送消息 (支持 stream:true → SSE)</span>
+        <span class="api-method-badge badge-std">STD</span>
+      </div>
+      <div class="api-method">
+        <span class="api-method-name">streamMessage</span>
+        <span class="api-method-desc">流式消息 (SSE event-stream)</span>
+        <span class="api-method-badge badge-std">STD</span>
+      </div>
+      <div class="api-method">
+        <span class="api-method-name">getTask</span>
+        <span class="api-method-desc">查询任务状态</span>
+        <span class="api-method-badge badge-std">STD</span>
+      </div>
+      <div class="api-method">
+        <span class="api-method-name">cancelTask</span>
+        <span class="api-method-desc">取消任务</span>
+        <span class="api-method-badge badge-std">STD</span>
+      </div>
+      <div class="api-method">
+        <span class="api-method-name">listTasks</span>
+        <span class="api-method-desc">列出任务</span>
+        <span class="api-method-badge badge-std">STD</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="api-section api-bridge">
+    <div class="api-section-header">Bridge 扩展方法</div>
+    <div class="api-methods">
+      <div class="api-method">
+        <span class="api-method-name">bridge.getWorkspaceInfo</span>
+        <span class="api-method-desc">workspace 元信息</span>
+        <span class="api-method-badge badge-ext">EXT</span>
+      </div>
+      <div class="api-method">
+        <span class="api-method-name">bridge.getAgents</span>
+        <span class="api-method-desc">远程 agent 列表</span>
+        <span class="api-method-badge badge-ext">EXT</span>
+      </div>
+      <div class="api-method">
+        <span class="api-method-name">bridge.listFiles</span>
+        <span class="api-method-desc">文件/目录浏览</span>
+        <span class="api-method-badge badge-ext">EXT</span>
+      </div>
+      <div class="api-method">
+        <span class="api-method-name">bridge.readFile</span>
+        <span class="api-method-desc">文件内容读取</span>
+        <span class="api-method-badge badge-ext">EXT</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Section 7: Security                                          -->
+<!-- ============================================================ -->
+<h2>安全机制</h2>
+
+<div class="security-grid">
+  <div class="security-item">
+    <div class="security-icon">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+    </div>
+    <div class="security-title">路径沙箱</div>
+    <div class="security-desc">所有文件操作限制在 workspace 基目录内，无法访问外部文件</div>
+  </div>
+  <div class="security-item">
+    <div class="security-icon">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--pink)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+    </div>
+    <div class="security-title">遍历防护</div>
+    <div class="security-desc">拒绝 <code style="font-family:'SF Mono','Fira Code',monospace;font-size:0.7rem;">..</code>、绝对路径、反斜杠，sanitize + canonicalize 双重验证</div>
+  </div>
+  <div class="security-item">
+    <div class="security-icon">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+    </div>
+    <div class="security-title">只读文件</div>
+    <div class="security-desc">listFiles / readFile 均为只读操作，不暴露写入能力</div>
+  </div>
+</div>
+
+<footer>AgentsZone <span>az-bridge</span> Architecture &mdash; 2026</footer>
+
+</body>
+</html>
