@@ -54,6 +54,7 @@ pub fn open_sse_stream(
                 msg_type: Some("error".to_string()),
                 session_id: None,
                 content_blocks: None,
+                token_usage: None,
             });
         }
     });
@@ -207,6 +208,7 @@ fn handle_non_sse_response(
             msg_type: Some("error".to_string()),
             session_id: None,
             content_blocks: None,
+            token_usage: None,
         });
         return Ok(());
     }
@@ -265,6 +267,7 @@ fn poll_task_until_done(
                 msg_type: Some("error".to_string()),
                 session_id: None,
                 content_blocks: None,
+                token_usage: None,
             });
             return Ok(());
         }
@@ -345,6 +348,7 @@ fn poll_task_until_done(
                     msg_type: Some("system".to_string()),
                     session_id: None,
                     content_blocks: None,
+                    token_usage: None,
                 });
             }
             // Still working, continue polling
@@ -368,6 +372,7 @@ fn poll_task_until_done(
                     msg_type: Some("error".to_string()),
                     session_id: None,
                     content_blocks: None,
+                    token_usage: None,
                 });
                 return Ok(());
             }
@@ -410,6 +415,7 @@ fn forward_task_result(
                     msg_type: Some("assistant".to_string()),
                     session_id: session_id.clone(),
                     content_blocks: None,
+                    token_usage: None,
                 });
             }
         }
@@ -423,6 +429,7 @@ fn forward_task_result(
         msg_type: None,
         session_id,
         content_blocks: None,
+        token_usage: None,
     });
 }
 
@@ -487,6 +494,7 @@ fn parse_sse_event(event_type: &str, data: &str) -> Option<StreamEvent> {
             }.to_string()),
             session_id: None,
             content_blocks: None,
+            token_usage: None,
         });
     }
 
@@ -504,6 +512,7 @@ fn parse_sse_event(event_type: &str, data: &str) -> Option<StreamEvent> {
             msg_type: Some("system".to_string()),
             session_id: task.session_id,
             content_blocks: None,
+            token_usage: None,
         });
     }
 
@@ -517,6 +526,7 @@ fn parse_sse_event(event_type: &str, data: &str) -> Option<StreamEvent> {
             msg_type: Some("raw".to_string()),
             session_id: None,
             content_blocks: None,
+            token_usage: None,
         });
     }
 
