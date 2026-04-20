@@ -19,11 +19,13 @@ import {
 import { cn } from '../lib/utils';
 import { useAgentStatus, getRuntimeStatusColor, getRuntimeStatusLabel } from '../lib/useAgentStatus';
 import { useUserProfile } from '../lib/useUserProfile';
+import { useRemoteConnections } from '../lib/useRemoteConnections';
 import { CreateAgentModal } from './CreateAgentModal';
 import { EditAgentModal } from './EditAgentModal';
 import { ApiKeyManager } from './ApiKeyManager';
 import { AgentIcon } from './AgentIcon';
 import { AgentBadge } from './AgentBadge';
+import { RemoteOverviewPanel } from './RemoteOverviewPanel';
 import { isRemoteAgent, getConnectionId } from '../lib/useAllAgents';
 import type { AgentWithRuntime, ThreadInfo, ChannelInfo } from '../types';
 
@@ -101,6 +103,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { agents: statusAgents, loading, scan: localScan } = useAgentStatus();
   const { profile } = useUserProfile();
+  const { connections: remoteConnections, loading: remoteLoading } = useRemoteConnections();
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showCreateAgent, setShowCreateAgent] = useState(false);
   const [showEditAgent, setShowEditAgent] = useState(false);
@@ -113,6 +116,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [editingTitle, setEditingTitle] = useState('');
   // New thread agent picker state
   const [showNewThreadPicker, setShowNewThreadPicker] = useState(false);
+  // Remote overview panel toggle
+  const [showRemotePanel, setShowRemotePanel] = useState(false);
 
   // Delete confirmation state: { type, id, name } or null
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'channel' | 'thread' | 'agent'; id: string; name: string } | null>(null);
@@ -166,13 +171,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <button className="flex-1 p-2 flex justify-center brutal-border-r hover:bg-gray-100">
           <MessageSquare size={20} />
         </button>
-        <button className="flex-1 p-2 flex justify-center hover:bg-gray-100">
+        <button
+          onClick={() => setShowRemotePanel(!showRemotePanel)}
+          className={cn(
+            "flex-1 p-2 flex justify-center transition-colors",
+            showRemotePanel
+              ? "bg-brutal-pink text-white"
+              : "hover:bg-gray-100"
+          )}
+          title="Toggle Remote Overview"
+        >
           <Monitor size={20} />
         </button>
       </div>
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto p-2 space-y-6">
+        {/* Remote Overview Panel — toggle via Monitor button */}
+        {showRemotePanel && (
+          <RemoteOverviewPanel
+            connections={remoteConnections}
+            agents={agents}
+            connectionNames={connectionNames ?? new Map()}
+            loading={remoteLoading}
+          />
+        )}
+
         {/* Channels */}
         <section>
           <div className="flex items-center justify-between px-2 mb-2">
