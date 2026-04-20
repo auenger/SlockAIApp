@@ -10,7 +10,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { Channel, ChannelInfo, ChannelMessage, AgentWithRuntime, ChannelChunkEvent, ChannelResponseEvent, ChannelA2aStartEvent, ChannelA2aDepthExceededEvent, ContentBlock } from "../types";
+import type { Channel, ChannelInfo, ChannelMessage, AgentWithRuntime, ChannelChunkEvent, ChannelResponseEvent, ChannelA2aStartEvent, ChannelA2aDepthExceededEvent, ContentBlock, TokenUsage } from "../types";
 import {
   createChannel,
   listChannels,
@@ -53,6 +53,8 @@ export interface AgentStreamState {
   contentBlocks: ContentBlock[];
   /** Status message from system events (e.g., "Session initialized · claude-sonnet-4") */
   statusMessage?: string;
+  /** Token usage statistics by model name, captured from is_done stream event */
+  tokenUsage?: Record<string, TokenUsage>;
 }
 
 // ---------------------------------------------------------------------------
@@ -456,6 +458,8 @@ export function useChannel(): ChannelState {
 
       // Per-agent accumulated text
       const agentTexts = new Map<string, string>();
+      // Per-agent token usage (captured from is_done, read in channel-response)
+      const agentTokenUsage = new Map<string, Record<string, TokenUsage>>();
 
       // Track expected agent count for UI display purposes.
       // Actual session completion is driven by backend's session-complete event.
@@ -668,11 +672,15 @@ export function useChannel(): ChannelState {
           }
 
           if (streamEvent.is_done) {
+            // Capture token_usage from is_done event
+            if (streamEvent.token_usage) {
+              agentTokenUsage.set(agentId, streamEvent.token_usage);
+            }
             // Clear contentBlocks on done (not persisted)
             setChannelAgentStreams(channelId, (prev) =>
               prev.map((s) =>
                 s.agent_id === agentId
-                  ? { ...s, streaming: false, thinking: false, done: true, error: streamEvent.error, contentBlocks: [], statusMessage: undefined }
+                  ? { ...s, streaming: false, thinking: false, done: true, error: streamEvent.error, contentBlocks: [], statusMessage: undefined, tokenUsage: streamEvent.token_usage }
                   : s
               )
             );
@@ -688,6 +696,9 @@ export function useChannel(): ChannelState {
         async (event: { payload: ChannelResponseEvent }) => {
           const { channel_id, agent_id, content, content_blocks } = event.payload;
           if (channel_id !== channelId) return;
+
+          // Read token_usage captured from is_done event
+          const tokenUsage = agentTokenUsage.get(agent_id);
 
           // Add agent message to UI state (backend already persisted it)
           setActiveChannel((prev) => {
@@ -707,6 +718,7 @@ export function useChannel(): ChannelState {
                   sender_id: agent_id,
                   content,
                   content_blocks,
+                  token_usage: tokenUsage,
                   timestamp: new Date().toISOString(),
                 },
               ],

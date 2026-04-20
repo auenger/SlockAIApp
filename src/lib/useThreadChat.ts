@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { Thread, ThreadInfo, StreamEvent, ContentBlock } from "../types";
+import type { Thread, ThreadInfo, StreamEvent, ContentBlock, TokenUsage } from "../types";
 import {
   createThread,
   listThreads,
@@ -325,6 +325,8 @@ export function useThreadChat(): ThreadChatState {
 
       let accumulatedText = "";
       let accumulatedBlocks: ContentBlock[] = [];
+      // Capture token_usage from is_done event for this thread
+      let capturedTokenUsage: Record<string, TokenUsage> | undefined;
 
       // 0. Listen for agent start event to set statusMessage
       const unlistenAgentStart = await listen<{
@@ -395,6 +397,10 @@ export function useThreadChat(): ThreadChatState {
           setIsStreaming(false);
           setIsThinking(false);
           setIsDone(true);
+          // Capture token_usage for this response
+          if (payload.token_usage) {
+            capturedTokenUsage = payload.token_usage;
+          }
           // Clear contentBlocks on done (they were ephemeral)
           setContentBlocks([]);
           setStatusMessage("");
@@ -434,7 +440,26 @@ export function useThreadChat(): ThreadChatState {
         // Save agent response to backend and reload thread with final state
         try {
           const finalThread = await saveAgentResponse(agentId, threadId, content, session_id);
-          setActiveThread(finalThread);
+          // Patch token_usage into the last agent message (backend doesn't persist it yet)
+          if (capturedTokenUsage && finalThread.messages.length > 0) {
+            const msgs = [...finalThread.messages];
+            // Find last agent message index (reverse search for compatibility)
+            let lastAgentIdx = -1;
+            for (let i = msgs.length - 1; i >= 0; i--) {
+              if (msgs[i].role === "agent") {
+                lastAgentIdx = i;
+                break;
+              }
+            }
+            if (lastAgentIdx >= 0) {
+              msgs[lastAgentIdx] = { ...msgs[lastAgentIdx], token_usage: capturedTokenUsage };
+              setActiveThread({ ...finalThread, messages: msgs });
+            } else {
+              setActiveThread(finalThread);
+            }
+          } else {
+            setActiveThread(finalThread);
+          }
         } catch (err) {
           console.error("[useThreadChat] save_agent_response failed:", err);
         }
