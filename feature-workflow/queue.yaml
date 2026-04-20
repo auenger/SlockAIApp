@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-17T13:55:00+08:00'
-  version: 161
+  last_updated: '2026-04-20T12:00:00+08:00'
+  version: 162
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -70,6 +70,10 @@ blocked:
   - feat-lan-mdns-discovery
   reason: Manually blocked — 暂缓开发
 completed:
+- id: feat-claude-stream-protocol
+  name: Claude Code Stream JSON 协议增强（全自动执行 + MCP 注入）
+  completed_at: '2026-04-20T12:00:00+08:00'
+  tag: feat-claude-stream-protocol-20260420
 - id: fix-settings-remote-ui
   name: 设置页面 Remote Connections UI 优化（样式统一 + Emoji→SVG + 溢出修复）
   completed_at: '2026-04-17T13:55:00+08:00'
