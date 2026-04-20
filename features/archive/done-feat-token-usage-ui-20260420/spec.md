@@ -125,6 +125,15 @@ Then 两个模型的用量分别显示
 - 数字格式化：>1000 显示为 "1.2k"，>1000000 显示为 "1.2M"
 
 ### General Checklist
-- [ ] TypeScript 类型无错误
-- [ ] 不影响现有消息渲染性能
-- [ ] token_usage 可选字段，向后兼容旧消息
+- [x] TypeScript 类型无错误
+- [x] 不影响现有消息渲染性能
+- [x] token_usage 可选字段，向后兼容旧消息
+
+## Merge Record
+- **Completed**: 2026-04-20
+- **Merged Branch**: feature/feat-token-usage-ui
+- **Merge Commit**: 73d84a1
+- **Archive Tag**: feat-token-usage-ui-20260420
+- **Conflicts**: None
+- **Verification**: All 5/5 Gherkin scenarios passed (code analysis)
+- **Stats**: 2 commits, 14 files changed, 488 insertions, 75 deletions

@@ -1,10 +1,35 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-20T12:35:00+08:00"
-  version: 58
-  total_completed: 58
+  last_updated: "2026-04-20T17:30:00+08:00"
+  version: 59
+  total_completed: 59
 
 records:
+  - id: feat-token-usage-ui
+    name: "Token 用量前端展示（消息底部消耗 + Agent 面板聚合统计）"
+    completed: "2026-04-20T17:30:00+08:00"
+    tag: feat-token-usage-ui-20260420
+    merge_commit: "73d84a1"
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-token-usage-ui
+    worktree_deleted: true
+    worktree_path: ../AgentsZone-feat-token-usage-ui
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 5
+      scenarios_passed: 5
+    stats:
+      started: "2026-04-20T17:00:00+08:00"
+      duration: "~30min"
+      commits: 2
+      files_changed: 14
+      lines_added: 488
+      lines_deleted: 75
+
   - id: feat-sidebar-agent-panel
     name: "Sidebar 对话按钮活跃 Agent 弹出面板"
     completed: "2026-04-20T12:35:00+08:00"
