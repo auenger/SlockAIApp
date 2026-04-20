@@ -1,8 +1,8 @@
 # features/archive/archive-log.yaml
 meta:
-  last_updated: "2026-04-20T12:00:00+08:00"
-  version: 55
-  total_completed: 55
+  last_updated: "2026-04-20T14:30:00+08:00"
+  version: 56
+  total_completed: 56
 
 records:
   - id: feat-claude-stream-protocol
@@ -1306,3 +1306,27 @@ records:
       duration: "~30min"
       commits: 1
       files_changed: 3
+
+archived:
+  - id: feat-remote-sidebar-panel
+    name: "Sidebar 远程机器 & Agent 概览面板（Monitor 按钮 toggle 展示连接 + Agent）"
+    completed: "2026-04-20T14:30:00+08:00"
+    tag: feat-remote-sidebar-panel-20260420
+    merge_commit: 20b30a1
+    merged_to: main
+    branch_deleted: true
+    branch_name: feature/feat-remote-sidebar-panel
+    worktree_deleted: true
+    worktree_path: ../SlockAI-feat-remote-sidebar-panel
+    conflicts:
+      had_conflict: false
+      conflict_files: []
+    verification:
+      status: passed
+      scenarios_total: 4
+      scenarios_passed: 4
+    stats:
+      started: "2026-04-20T14:00:00+08:00"
+      duration: "~30 minutes"
+      commits: 1
+      files_changed: 2

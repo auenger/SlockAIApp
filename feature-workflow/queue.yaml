@@ -1,6 +1,6 @@
 meta:
-  last_updated: '2026-04-20T12:00:00+08:00'
-  version: 162
+  last_updated: '2026-04-20T14:30:00+08:00'
+  version: 164
 parents:
 - id: feat-a2a-runtime
   name: A2A 协议 Runtime 重构（标准化 Transport + 远程连接 + 多 Agent 协作）
@@ -70,6 +70,10 @@ blocked:
   - feat-lan-mdns-discovery
   reason: Manually blocked — 暂缓开发
 completed:
+- id: feat-remote-sidebar-panel
+  name: Sidebar 远程机器 & Agent 概览面板（Monitor 按钮 toggle 展示连接 + Agent）
+  completed_at: '2026-04-20T14:30:00+08:00'
+  tag: feat-remote-sidebar-panel-20260420
 - id: feat-claude-stream-protocol
   name: Claude Code Stream JSON 协议增强（全自动执行 + MCP 注入）
   completed_at: '2026-04-20T12:00:00+08:00'
@@ -331,3 +335,11 @@ completed:
   completed_at: '2026-04-12T01:30:00+08:00'
   tag: fix-channel-msg-render-20260412
 pending:
+- id: feat-claude-resilience-usage
+  name: Claude Code 健壮性 + Token 用量统计（Session Resume 降级重试 + 按模型聚合统计）
+  priority: 75
+  dependencies:
+  - feat-claude-stream-protocol
+- id: feat-sidebar-agent-panel
+  name: Sidebar 对话按钮活跃 Agent 弹出面板
+  priority: 70
