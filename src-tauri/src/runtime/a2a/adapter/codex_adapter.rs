@@ -74,6 +74,7 @@ impl CliA2AAdapter for CodexAdapter {
             system_prompt: config.system_prompt.clone(),
             timeout_secs: config.timeout_secs,
             persistent: false, // Codex always uses one-shot mode
+            mcp_config: None,
         };
 
         // Execute via the underlying Codex runtime

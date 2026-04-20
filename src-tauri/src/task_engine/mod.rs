@@ -443,6 +443,7 @@ impl TaskEngine {
                             system_prompt: Some("[Task Execution Context]\nYou are executing an async background task.\n".to_string()),
                             timeout_secs: 300,
                             persistent: false,
+                            mcp_config: None,
                         };
 
                         match runtime.execute(params) {
