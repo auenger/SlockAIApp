@@ -719,6 +719,7 @@ fn execute_single_agent_inner(
                             system_prompt,
                             timeout_secs: 120,
                             persistent: false,
+                            mcp_config: None,
                         };
 
                         match runtime.execute(params) {
@@ -815,6 +816,7 @@ fn execute_single_agent_inner(
                     system_prompt,
                     timeout_secs: 120,
                     persistent: false, // Channel: one-shot, context reconstructed each time
+                    mcp_config: None,
                 };
 
                 runtime.execute(params)?
@@ -1547,6 +1549,7 @@ pub async fn compact_channel(
             system_prompt: None,
             timeout_secs: 60,
             persistent: false,
+            mcp_config: None,
         };
 
         let receiver = runtime.execute(params)?;

@@ -20,6 +20,7 @@ use super::{
 };
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -41,6 +42,9 @@ struct ProcessHandle {
     child: Child,
     /// stdin writer for sending JSON messages (None after shutdown)
     stdin_writer: Option<BufWriter<ChildStdin>>,
+    /// Shared stdin writer for the stdout reader thread to write control_response.
+    /// This is a clone of the same BufWriter inner writer, wrapped for thread-safe sharing.
+    stdin_for_reader: Arc<Mutex<Option<ChildStdin>>>,
     /// The current request's output channel sender.
     current_sender: Arc<Mutex<Option<std::sync::mpsc::Sender<StreamEvent>>>>,
     /// Session ID extracted from the first response (used for --resume after eviction)
@@ -61,7 +65,7 @@ impl ProcessHandle {
         matches!(self.child.try_wait(), Ok(None))
     }
 
-    /// Send a user message to the process via stdin (Control Protocol).
+    /// Send a user message to the process via stdin (stream-json protocol).
     fn send_user_message(&mut self, message: &str) -> Result<(), String> {
         let writer = self
             .stdin_writer
@@ -84,11 +88,47 @@ impl ProcessHandle {
         Ok(())
     }
 
+    /// Send a control_response to auto-approve a control_request.
+    fn send_control_response(&self, request_id: &str, input: &serde_json::Value) {
+        let response = serde_json::json!({
+            "type": "control_response",
+            "response": {
+                "subtype": "success",
+                "request_id": request_id,
+                "response": {
+                    "behavior": "allow",
+                    "updatedInput": input
+                }
+            }
+        });
+        if let Ok(mut guard) = self.stdin_for_reader.lock() {
+            if let Some(ref mut stdin) = *guard {
+                let line = format!("{}\n", response);
+                // Write directly to the raw stdin (no BufWriter needed for single writes)
+                use std::io::Write;
+                if let Err(e) = stdin.write_all(line.as_bytes()) {
+                    log::warn!("[ClaudeCodeRuntime] Failed to write control_response: {}", e);
+                } else if let Err(e) = stdin.flush() {
+                    log::warn!("[ClaudeCodeRuntime] Failed to flush control_response: {}", e);
+                } else {
+                    log::info!(
+                        "[ClaudeCodeRuntime] Auto-approved control_request {}",
+                        request_id
+                    );
+                }
+            }
+        }
+    }
+
     /// Gracefully shut down the process.
     fn shutdown(&mut self) {
         if let Some(mut writer) = self.stdin_writer.take() {
             let _ = writer.flush();
             drop(writer);
+        }
+        // Clear the shared stdin reference so the reader thread stops trying
+        if let Ok(mut guard) = self.stdin_for_reader.lock() {
+            *guard = None;
         }
         std::thread::sleep(Duration::from_millis(100));
         let _ = self.child.kill();
@@ -187,6 +227,7 @@ impl ClaudeCodeRuntime {
         workspace: Option<&str>,
         system_prompt: Option<&str>,
         session_id: Option<&str>,
+        mcp_config: Option<&serde_json::Value>,
     ) -> Result<(), String> {
         // First, clean up any idle processes
         self.cleanup_idle();
@@ -213,13 +254,14 @@ impl ClaudeCodeRuntime {
                 workspace,
                 system_prompt,
                 session_id.or(old_session.as_deref()),
+                mcp_config,
                 epoch,
             );
         }
 
         // No existing process, spawn new
         drop(processes);
-        self.spawn_persistent(agent_id, workspace, system_prompt, session_id, epoch)
+        self.spawn_persistent(agent_id, workspace, system_prompt, session_id, mcp_config, epoch)
     }
 
     /// Spawn a persistent claude process (Thread mode).
@@ -229,6 +271,7 @@ impl ClaudeCodeRuntime {
         workspace: Option<&str>,
         system_prompt: Option<&str>,
         session_id: Option<&str>,
+        mcp_config: Option<&serde_json::Value>,
         epoch: u64,
     ) -> Result<(), String> {
         let mut processes = self.processes.lock().map_err(|e| e.to_string())?;
@@ -238,7 +281,9 @@ impl ClaudeCodeRuntime {
             Self::evict_lru(&mut processes);
         }
 
-        let args = build_cli_args(system_prompt, session_id, workspace, true);
+        // Write MCP config to temp file if provided
+        let mcp_temp_file = mcp_config.and_then(|cfg| write_temp_mcp_config(cfg).ok());
+        let args = build_cli_args(system_prompt, session_id, workspace, true, mcp_temp_file.as_ref());
 
         log::info!(
             "[ClaudeCodeRuntime] Spawning persistent process for agent {} (session_id={:?})",
@@ -248,6 +293,13 @@ impl ClaudeCodeRuntime {
 
         let (child, stdin_handle, stdout_handle, stderr_handle) =
             spawn_cli_process(&args, workspace)?;
+
+        // We need two references to stdin: one for ProcessHandle (BufWriter for user messages),
+        // and one for the stdout reader (raw stdin for control_response).
+        // We can't clone ChildStdin, so we share it via Arc<Mutex> and only write through
+        // one at a time. ProcessHandle keeps a BufWriter for efficiency; the reader thread
+        // accesses the raw stdin via the shared mutex for control_response.
+        let shared_stdin: Arc<Mutex<Option<ChildStdin>>> = Arc::new(Mutex::new(None));
 
         let current_sender: Arc<Mutex<Option<std::sync::mpsc::Sender<StreamEvent>>>> =
             Arc::new(Mutex::new(None));
@@ -267,12 +319,14 @@ impl ClaudeCodeRuntime {
             last_active.clone(),
             reader_alive.clone(),
             shared_session_id.clone(),
+            shared_stdin.clone(),
         );
         spawn_stderr_reader(stderr_handle, current_sender.clone(), last_active.clone());
 
         let handle = ProcessHandle {
             child,
             stdin_writer: Some(BufWriter::new(stdin_handle)),
+            stdin_for_reader: shared_stdin,
             current_sender,
             session_id: None,
             last_active,
@@ -291,11 +345,14 @@ impl ClaudeCodeRuntime {
         &self,
         params: &ExecuteParams,
     ) -> Result<std::sync::mpsc::Receiver<StreamEvent>, String> {
+        // Write MCP config to temp file if provided
+        let mcp_temp_file = params.mcp_config.as_ref().and_then(|cfg| write_temp_mcp_config(cfg).ok());
         let args = build_cli_args(
             params.system_prompt.as_deref(),
             params.session_id.as_deref(),
             params.workspace.as_deref(),
-            false, // no --input-format (one-shot doesn't need stdin JSON)
+            true, // enable --input-format stream-json for all modes
+            mcp_temp_file.as_ref(),
         );
 
         // For one-shot mode, append the message as final positional arg
@@ -398,8 +455,19 @@ impl ClaudeCodeRuntime {
         });
 
         // Reap the child process in background to avoid zombies
+        // Also clean up MCP temp file when process exits
+        let mcp_cleanup = mcp_temp_file;
         std::thread::spawn(move || {
             let _ = child.wait();
+            // Clean up MCP temp file after process exits
+            if let Some(ref path) = mcp_cleanup {
+                if let Err(e) = std::fs::remove_file(path) {
+                    log::warn!(
+                        "[ClaudeCodeRuntime] Failed to clean up MCP temp file {:?}: {}",
+                        path, e
+                    );
+                }
+            }
         });
 
         Ok(rx)
@@ -416,6 +484,7 @@ impl ClaudeCodeRuntime {
             params.workspace.as_deref(),
             params.system_prompt.as_deref(),
             params.session_id.as_deref(),
+            params.mcp_config.as_ref(),
         )?;
 
         let (tx, rx) = std::sync::mpsc::channel();
@@ -498,12 +567,40 @@ impl ClaudeCodeRuntime {
 // Shared helper functions
 // ===========================================================================
 
+/// Write MCP config JSON to a temporary file and return the path.
+///
+/// The caller is responsible for cleaning up the temp file after the process exits.
+fn write_temp_mcp_config(mcp_config: &serde_json::Value) -> Result<PathBuf, String> {
+    let temp_dir = std::env::temp_dir();
+    let file_name = format!("claude_mcp_{}.json", uuid_suffix());
+    let path = temp_dir.join(file_name);
+    let json_str = serde_json::to_string_pretty(mcp_config)
+        .map_err(|e| format!("Failed to serialize MCP config: {}", e))?;
+    std::fs::write(&path, json_str)
+        .map_err(|e| format!("Failed to write MCP config temp file: {}", e))?;
+    log::info!("[ClaudeCodeRuntime] Wrote MCP config to {:?}", path);
+    Ok(path)
+}
+
+/// Generate a short unique suffix for temp file names.
+fn uuid_suffix() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let count = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    format!("{:x}{:x}", now, count)
+}
+
 /// Build CLI argument list for claude invocation.
 fn build_cli_args(
     system_prompt: Option<&str>,
     session_id: Option<&str>,
     workspace: Option<&str>,
     with_input_format: bool,
+    mcp_config_path: Option<&PathBuf>,
 ) -> Vec<String> {
     let mut args: Vec<String> = vec![
         "--print".to_string(),
@@ -511,13 +608,17 @@ fn build_cli_args(
         "stream-json".to_string(),
         "--verbose".to_string(),
         "--dangerously-skip-permissions".to_string(),
+        // Add --input-format stream-json for stdin JSON protocol support
+        // (enables control_response for auto-approving tool calls)
+        "--input-format".to_string(),
+        "stream-json".to_string(),
+        // Full autonomous execution — skip all permission prompts
+        "--permission-mode".to_string(),
+        "bypassPermissions".to_string(),
     ];
 
-    // Only add --input-format for persistent (Thread) mode
-    if with_input_format {
-        args.push("--input-format".to_string());
-        args.push("stream-json".to_string());
-    }
+    // Legacy flag kept for backward compat; --input-format is always added above
+    let _ = with_input_format;
 
     if let Some(sid) = session_id {
         args.push("--resume".to_string());
@@ -534,6 +635,13 @@ fn build_cli_args(
             args.push("--add-dir".to_string());
             args.push(ws.to_string());
         }
+    }
+
+    // MCP config injection: --mcp-config + --strict-mcp-config
+    if let Some(mcp_path) = mcp_config_path {
+        args.push("--mcp-config".to_string());
+        args.push(mcp_path.to_string_lossy().to_string());
+        args.push("--strict-mcp-config".to_string());
     }
 
     args
@@ -577,12 +685,15 @@ fn spawn_cli_process(
 
 /// Persistent stdout reader: parses JSONL lines into StreamEvents and sends
 /// them through the current_sender channel (which gets swapped per request).
+///
+/// Also handles `control_request` messages by auto-approving them via stdin.
 fn spawn_stdout_reader(
     stdout: std::process::ChildStdout,
     current_sender: Arc<Mutex<Option<std::sync::mpsc::Sender<StreamEvent>>>>,
     last_active: Arc<AtomicU64>,
     reader_alive: Arc<AtomicBool>,
     shared_session_id: Arc<Mutex<Option<String>>>,
+    stdin_writer: Arc<Mutex<Option<ChildStdin>>>,
 ) {
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
@@ -605,6 +716,18 @@ fn spawn_stdout_reader(
 
                     match serde_json::from_str::<serde_json::Value>(trimmed) {
                         Ok(json_obj) => {
+                            // Handle control_request: auto-approve via stdin
+                            let msg_type = json_obj
+                                .get("type")
+                                .and_then(|t| t.as_str())
+                                .unwrap_or("");
+
+                            if msg_type == "control_request" {
+                                handle_control_request(&json_obj, &stdin_writer);
+                                // Don't forward control_request to the frontend
+                                continue;
+                            }
+
                             let event = parse_stream_event(&json_obj, trimmed);
 
                             // Cache session_id from any event
@@ -641,6 +764,58 @@ fn spawn_stdout_reader(
         reader_alive.store(false, Ordering::Relaxed);
         log::info!("[ClaudeCodeRuntime] Persistent stdout reader exited");
     });
+}
+
+/// Handle a `control_request` from Claude Code by auto-approving it via stdin.
+///
+/// Claude Code sends control_request messages when it needs permission to use
+/// tools. Even with `--permission-mode bypassPermissions`, certain scenarios
+/// (e.g. MCP tool first use) may still trigger these. Auto-approving ensures
+/// uninterrupted execution.
+fn handle_control_request(
+    json_obj: &serde_json::Value,
+    stdin_writer: &Arc<Mutex<Option<ChildStdin>>>,
+) {
+    let request_id = json_obj
+        .get("request_id")
+        .and_then(|r| r.as_str())
+        .unwrap_or("");
+    let input = json_obj
+        .get("input")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
+
+    let response = serde_json::json!({
+        "type": "control_response",
+        "response": {
+            "subtype": "success",
+            "request_id": request_id,
+            "response": {
+                "behavior": "allow",
+                "updatedInput": input
+            }
+        }
+    });
+
+    let line = format!("{}\n", response);
+    if let Ok(mut guard) = stdin_writer.lock() {
+        if let Some(ref mut stdin) = *guard {
+            match stdin.write_all(line.as_bytes()).and_then(|_| stdin.flush()) {
+                Ok(_) => {
+                    log::info!(
+                        "[ClaudeCodeRuntime] Auto-approved control_request (request_id={})",
+                        request_id
+                    );
+                }
+                Err(e) => {
+                    log::warn!(
+                        "[ClaudeCodeRuntime] Failed to write control_response for request {}: {}",
+                        request_id, e
+                    );
+                }
+            }
+        }
+    }
 }
 
 /// Stderr reader thread: logs warnings and forwards errors.

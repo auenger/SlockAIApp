@@ -583,6 +583,7 @@ pub async fn send_message(
                                 system_prompt: Some(context_prefix),
                                 timeout_secs: 120,
                                 persistent: true,
+                                mcp_config: None,
                             };
 
                             // Execute on a dedicated OS thread to avoid
@@ -683,6 +684,7 @@ pub async fn send_message(
                         system_prompt: Some(context_prefix),
                         timeout_secs: 120,
                         persistent: true, // Thread: persistent process, context kept in-process
+                        mcp_config: None,
                     };
 
                     runtime.execute(params)?

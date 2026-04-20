@@ -74,6 +74,7 @@ impl CliA2AAdapter for ClaudeCodeAdapter {
             system_prompt: config.system_prompt.clone(),
             timeout_secs: config.timeout_secs,
             persistent: config.persistent,
+            mcp_config: None,
         };
 
         // Execute via the underlying Claude Code runtime

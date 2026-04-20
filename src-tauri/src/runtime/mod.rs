@@ -168,6 +168,13 @@ pub struct ExecuteParams {
     /// Thread mode: reuse process via stdin JSON, context kept in-process.
     /// Channel mode: fresh process each request, context reconstructed by caller.
     pub persistent: bool,
+    /// Optional MCP (Model Context Protocol) configuration to inject.
+    /// When present, written to a temp file and passed via --mcp-config + --strict-mcp-config.
+    /// Format: JSON object with `mcpServers` key, e.g.:
+    /// ```json
+    /// { "mcpServers": { "filesystem": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"] } } }
+    /// ```
+    pub mcp_config: Option<serde_json::Value>,
 }
 
 /// A streaming event produced by an AgentRuntime during execution.
