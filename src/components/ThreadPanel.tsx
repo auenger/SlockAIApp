@@ -3,6 +3,7 @@ import { X, Send, User } from 'lucide-react';
 import { AgentIcon } from './AgentIcon';
 import { MarkdownRenderer } from './markdown';
 import { ContentBlockCard } from './MainContent';
+import { TokenUsageBadge } from './TokenUsageBadge';
 import type { Thread, ThreadMessageData, AgentWithRuntime, ContentBlock } from '../types';
 
 interface ThreadPanelProps {
@@ -216,6 +217,12 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
                     <MarkdownRenderer content={msg.content} compact />
                   ) : (
                     <span className="whitespace-pre-wrap">{msg.content}</span>
+                  )}
+                  {/* Token usage badge for agent messages */}
+                  {msg.role === 'agent' && msg.token_usage && Object.keys(msg.token_usage).length > 0 && (
+                    <div className="mt-1">
+                      <TokenUsageBadge tokenUsage={msg.token_usage} />
+                    </div>
                   )}
                 </div>
               </div>

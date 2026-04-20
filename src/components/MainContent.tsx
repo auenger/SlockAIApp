@@ -52,7 +52,10 @@ import { EditAgentModal } from './EditAgentModal';
 import { TaskView } from './task/TaskView';
 import { TaskSuggestionCard } from './task/TaskSuggestionCard';
 import { MarkdownRenderer } from './markdown';
+import { TokenUsageBadge } from './TokenUsageBadge';
+import { useTokenUsageSummary } from '../lib/useTokenUsageSummary';
 import type { AgentStreamState } from '../lib/useChannel';
+import type { TokenUsage } from '../types';
 
 // ---------------------------------------------------------------------------
 // Agent color palette for distinguishing multi-Agent replies
@@ -514,6 +517,13 @@ export const MainContent: React.FC<MainContentProps> = ({
   // Profile data loading
   const { data: profileData, loading: profileLoading, loadProfile } = useAgentProfile();
 
+  // Token usage summary: aggregate from all available messages for the selected agent
+  const tokenUsageSummary = useTokenUsageSummary(
+    !isChannelMode
+      ? (activeThread?.messages ?? [])
+      : (activeChannel?.messages?.filter((m) => m.sender_id === selectedAgent?.agent.agent_id) ?? [])
+  );
+
   // Load profile when selectedAgent changes
   useEffect(() => {
     if (selectedAgent?.agent.agent_id) {
@@ -590,7 +600,7 @@ export const MainContent: React.FC<MainContentProps> = ({
   };
 
   // Convert thread messages to display format
-  const displayMessages: Message[] = (() => {
+  const displayMessages: (Message & { tokenUsage?: Record<string, TokenUsage> })[] = (() => {
     if (!activeThread) return [];
     return activeThread.messages.map((msg) => ({
       id: msg.id,
@@ -601,11 +611,12 @@ export const MainContent: React.FC<MainContentProps> = ({
       },
       content: msg.content,
       timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      tokenUsage: msg.token_usage,
     }));
   })();
 
   // Convert channel messages to display format with per-agent colors
-  const channelDisplayMessages: (Message & { agentColor?: string; agentEmoji?: string; contentBlocks?: ContentBlock[] })[] = (() => {
+  const channelDisplayMessages: (Message & { agentColor?: string; agentEmoji?: string; contentBlocks?: ContentBlock[]; tokenUsage?: Record<string, TokenUsage> })[] = (() => {
     if (!activeChannel) return [];
     return activeChannel.messages.map((msg: ChannelMessage) => {
       const isAgent = msg.sender_type === 'agent';
@@ -623,6 +634,7 @@ export const MainContent: React.FC<MainContentProps> = ({
         agentColor: isAgent ? getAgentColor(cIdx) : undefined,
         agentEmoji: isAgent ? agentInfo?.agent.emoji : undefined,
         contentBlocks: msg.content_blocks,
+        tokenUsage: msg.token_usage,
       };
     });
   })();
@@ -1066,8 +1078,9 @@ export const MainContent: React.FC<MainContentProps> = ({
                 )}
 
                 {(isChannelMode ? channelDisplayMessages : displayMessages).map((msgRaw) => {
-                  const msg = msgRaw as (Message & { agentColor?: string; agentEmoji?: string; contentBlocks?: ContentBlock[] });
+                  const msg = msgRaw as (Message & { agentColor?: string; agentEmoji?: string; contentBlocks?: ContentBlock[]; tokenUsage?: Record<string, TokenUsage> });
                   const hasBlocks = msg.contentBlocks && msg.contentBlocks.length > 0;
+                  const hasTokenUsage = isChannelMode && msg.sender.isAgent && msg.tokenUsage && Object.keys(msg.tokenUsage).length > 0;
                   return (
                   <div key={msg.id} className="flex gap-3 px-2">
                     {msg.sender.isAgent ? (
@@ -1126,12 +1139,21 @@ export const MainContent: React.FC<MainContentProps> = ({
                           ))}
                         </div>
                       )}
-                      {/* Context info badge for agent messages in channels */}
+                      {/* Context info badge + Token usage for agent messages in channels */}
                       {isChannelMode && msg.sender.isAgent && (
                         <div className="mt-1 flex items-center gap-2 text-[8px] text-gray-400">
                           <span className="px-1 py-0.5 bg-gray-100 brutal-border">SOUL.md</span>
                           <span className="px-1 py-0.5 bg-gray-100 brutal-border">Channel History</span>
                           <span className="px-1 py-0.5 bg-gray-100 brutal-border">MEMORY.md</span>
+                          {hasTokenUsage && (
+                            <TokenUsageBadge tokenUsage={msg.tokenUsage!} />
+                          )}
+                        </div>
+                      )}
+                      {/* Token usage badge for thread mode agent messages */}
+                      {!isChannelMode && msg.sender.isAgent && msg.tokenUsage && Object.keys(msg.tokenUsage).length > 0 && (
+                        <div className="mt-1">
+                          <TokenUsageBadge tokenUsage={msg.tokenUsage} />
                         </div>
                       )}
                     </div>
@@ -1720,6 +1742,65 @@ export const MainContent: React.FC<MainContentProps> = ({
                     )}
                   </div>
                 </section>
+
+                {/* Token Usage Statistics Section */}
+                {tokenUsageSummary.grandTotal > 0 && (
+                  <section className="space-y-2">
+                    <h3 className="font-black text-xs uppercase tracking-widest text-gray-500">Token Usage</h3>
+                    <div className="brutal-card space-y-3">
+                      {/* Grand total */}
+                      <div className="flex items-center justify-between pb-2 brutal-border-b">
+                        <span className="text-[10px] font-black text-gray-400 uppercase">Session Total</span>
+                        <span className="text-sm font-black font-mono">
+                          {tokenUsageSummary.grandTotal >= 1_000_000
+                            ? `${(tokenUsageSummary.grandTotal / 1_000_000).toFixed(1)}M`
+                            : tokenUsageSummary.grandTotal >= 1_000
+                            ? `${(tokenUsageSummary.grandTotal / 1_000).toFixed(1)}k`
+                            : tokenUsageSummary.grandTotal} tokens
+                        </span>
+                      </div>
+                      {/* Per-model breakdown */}
+                      {tokenUsageSummary.models.map((model) => (
+                        <div key={model.model} className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-brutal-cyan truncate" title={model.model}>
+                              {model.model}
+                            </span>
+                            <span className="text-[10px] font-mono font-bold">
+                              {model.total_tokens >= 1_000_000
+                                ? `${(model.total_tokens / 1_000_000).toFixed(1)}M`
+                                : model.total_tokens >= 1_000
+                                ? `${(model.total_tokens / 1_000).toFixed(1)}k`
+                                : model.total_tokens}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-4 gap-1 text-[9px] font-mono text-gray-500">
+                            <div>
+                              <span className="text-gray-400">in </span>
+                              {model.input_tokens >= 1_000 ? `${(model.input_tokens / 1_000).toFixed(1)}k` : model.input_tokens}
+                            </div>
+                            <div>
+                              <span className="text-gray-400">out </span>
+                              {model.output_tokens >= 1_000 ? `${(model.output_tokens / 1_000).toFixed(1)}k` : model.output_tokens}
+                            </div>
+                            {model.cache_read_tokens > 0 && (
+                              <div>
+                                <span className="text-gray-400">cr </span>
+                                {model.cache_read_tokens >= 1_000 ? `${(model.cache_read_tokens / 1_000).toFixed(1)}k` : model.cache_read_tokens}
+                              </div>
+                            )}
+                            {model.cache_write_tokens > 0 && (
+                              <div>
+                                <span className="text-gray-400">cw </span>
+                                {model.cache_write_tokens >= 1_000 ? `${(model.cache_write_tokens / 1_000).toFixed(1)}k` : model.cache_write_tokens}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
 
                 {/* LAN Access Section */}
                 <section className="space-y-2">
