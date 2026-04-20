@@ -26,6 +26,7 @@ import { ApiKeyManager } from './ApiKeyManager';
 import { AgentIcon } from './AgentIcon';
 import { AgentBadge } from './AgentBadge';
 import { RemoteOverviewPanel } from './RemoteOverviewPanel';
+import { ActiveAgentPanel } from './ActiveAgentPanel';
 import { isRemoteAgent, getConnectionId } from '../lib/useAllAgents';
 import type { AgentWithRuntime, ThreadInfo, ChannelInfo } from '../types';
 
@@ -118,6 +119,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [showNewThreadPicker, setShowNewThreadPicker] = useState(false);
   // Remote overview panel toggle
   const [showRemotePanel, setShowRemotePanel] = useState(false);
+  // Active agent panel toggle (MessageSquare button)
+  const [showActiveAgentPanel, setShowActiveAgentPanel] = useState(false);
 
   // Delete confirmation state: { type, id, name } or null
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'channel' | 'thread' | 'agent'; id: string; name: string } | null>(null);
@@ -168,11 +171,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Navigation Icons */}
       <div className="flex brutal-border-b bg-white">
-        <button className="flex-1 p-2 flex justify-center brutal-border-r hover:bg-gray-100">
-          <MessageSquare size={20} />
-        </button>
+        <div className="relative flex-1">
+          <button
+            onClick={() => {
+              setShowActiveAgentPanel(!showActiveAgentPanel);
+              setShowRemotePanel(false);
+            }}
+            className={cn(
+              "w-full p-2 flex justify-center brutal-border-r transition-colors",
+              showActiveAgentPanel
+                ? "bg-brutal-pink text-white"
+                : "hover:bg-gray-100"
+            )}
+            title="Active Agents"
+          >
+            <MessageSquare size={20} />
+          </button>
+          {showActiveAgentPanel && (
+            <ActiveAgentPanel
+              agents={agents}
+              onAgentSelect={onAgentSelect}
+              onClose={() => setShowActiveAgentPanel(false)}
+              connectionNames={connectionNames ?? new Map()}
+            />
+          )}
+        </div>
         <button
-          onClick={() => setShowRemotePanel(!showRemotePanel)}
+          onClick={() => {
+            setShowRemotePanel(!showRemotePanel);
+            setShowActiveAgentPanel(false);
+          }}
           className={cn(
             "flex-1 p-2 flex justify-center transition-colors",
             showRemotePanel
