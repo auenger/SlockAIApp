@@ -179,15 +179,16 @@ pub fn remote_connection_delete(
         .map_err(|e| format!("Failed to clean up remote agents: {}", e))?;
     log::info!("[remote_connection_delete] Cleaned up {} remote agents for '{}'", deleted_agents, id);
 
-    // Also clean up workspace directories for remote agents
+    // Also clean up workspace directories and in-memory entries for remote agents
     {
-        let manager = state.agent_manager.lock().map_err(|e| format!("lock error: {}", e))?;
-        let agents_dir = manager.agents_dir();
+        let mut manager = state.agent_manager.lock().map_err(|e| format!("lock error: {}", e))?;
+        let agents_dir = manager.agents_dir().to_path_buf();
         // Remote agent dirs follow pattern: "remote:{connection_id}:{agent_name}"
-        if let Ok(entries) = std::fs::read_dir(agents_dir) {
+        if let Ok(entries) = std::fs::read_dir(&agents_dir) {
             for entry in entries.flatten() {
                 let name = entry.file_name().to_string_lossy().to_string();
                 if name.starts_with(&format!("remote:{}:", id)) {
+                    manager.unregister_remote_agent(&name);
                     if let Err(e) = std::fs::remove_dir_all(entry.path()) {
                         log::warn!("[remote_connection_delete] Failed to remove remote agent dir '{}': {}", name, e);
                     }
@@ -381,12 +382,22 @@ pub fn sync_remote_agents(
 
         // Also add to the in-memory AgentManager
         {
-            let manager = state.agent_manager.lock().map_err(|e| format!("lock error: {}", e))?;
+            let mut manager = state.agent_manager.lock().map_err(|e| format!("lock error: {}", e))?;
             // Ensure a workspace directory exists for the remote agent (lightweight)
             let agents_dir = manager.agents_dir().join(&agent_id);
             if !agents_dir.exists() {
                 std::fs::create_dir_all(&agents_dir).map_err(|e| format!("Failed to create remote agent dir: {}", e))?;
             }
+            // Register in memory so get_agent() can find it
+            manager.register_remote_agent(
+                agent_id.clone(),
+                agent.name.clone(),
+                if agent.emoji.is_empty() { "cloud".to_string() } else { agent.emoji.clone() },
+                crate::runtime::RuntimeType::Custom(runtime_type.clone()),
+                crate::runtime::a2a::types::ConnectionMode::Remote {
+                    connection_id: connection_id.clone(),
+                },
+            );
         }
 
         synced.push(AgentSummary {

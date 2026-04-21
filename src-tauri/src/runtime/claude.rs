@@ -146,6 +146,24 @@ impl Drop for ProcessHandle {
 // ClaudeCodeRuntime
 // ===========================================================================
 
+/// Global override for the Claude CLI binary name.
+/// Used by az-bridge to support platform-specific names (e.g. "claude.cmd" on Windows).
+static CLAUDE_BINARY_OVERRIDE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// Cached readiness check result. `detect()` can be expensive (spawns `claude --version`),
+/// so we cache the result after the first successful check.
+static CLAUDE_READY: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+
+/// Set the global Claude CLI binary name override.
+pub fn set_claude_binary(name: &str) {
+    let _ = CLAUDE_BINARY_OVERRIDE.set(name.to_string());
+}
+
+/// Get the Claude CLI binary name to use.
+fn claude_binary() -> &'static str {
+    CLAUDE_BINARY_OVERRIDE.get().map(|s| s.as_str()).unwrap_or("claude")
+}
+
 /// Claude Code CLI runtime with dual execution strategy.
 ///
 /// - Thread calls (session_id present): persistent process pool with LRU eviction
@@ -286,9 +304,11 @@ impl ClaudeCodeRuntime {
         let args = build_cli_args(system_prompt, session_id, workspace, true, mcp_temp_file.as_ref());
 
         log::info!(
-            "[ClaudeCodeRuntime] Spawning persistent process for agent {} (session_id={:?})",
+            "[ClaudeCodeRuntime] Spawning persistent process for agent {} (session_id={:?}), binary={}, args={:?}",
             agent_id,
-            session_id
+            session_id,
+            claude_binary(),
+            args
         );
 
         let (child, stdin_handle, stdout_handle, stderr_handle) =
@@ -351,7 +371,7 @@ impl ClaudeCodeRuntime {
             params.system_prompt.as_deref(),
             params.session_id.as_deref(),
             params.workspace.as_deref(),
-            true, // enable --input-format stream-json for all modes
+            false, // one-shot mode: no stdin, cannot use stream-json input
             mcp_temp_file.as_ref(),
         );
 
@@ -361,11 +381,13 @@ impl ClaudeCodeRuntime {
         full_args.push(params.message.clone());
 
         log::info!(
-            "[ClaudeCodeRuntime] One-shot spawn for agent {} (channel mode)",
-            params.agent_id
+            "[ClaudeCodeRuntime] One-shot spawn for agent {} (channel mode), binary={}, args={:?}",
+            params.agent_id,
+            claude_binary(),
+            full_args
         );
 
-        let mut cmd = Command::new("claude");
+        let mut cmd = Command::new(claude_binary());
         if let Some(ref ws) = params.workspace {
             if !ws.is_empty() {
                 cmd.current_dir(ws);
@@ -610,17 +632,15 @@ fn build_cli_args(
         "stream-json".to_string(),
         "--verbose".to_string(),
         "--dangerously-skip-permissions".to_string(),
-        // Add --input-format stream-json for stdin JSON protocol support
-        // (enables control_response for auto-approving tool calls)
-        "--input-format".to_string(),
-        "stream-json".to_string(),
-        // Full autonomous execution — skip all permission prompts
-        "--permission-mode".to_string(),
-        "bypassPermissions".to_string(),
     ];
 
-    // Legacy flag kept for backward compat; --input-format is always added above
-    let _ = with_input_format;
+    // Only enable --input-format stream-json for persistent (Thread) mode.
+    // One-shot (Channel) mode uses Stdio::null() stdin, so stream-json would
+    // cause the CLI to read EOF and exit immediately without producing output.
+    if with_input_format {
+        args.push("--input-format".to_string());
+        args.push("stream-json".to_string());
+    }
 
     if let Some(sid) = session_id {
         args.push("--resume".to_string());
@@ -654,7 +674,7 @@ fn spawn_cli_process(
     args: &[String],
     workspace: Option<&str>,
 ) -> Result<(Child, ChildStdin, std::process::ChildStdout, std::process::ChildStderr), String> {
-    let mut cmd = Command::new("claude");
+    let mut cmd = Command::new(claude_binary());
     if let Some(ws) = workspace {
         if !ws.is_empty() {
             cmd.current_dir(ws);
@@ -1344,15 +1364,16 @@ impl AgentRuntime for ClaudeCodeRuntime {
     }
 
     fn binary_name(&self) -> &str {
-        "claude"
+        claude_binary()
     }
 
     fn detect(&self) -> Result<Option<(String, String)>, String> {
-        let path = RuntimeDetector::find_command("claude");
+        let bin = claude_binary();
+        let path = RuntimeDetector::find_command(bin);
         match path {
             Some(p) => {
                 let version =
-                    RuntimeDetector::get_version("claude").unwrap_or_else(|| "unknown".to_string());
+                    RuntimeDetector::get_version(bin).unwrap_or_else(|| "unknown".to_string());
                 Ok(Some((p, version)))
             }
             None => Ok(None),
@@ -1396,7 +1417,14 @@ impl AgentRuntime for ClaudeCodeRuntime {
     }
 
     fn is_ready(&self) -> bool {
-        matches!(self.health_check(), AgentRuntimeStatus::Available)
+        // Use cached result if available — detect() spawns `claude --version`
+        // which is expensive (~50s on Windows with claude.cmd).
+        if let Some(&ready) = CLAUDE_READY.get() {
+            return ready;
+        }
+        let ready = matches!(self.health_check(), AgentRuntimeStatus::Available);
+        let _ = CLAUDE_READY.set(ready);
+        ready
     }
 
     fn execute(

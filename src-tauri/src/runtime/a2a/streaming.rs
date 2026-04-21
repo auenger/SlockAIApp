@@ -482,7 +482,9 @@ fn parse_sse_event(event_type: &str, data: &str) -> Option<StreamEvent> {
     // Try parsing as A2A Message
     if let Ok(msg) = serde_json::from_str::<Message>(data) {
         let text = extract_text_from_parts(&msg.parts);
-        let is_done = event_type == "done" || msg.role == MessageRole::System;
+        // Only the "done" SSE event type signals completion.
+        // System messages (e.g. "Session initialized") are informational, not terminal.
+        let is_done = event_type == "done";
         return Some(StreamEvent {
             text,
             is_done,

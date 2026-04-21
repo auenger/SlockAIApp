@@ -124,6 +124,38 @@ pub fn init_workspace(state: tauri::State<'_, AppState>) -> Result<InitWorkspace
     // Load the default agent into memory
     manager.load().map_err(|e| format!("load failed: {e}"))?;
 
+    // Also load remote agents from database into memory
+    {
+        let db_conn = state
+            .db_conn
+            .lock()
+            .map_err(|e| format!("db lock error: {e}"))?;
+        let remote_rows = crate::storage::db_helpers::list_remote_agents(&db_conn)
+            .map_err(|e| format!("remote agents load failed: {e}"))?;
+        let remote_count = remote_rows.len();
+        for row in remote_rows {
+            let rt = crate::runtime::RuntimeType::Custom(
+                if row.runtime_type.is_empty() { "remote-a2a".to_string() } else { row.runtime_type.clone() }
+            );
+            let cm = if row.connection_mode.starts_with("remote:") {
+                let conn_id = row.connection_mode.trim_start_matches("remote:").to_string();
+                crate::runtime::a2a::types::ConnectionMode::Remote { connection_id: conn_id }
+            } else {
+                crate::runtime::a2a::types::ConnectionMode::Local
+            };
+            manager.register_remote_agent(
+                row.id,
+                row.name,
+                row.emoji,
+                rt,
+                cm,
+            );
+        }
+        if remote_count > 0 {
+            log::info!("[init_workspace] Loaded {} remote agents into memory", remote_count);
+        }
+    }
+
     Ok(InitWorkspaceResult {
         templates_created: result.templates_synced.created,
         templates_skipped: result.templates_synced.skipped,
@@ -428,16 +460,49 @@ pub fn get_agent_identity(
     state: tauri::State<'_, AppState>,
     agent_id: String,
 ) -> Result<IdentitySummary, String> {
-    let manager = state
-        .agent_manager
-        .lock()
-        .map_err(|e| format!("lock error: {e}"))?;
+    // Try local AgentManager first
+    {
+        let manager = state
+            .agent_manager
+            .lock()
+            .map_err(|e| format!("lock error: {e}"))?;
 
-    let agent = manager
-        .get_agent(&agent_id)
+        if let Some(agent) = manager.get_agent(&agent_id) {
+            return Ok(agent.identity.to_summary());
+        }
+    }
+
+    // Fallback: check database for remote agents
+    let db_conn = state
+        .db_conn
+        .lock()
+        .map_err(|e| format!("db lock error: {e}"))?;
+
+    let row = crate::storage::db_helpers::get_agent(&db_conn, &agent_id)
+        .map_err(|e| format!("db query error: {e}"))?
         .ok_or_else(|| format!("agent not found: {agent_id}"))?;
 
-    Ok(agent.identity.to_summary())
+    let runtime_type = crate::runtime::RuntimeType::Custom(
+        if row.runtime_type.is_empty() { "remote-a2a".to_string() } else { row.runtime_type }
+    );
+    let connection_mode = if row.connection_mode.starts_with("remote:") {
+        let conn_id = row.connection_mode.trim_start_matches("remote:").to_string();
+        crate::runtime::a2a::types::ConnectionMode::Remote { connection_id: conn_id }
+    } else {
+        crate::runtime::a2a::types::ConnectionMode::Local
+    };
+
+    Ok(IdentitySummary {
+        agent_id: row.id,
+        name: row.name,
+        emoji: row.emoji,
+        avatar: row.avatar_path,
+        icon: None,
+        creature: "Remote Agent".to_string(),
+        vibe: "协作".to_string(),
+        runtime_type,
+        connection_mode,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -462,6 +527,20 @@ pub fn get_agent_context(
     state: tauri::State<'_, AppState>,
     agent_id: String,
 ) -> Result<AgentContextResult, String> {
+    // Remote agents don't have local context files
+    if agent_id.starts_with("remote:") {
+        return Ok(AgentContextResult {
+            agent_id,
+            system_prompt: String::new(),
+            has_user_context: false,
+            has_agent_instructions: false,
+            has_tool_instructions: false,
+            has_memory: false,
+            has_history: false,
+            context_prefix_length: 0,
+        });
+    }
+
     let manager = state
         .agent_manager
         .lock()

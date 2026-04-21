@@ -14,6 +14,18 @@ use crate::runtime::{
 };
 use crate::storage::keyring;
 
+/// Truncate a string to at most `max` bytes, respecting UTF-8 char boundaries.
+fn char_boundary_truncate(s: &str, max: usize) -> &str {
+    if s.len() <= max {
+        return s;
+    }
+    let mut end = max;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
 /// A remote A2A agent runtime.
 ///
 /// Connects to a remote A2A endpoint via HTTP and implements the
@@ -158,7 +170,7 @@ impl AgentRuntime for RemoteA2ARuntime {
             "[RemoteA2ARuntime] Executing on '{}' (task: {}): {}",
             self.connection.name,
             task_id,
-            &params.message[..params.message.len().min(80)]
+            char_boundary_truncate(&params.message, 80)
         );
 
         // Build user message with optional system context

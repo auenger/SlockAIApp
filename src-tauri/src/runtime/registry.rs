@@ -5,10 +5,14 @@
 //! Also provides runtime resolution that routes local agents to registered
 //! runtimes and remote agents to dynamically-created RemoteA2ARuntime instances.
 
-use super::a2a::remote_runtime::RemoteA2ARuntime;
-use super::a2a::types::{ConnectionMode, ConnectionStatus, RemoteConnection};
+use super::a2a::types::ConnectionMode;
 use super::{AgentRuntime, AgentRuntimeInfo, AgentRuntimeStatus, RuntimeType};
 use std::collections::HashMap;
+
+#[cfg(feature = "tauri-app")]
+use super::a2a::remote_runtime::RemoteA2ARuntime;
+#[cfg(feature = "tauri-app")]
+use super::a2a::types::ConnectionStatus;
 
 // ===========================================================================
 // RuntimeRegistry
@@ -239,6 +243,7 @@ pub fn create_default_registry() -> RuntimeRegistry {
 /// Resolved runtime for agent execution.
 ///
 /// Abstracts over whether the agent runs locally or remotely.
+#[cfg(feature = "tauri-app")]
 pub enum ResolvedRuntime {
     /// Agent runs via a locally registered runtime (Claude Code, Codex, etc.).
     Local {
@@ -259,6 +264,7 @@ pub enum ResolvedRuntime {
 /// - `Remote` agents: loads the connection from SQLite and creates a RemoteA2ARuntime
 ///
 /// Returns an error if the agent is remote but the connection is not found or offline.
+#[cfg(feature = "tauri-app")]
 pub fn resolve_runtime_for_agent(
     connection_mode: &ConnectionMode,
     db_conn: &rusqlite::Connection,

@@ -22,8 +22,7 @@ use std::sync::mpsc::Receiver;
 ///
 /// Each agent is associated with exactly one runtime type, which determines
 /// which CLI/API client is used for execution. The default is `ClaudeCode`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RuntimeType {
     /// Anthropic Claude Code CLI
     ClaudeCode,
@@ -33,6 +32,24 @@ pub enum RuntimeType {
     Gemini,
     /// Extensible custom runtime (name identifies the binary)
     Custom(String),
+}
+
+impl Serialize for RuntimeType {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for RuntimeType {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        Ok(match s.as_str() {
+            "claude_code" => Self::ClaudeCode,
+            "codex" => Self::Codex,
+            "gemini" => Self::Gemini,
+            other => Self::Custom(other.to_string()),
+        })
+    }
 }
 
 impl RuntimeType {

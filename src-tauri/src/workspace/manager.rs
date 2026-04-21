@@ -359,6 +359,43 @@ impl AgentManager {
         Ok(self.agents.get(agent_id).unwrap())
     }
 
+    /// Register a remote agent in the in-memory map.
+    ///
+    /// Remote agents are synced from A2A connections and stored in the database.
+    /// This method creates a lightweight in-memory entry so that `get_agent()` can
+    /// find them without hitting the database.
+    pub fn register_remote_agent(
+        &mut self,
+        agent_id: String,
+        name: String,
+        emoji: String,
+        runtime_type: RuntimeType,
+        connection_mode: ConnectionMode,
+    ) {
+        let identity = AgentIdentity {
+            agent_id: agent_id.clone(),
+            name,
+            creature: "Remote Agent".to_string(),
+            vibe: "协作".to_string(),
+            emoji,
+            avatar: None,
+            icon: None,
+            runtime_type,
+            connection_mode,
+        };
+        self.agents.insert(agent_id.clone(), Agent {
+            agent_id,
+            identity,
+            enabled: true,
+            session_count: 0,
+        });
+    }
+
+    /// Remove a remote agent from the in-memory map.
+    pub fn unregister_remote_agent(&mut self, agent_id: &str) {
+        self.agents.remove(agent_id);
+    }
+
     /// Get an agent by ID.
     pub fn get_agent(&self, agent_id: &str) -> Option<&Agent> {
         self.agents.get(agent_id)

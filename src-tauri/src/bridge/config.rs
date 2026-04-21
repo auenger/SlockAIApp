@@ -17,6 +17,34 @@ pub struct BridgeConfig {
     pub port: u16,
     /// Display name for this bridge (default: hostname).
     pub name: String,
+    /// Runtime binary overrides (e.g. claude_binary = "claude.cmd").
+    #[serde(default)]
+    pub runtime: RuntimeConfig,
+}
+
+/// Runtime binary name overrides for the bridge host.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuntimeConfig {
+    /// Binary name for Claude Code CLI (default: "claude").
+    #[serde(default = "RuntimeConfig::default_claude_binary")]
+    pub claude_binary: String,
+    /// Binary name for Codex CLI (default: "codex").
+    #[serde(default = "RuntimeConfig::default_codex_binary")]
+    pub codex_binary: String,
+}
+
+impl Default for RuntimeConfig {
+    fn default() -> Self {
+        Self {
+            claude_binary: Self::default_claude_binary(),
+            codex_binary: Self::default_codex_binary(),
+        }
+    }
+}
+
+impl RuntimeConfig {
+    fn default_claude_binary() -> String { "claude".to_string() }
+    fn default_codex_binary() -> String { "codex".to_string() }
 }
 
 impl Default for BridgeConfig {
@@ -34,6 +62,7 @@ impl Default for BridgeConfig {
             bind: "0.0.0.0".to_string(),
             port: 7878,
             name,
+            runtime: RuntimeConfig::default(),
         }
     }
 }
@@ -42,6 +71,7 @@ impl Default for BridgeConfig {
 #[derive(Debug, Deserialize)]
 struct BridgeToml {
     bridge: Option<BridgeTomlSection>,
+    runtime: Option<RuntimeTomlSection>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -50,6 +80,12 @@ struct BridgeTomlSection {
     bind: Option<String>,
     port: Option<u16>,
     name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RuntimeTomlSection {
+    claude_binary: Option<String>,
+    codex_binary: Option<String>,
 }
 
 impl BridgeConfig {
@@ -90,6 +126,15 @@ impl BridgeConfig {
                 }
                 if let Some(name) = section.name {
                     config.name = name;
+                }
+            }
+
+            if let Some(runtime) = toml.runtime {
+                if let Some(claude) = runtime.claude_binary {
+                    config.runtime.claude_binary = claude;
+                }
+                if let Some(codex) = runtime.codex_binary {
+                    config.runtime.codex_binary = codex;
                 }
             }
         }

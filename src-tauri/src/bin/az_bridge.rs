@@ -36,6 +36,10 @@ struct Args {
 }
 
 fn main() {
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("info")
+    ).init();
+
     let args = Args::parse();
 
     println!("[az-bridge] AgentsZone Remote Workspace Gateway");
@@ -54,6 +58,12 @@ fn main() {
             std::process::exit(1);
         }
     };
+
+    // Apply runtime binary overrides (e.g. "claude.cmd" on Windows)
+    if config.runtime.claude_binary != "claude" {
+        agentszone_lib::runtime::claude::set_claude_binary(&config.runtime.claude_binary);
+        println!("[az-bridge] Claude binary: {}", config.runtime.claude_binary);
+    }
 
     // Create and run the bridge server
     let server = match agentszone_lib::bridge::BridgeServer::new(config) {
